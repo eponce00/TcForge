@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4024.62">
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.17">
 	<DataTypes>
 		<DataType>
 			<Name GUID="{18071995-0000-0000-0000-000000000035}" TcBaseType="true" HideType="true">UINTARR2</Name>
@@ -1006,13 +1006,13 @@ Drive Status 4 (manually linked):
 			<Name GUID="{F7B9FC50-054E-4547-B468-83A9E72D8064}" Namespace="MC" TcBaseType="true" HideType="true">NCTOPLC_AXIS_REF_STATE3_FLAGS</Name>
 			<BitSize>32</BitSize>
 			<SubItem>
-				<Name>TouchProbe1InputState </Name>
+				<Name>TouchProbe1InputState</Name>
 				<Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
 				<BitSize>1</BitSize>
 				<BitOffs>0</BitOffs>
 			</SubItem>
 			<SubItem>
-				<Name>TouchProbe2InputState </Name>
+				<Name>TouchProbe2InputState</Name>
 				<Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
 				<BitSize>1</BitSize>
 				<BitOffs>1</BitOffs>
@@ -1451,7 +1451,7 @@ External Setpoint Generation:
 			</ArrayInfo>
 		</DataType>
 		<DataType>
-			<Name GUID="{18071995-0000-0000-0000-002000000001}" IecBaseType="true" BitType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..0] OF BIT</Name>
+			<Name GUID="{18071995-0000-0000-0000-002000000001}" IecBaseType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..0] OF BIT</Name>
 			<BitSize>1</BitSize>
 			<BaseType GUID="{18071995-0000-0000-0000-000000000010}">BIT</BaseType>
 			<ArrayInfo>
@@ -1487,7 +1487,7 @@ External Setpoint Generation:
 			</ArrayInfo>
 		</DataType>
 		<DataType>
-			<Name GUID="{18071995-0000-0000-0000-00200000000E}" IecBaseType="true" BitType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..13] OF BIT</Name>
+			<Name GUID="{18071995-0000-0000-0000-00200000000E}" IecBaseType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..13] OF BIT</Name>
 			<BitSize>14</BitSize>
 			<BaseType GUID="{18071995-0000-0000-0000-000000000010}">BIT</BaseType>
 			<ArrayInfo>
@@ -1496,7 +1496,7 @@ External Setpoint Generation:
 			</ArrayInfo>
 		</DataType>
 		<DataType>
-			<Name GUID="{18071995-0000-0000-0000-00200000000D}" IecBaseType="true" BitType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..12] OF BIT</Name>
+			<Name GUID="{18071995-0000-0000-0000-00200000000D}" IecBaseType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..12] OF BIT</Name>
 			<BitSize>13</BitSize>
 			<BaseType GUID="{18071995-0000-0000-0000-000000000010}">BIT</BaseType>
 			<ArrayInfo>
@@ -1513,7 +1513,7 @@ External Setpoint Generation:
 	</ImageDatas>
 	<Project ProjectGUID="{30BC0CFA-4EDA-442C-AB84-5F964B0C9962}" TargetNetId="172.18.236.100.1.1" Target64Bit="true" ShowHideConfigurations="#x6">
 		<System>
-			<Settings MaxCpus="4">
+			<Settings MaxCpus="4" NonWinCpus="2">
 				<Cpu/>
 				<Cpu CpuId="1"/>
 				<Cpu CpuId="2"/>
@@ -1522,8 +1522,8 @@ External Setpoint Generation:
 			</Settings>
 			<Licenses>
 				<Target>
-					<ManualSelect>{BDCC0070-42D5-49AE-ABF1-1D4434813D60}</ManualSelect>
 					<ManualSelect Instances="1">{87DBEEFC-A548-4B37-9797-C9521D3A43A2}</ManualSelect>
+					<ManualSelect>{BDCC0070-42D5-49AE-ABF1-1D4434813D60}</ManualSelect>
 				</Target>
 			</Licenses>
 			<Tasks>
@@ -1881,10 +1881,130 @@ External Setpoint Generation:
 			</NC>
 		</Motion>
 		<Plc>
-			<Project GUID="{2C41D41A-2644-4D36-82D2-076E2F9459E3}" Name="HMI-PLC" PrjFilePath="HMI-PLC\HMI-PLC.plcproj" TmcFilePath="HMI-PLC\HMI-PLC.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="HMI-PLC\HMI-PLC.tmc" TmcHash="{A84D8BF1-1A27-B16C-BB51-3A29B827EBB2}">
-					<Name>HMI-PLC Instance</Name>
+			<Project GUID="{2C41D41A-2644-4D36-82D2-076E2F9459E3}" Name="HMIPLC" PrjFilePath="HMIPLC\HMIPLC.plcproj" TmcFilePath="HMIPLC\HMIPLC.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{099D8C88-B64C-6D59-FE70-CE301096A41B}" TmcPath="HMI-PLC\HMI-PLC.tmc">
+					<Name>HMIPLC Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
+					<Vars VarGrpType="2" AreaNo="1">
+						<Name>PlcTask Outputs</Name>
+						<Var>
+							<Name>Cognex_Mapping.outTriggerEnable</Name>
+							<Comment><![CDATA[ Outputs]]></Comment>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outTriggerCamera</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outBufferResultsEnable</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outInspectionResultsAck</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outExecuteCommand</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outNoname0ArrBIT</Name>
+							<Type GUID="{54195CC7-3340-E483-343B-EF7951C3211B}">ARRAY [0..1] OF BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outSetOffline</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outSoftEvent0</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outSoftEvent1</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outSoftEvent2</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outSoftEvent3</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outSoftEvent4</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outSoftEvent5</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outSoftEvent6</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outSoftEvent7</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outCommand</Name>
+							<Type>UINT</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData1</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData2</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData3</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData4</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData5</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData6</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData7</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData8</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData9</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outUserData10</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.output1</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.output2</Name>
+							<Type>BOOL</Type>
+						</Var>
+					</Vars>
 					<Vars VarGrpType="1">
 						<Name>PlcTask Inputs</Name>
 						<Var>
@@ -1964,6 +2084,10 @@ External Setpoint Generation:
 							<Type GUID="{54195CC7-3340-E483-343B-EF7951C3211B}">ARRAY [0..1] OF BOOL</Type>
 						</Var>
 						<Var>
+							<Name>Cognex_Mapping.inpInspectionResults</Name>
+							<Type>BYTE</Type>
+						</Var>
+						<Var>
 							<Name>Cognex_Mapping.inpCurrentJobID</Name>
 							<Type>UINT</Type>
 						</Var>
@@ -1978,10 +2102,6 @@ External Setpoint Generation:
 						<Var>
 							<Name>Cognex_Mapping.inpInspectionResultCode</Name>
 							<Type>INT</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.inpInspectionResults</Name>
-							<Type>BYTE</Type>
 						</Var>
 						<Var>
 							<Name>Cognex_Mapping.inpInspectionResults1</Name>
@@ -2031,126 +2151,6 @@ External Setpoint Generation:
 						</Var>
 						<Var>
 							<Name>Cognex_Mapping.input2</Name>
-							<Type>BOOL</Type>
-						</Var>
-					</Vars>
-					<Vars VarGrpType="2" AreaNo="1">
-						<Name>PlcTask Outputs</Name>
-						<Var>
-							<Name>Cognex_Mapping.outTriggerEnable</Name>
-							<Comment><![CDATA[ Outputs]]></Comment>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outTriggerCamera</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outBufferResultsEnable</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outInspectionResultsAck</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outExecuteCommand</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outNoname0ArrBIT</Name>
-							<Type GUID="{54195CC7-3340-E483-343B-EF7951C3211B}">ARRAY [0..1] OF BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outSetOffline</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outSoftEvent0</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outSoftEvent1</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outSoftEvent2</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outSoftEvent3</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outSoftEvent4</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outSoftEvent5</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outSoftEvent6</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outSoftEvent7</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outCommand</Name>
-							<Type>UINT</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData1</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData2</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData3</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData4</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData5</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData6</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData7</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData8</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData9</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.outUserData10</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.output1</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>Cognex_Mapping.output2</Name>
 							<Type>BOOL</Type>
 						</Var>
 					</Vars>
@@ -8506,7 +8506,7 @@ C:\TwinCAT\3.1\Config\Io\EtherNetIP\02A6006401090C00.eds
 				<Link VarA="Enc^Outputs^Out^nDataOut1[0]" VarB="ENC Control compact^Set counter value"/>
 			</OwnerB>
 		</OwnerA>
-		<OwnerA Name="TIPC^HMI-PLC^HMI-PLC Instance">
+		<OwnerA Name="TIPC^HMIPLC^HMIPLC Instance">
 			<OwnerB Name="TIID^Device 1 (TC3 EIP Scanner)^Box 1 (In-Sight 7000 Series)">
 				<Link VarA="PlcTask Inputs^Cognex_Mapping.inpAcquiring" VarB="Connection 1 (Input/Output)^Inputs^Acquiring"/>
 				<Link VarA="PlcTask Inputs^Cognex_Mapping.inpAcquisitionID" VarB="Connection 1 (Input/Output)^Inputs^Acquisition ID"/>

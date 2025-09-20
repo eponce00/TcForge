@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="MAIN" Id="{4f4444b9-0fc9-41d2-8d8b-6376a7d4acc5}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
@@ -23,9 +23,17 @@ VAR
 
 	NextStep: DINT; // Next step to be modified by sequences
 	
+	testWriteADS : REAL := 0;
+	testReadADS : REAL := 3.75;
+	
+	testTimer :TON ;
+	testTimerON : BOOL := FALSE ;
+	
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[//=============================================================================
+      <ST><![CDATA[testTimer(IN := testTimerON, PT := T#9999S);
+
+//=============================================================================
 // MAIN PROGRAM - State Machine Implementation with Sequence Programs
 //=============================================================================
 
@@ -33,6 +41,8 @@ END_VAR]]></Declaration>
 // CENTRALIZED INITIAL STEP SETTING
 //=============================================================================
 // Initialize sequence when first entering any state (CurrentStep.Step = 0)
+
+
 IF currentStep.Step = 0 THEN
     IF fbStateMachine.Status.Homing THEN
         NextStep := 1000;  // Start homing sequence
@@ -57,6 +67,8 @@ IF currentStep.Step = 0 THEN
         // No initial step needed
     END_IF;
 END_IF;
+
+
 
 // Call state machine BEFORE sequences to ensure timer is updated first
 fbStateMachine(
@@ -130,13 +142,20 @@ _6000_PRG_Proceeding(
 ]]></ST>
     </Implementation>
     <LineIds Name="MAIN">
+      <LineId Id="1244" Count="1" />
       <LineId Id="1036" Count="2" />
-      <LineId Id="1155" Count="12" />
+      <LineId Id="1155" Count="4" />
+      <LineId Id="1241" Count="0" />
+      <LineId Id="1240" Count="0" />
+      <LineId Id="1160" Count="7" />
       <LineId Id="1172" Count="1" />
       <LineId Id="1168" Count="0" />
       <LineId Id="1171" Count="0" />
       <LineId Id="1057" Count="0" />
-      <LineId Id="1201" Count="14" />
+      <LineId Id="1201" Count="10" />
+      <LineId Id="1243" Count="0" />
+      <LineId Id="1242" Count="0" />
+      <LineId Id="1212" Count="3" />
       <LineId Id="1200" Count="0" />
       <LineId Id="1059" Count="8" />
       <LineId Id="1069" Count="1" />
@@ -170,6 +189,8 @@ _6000_PRG_Proceeding(
       <LineId Id="2" Count="0" />
       <LineId Id="96" Count="3" />
       <LineId Id="1216" Count="0" />
+      <LineId Id="101" Count="3" />
+      <LineId Id="1217" Count="0" />
     </LineIds>
-    </POU>
+  </POU>
 </TcPlcObject>

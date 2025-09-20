@@ -1,8 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_Permissives" Id="{3468ff58-4b50-4782-bf79-0df0256f5d2f}" SpecialFunc="None">
-    <Declaration><![CDATA[{attribute 'hide_all_locals'}
-FUNCTION_BLOCK FB_Permissives
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Permissives
 VAR_INPUT
     inPermissives : INT;           // Real-world permissive bits from hardware/sensors
     cfg           : ST_PermIntlk_cfg; // Configuration: name, bit descriptions, and bypass settings

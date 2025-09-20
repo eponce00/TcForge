@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="_3000_PRG_Running" Id="{12345678-1234-1234-1234-123456789002}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM _3000_PRG_Running
 VAR_IN_OUT
@@ -57,7 +57,7 @@ IF fbStep3000.outStepActive THEN
     // Only simulate permissives if step is active but not advancing
     IF fbStep3000.outNextStep = fbStep3000.cfgStep THEN  // Step is waiting for permissives
         // Permissives simulation - Simulate based on timer
-        IF StepTimerSeconds < 3 THEN
+        IF StepTimerSeconds < 60 THEN
             step3000Perms := 16#FFFE;  // Bit 0 not OK (not ready yet)
         ELSE
             step3000Perms := -1;  // All permissives OK after 5 seconds

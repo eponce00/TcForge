@@ -1,8 +1,7 @@
-<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
-  <POU Name="FB_TwoPosActuator" Id="{A1234567-1234-1234-1234-123456789007}" SpecialFunc="None">
-    <Declaration><![CDATA[{attribute 'hide_all_locals'} // Hides all local variables
-FUNCTION_BLOCK FB_TwoPosActuator
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_TwoPosActuator" Id="{a1234567-1234-1234-1234-123456789007}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TwoPosActuator
 VAR_INPUT
     EnableIn : BOOL := TRUE;            // Enable input for the function block
     inWorkingMode : BOOL := TRUE;       // Working mode: TRUE=Auto, FALSE=Manual
@@ -494,6 +493,7 @@ END_IF;]]></ST>
     </Implementation>
     <LineIds Name="FB_TwoPosActuator">
       <LineId Id="1" Count="296" />
+      <LineId Id="300" Count="122" />
     </LineIds>
   </POU>
 </TcPlcObject>
