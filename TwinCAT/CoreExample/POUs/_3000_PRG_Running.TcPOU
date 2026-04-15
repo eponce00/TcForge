@@ -41,7 +41,7 @@ END_VAR]]></Declaration>
 // STEP 3000 - PRODUCTION START
 //=============================================================================
 fbStep3000(
-    inpStep := CurrentStep.Step,
+    inpStep := CurrentStep.Step +2,
     cfgStep := 3000,
     cfgNextStep := 3002,
     inpStepTimerSeconds := StepTimerSeconds,
@@ -53,7 +53,7 @@ fbStep3000(
 );
 
 // Step 3000 Active Logic
-IF fbStep3000.outStepActive THEN
+IF fbStep3000.outStepActive  THEN
     // Only simulate permissives if step is active but not advancing
     IF fbStep3000.outNextStep = fbStep3000.cfgStep THEN  // Step is waiting for permissives
         // Permissives simulation - Simulate based on timer

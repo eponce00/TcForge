@@ -29,6 +29,17 @@ The included code example demonstrates a typical implementation with four main s
 
 Each state has its own program (PRG_Homing, PRG_Running, etc.) that manages the step sequence for that particular operation. The main program coordinates between states and handles the overall state transitions.
 
+## Repository Layout
+
+The active TwinCAT source now lives under a single cleaned host project:
+
+- `TwinCAT/Core.sln` - unified solution entry point
+- `TwinCAT/Core.tsproj` - shared TwinCAT project configuration
+- `TwinCAT/CoreExample` - example PLC application
+- `TwinCAT/Core` - library PLC source used to build the reusable state machine library
+
+This keeps the example PLC and the library PLC in one TwinCAT project instead of maintaining separate solutions or duplicate folder trees.
+
 ## Key Benefits
 
 - **Predictable Behavior** - Clear state definitions eliminate unexpected machine behavior
@@ -39,9 +50,10 @@ Each state has its own program (PRG_Homing, PRG_Running, etc.) that manages the 
 
 ## Getting Started
 
-1. Import the `State_Machine.library` into your TwinCAT project
-2. Study the provided code example to understand the implementation pattern
-3. Create your own state programs based on your machine's specific sequences
-4. Configure safety permissions and HMI interface for your application
+1. Open `TwinCAT/Core.sln` in TwinCAT XAE
+2. Use `CoreExample` as the reference example for how the library is consumed
+3. Use `Core` as the source PLC for the reusable library objects
+4. Build the unified solution and adapt the example state programs to your machine
+5. Configure safety permissions and HMI interface for your application
 
 This library transforms complex automation sequences into manageable, structured code that's easier to develop, debug, and maintain.

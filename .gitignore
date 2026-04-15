@@ -37,6 +37,7 @@ LineIDs.dbg.bak
 # exclude not required folders
 **/_Boot/
 **/_CompileInfo/
+**/_CompileInfo_Upload/
 **/_Libraries/
 **/_ModuleInstall/
 **/_Deployment/
@@ -66,8 +67,3 @@ tchmipublish.journal.json
 # Additional generated files
 *.tfignore
 
-# --- Project-specific exceptions ---
-# Our TwinCAT source library folder is named with a .library suffix (a directory),
-# which gets ignored by the '*.library' rule above. Unignore this specific folder
-# so source files inside are tracked, while keeping other .library files ignored.
-!Personal-Libraries/Twincat_State_Machine_Library/State_Machine.library/
