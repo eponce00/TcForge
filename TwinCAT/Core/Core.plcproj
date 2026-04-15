@@ -7,7 +7,7 @@
     <SubObjectsSortedByName>True</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>true</WriteProductVersion>
-    <GenerateTpy>false</GenerateTpy>
+    <GenerateTpy>true</GenerateTpy>
     <Name>Core</Name>
     <ProgramVersion>3.1.4026.17</ProgramVersion>
     <Application>{3e8d9abc-3123-42ab-93ad-a721324fdb78}</Application>
@@ -244,6 +244,15 @@
           <d n="Values" t="Hashtable" ckt="String" cvt="String">
             <v>DisabledWarningIds</v>
             <v>5410</v>
+          </d>
+        </o>
+        <v>{E709B08B-B6E4-4966-8EED-D793A13114C6}</v>
+        <o>
+          <v n="Name">"{E709B08B-B6E4-4966-8EED-D793A13114C6}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
+            <v>Utf8Encoding</v>
+            <v>True</v>
           </d>
         </o>
         <v>{F66C7017-BDD8-4114-926C-81D6D687E35F}</v>
