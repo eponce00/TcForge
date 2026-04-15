@@ -60,10 +60,6 @@
     <Folder Include="POUs" />
   </ItemGroup>
   <ItemGroup>
-    <PlaceholderReference Include="State Machine Twincat">
-      <DefaultResolution>State Machine Twincat, * (Home)</DefaultResolution>
-      <Namespace>State_Machine_Twincat</Namespace>
-    </PlaceholderReference>
     <PlaceholderReference Include="Tc2_Standard">
       <DefaultResolution>Tc2_Standard, * (Beckhoff Automation GmbH)</DefaultResolution>
       <Namespace>Tc2_Standard</Namespace>
@@ -79,6 +75,10 @@
     <PlaceholderReference Include="Tc3_Module">
       <DefaultResolution>Tc3_Module, * (Beckhoff Automation GmbH)</DefaultResolution>
       <Namespace>Tc3_Module</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Twincat Open Library">
+      <DefaultResolution>[Twincat Open Library], * (Home)</DefaultResolution>
+      <Namespace>Twincat_Open_Library</Namespace>
     </PlaceholderReference>
   </ItemGroup>
   <ItemGroup>
