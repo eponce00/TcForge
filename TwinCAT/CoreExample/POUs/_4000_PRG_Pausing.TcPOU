@@ -1,82 +1,74 @@
-<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
-  <POU Name="_4000_PRG_Pausing" Id="{8e2c6c3f-6f2a-4c03-bb33-4ec0b5f1b4d0}" SpecialFunc="None">
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="_4000_PRG_Pausing" Id="{12345678-1234-1234-1234-123456789004}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM _4000_PRG_Pausing
 VAR_IN_OUT
-    CurrentStep : ActiveStep;
-    NextStep    : DINT;
-END_VAR
-VAR_INPUT
-    StepTimerSeconds   : DINT;
-    RetrySignal        : BOOL;
-    StateMachineStatus : ST_SM_Status;
+    sm : FB_StateMachine;
 END_VAR
 VAR
-    fbStep4000 : FB_SequenceStep; // Pausing prepare
-    fbStep4002 : FB_SequenceStep; // Pausing execute
-    step4000Perms : INT := -1;
-    step4002Perms : INT := -1;
+    step4000 : FB_Step;
+    step4002 : FB_Step;
+
+    // Simulated signals
+    bAxesHolding       : BOOL;
+    bProcessSuspended  : BOOL;
+    tonRampDown        : TON;
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[
-// STEP 4000 - PAUSING PREPARE
-fbStep4000(
-    inpStep := CurrentStep.Step,
-    cfgStep := 4000,
-    cfgNextStep := 4002,
-    inpStepTimerSeconds := StepTimerSeconds,
-    inpRetry := RetrySignal,
-    inpStepPermissives := step4000Perms,
-    cfgStepTimeout := 5,
-    inpFaultStep := FALSE,
-    ActiveStep := CurrentStep
-);
-IF fbStep4000.outStepActive THEN
-    IF fbStep4000.outNextStep = fbStep4000.cfgStep THEN
-        IF StepTimerSeconds < 2 THEN
-            step4000Perms := 16#FFFE;
-        ELSE
-            step4000Perms := -1;
-        END_IF;
-    END_IF;
-    CurrentStep.PermsHMI.Name := 'Pausing Prepare';
-    CurrentStep.PermsHMI.Desc[0] := 'Prepare to Pause';
-    CurrentStep.PermsHMI.Desc[1] := 'Buffer Operations';
-    CurrentStep.PermsHMI.Desc[2] := 'Safe To Pause';
-    NextStep := fbStep4000.outNextStep;
-ELSE
-    step4000Perms := 16#FFFE;
+//=============================================================================
+// STEP 4000 - Ramp Down to Hold
+// Demonstrates: Entry (command hold), Execute (monitor ramp), Exiting (confirm)
+//=============================================================================
+step4000(sm := sm, nStep := 4000, nNextStep := 4002, nTimeout := 8, sName := 'Ramp Down');
+
+IF step4000.Entry THEN
+    // One-shot: command controlled ramp-down
+    bAxesHolding := FALSE;
+    bProcessSuspended := FALSE;
+    tonRampDown(IN := FALSE);
 END_IF;
 
-// STEP 4002 - PAUSING EXECUTE
-fbStep4002(
-    inpStep := CurrentStep.Step,
-    cfgStep := 4002,
-    cfgNextStep := 0, // sequence complete
-    inpStepTimerSeconds := StepTimerSeconds,
-    inpRetry := RetrySignal,
-    inpStepPermissives := step4002Perms,
-    cfgStepTimeout := 8,
-    inpFaultStep := FALSE,
-    ActiveStep := CurrentStep
-);
-IF fbStep4002.outStepActive THEN
-    IF fbStep4002.outNextStep = fbStep4002.cfgStep THEN
-        IF StepTimerSeconds < 5 THEN
-            step4002Perms := 16#FFFD;
-        ELSE
-            step4002Perms := -1;
-        END_IF;
-    END_IF;
-    CurrentStep.PermsHMI.Name := 'Pausing Execute';
-    CurrentStep.PermsHMI.Desc[0] := 'Pausing';
-    CurrentStep.PermsHMI.Desc[1] := 'Drive/Actuator Hold';
-    CurrentStep.PermsHMI.Desc[2] := 'Safe State';
-    NextStep := fbStep4002.outNextStep;
-ELSE
-    step4002Perms := 16#FFFD;
+IF step4000.Execute THEN
+    // Simulate ramp-down over 3 seconds
+    tonRampDown(IN := TRUE, PT := T#3S);
+    bAxesHolding := tonRampDown.Q;
+
+    step4000.MapPerm(nIndex := 0, sDescription := 'Axes Holding Position', bValue := bAxesHolding);
+    step4000.MapPerm(nIndex := 1, sDescription := 'No Motion Commands',    bValue := TRUE);
+END_IF;
+
+IF step4000.Exiting THEN
+    tonRampDown(IN := FALSE);
+END_IF;
+
+//=============================================================================
+// STEP 4002 - Suspend Process
+// Demonstrates: Entry (freeze process state), nNextStep := 0 enters Paused
+//=============================================================================
+step4002(sm := sm, nStep := 4002, nNextStep := 0, nTimeout := 5, sName := 'Suspend Process');
+
+IF step4002.Entry THEN
+    bProcessSuspended := FALSE;
+END_IF;
+
+IF step4002.Execute THEN
+    // Simulate process freeze
+    bProcessSuspended := sm.StepInfo.StepTimerSeconds >= 1.0;
+
+    step4002.MapPerm(nIndex := 0, sDescription := 'Process State Saved',  bValue := bProcessSuspended);
+    step4002.MapPerm(nIndex := 1, sDescription := 'Heaters in Standby',   bValue := TRUE);
+    step4002.MapPerm(nIndex := 2, sDescription := 'Vacuum Maintained',    bValue := TRUE);
+END_IF;
+
+IF step4002.Exiting THEN
+    // Process is now paused - operator can inspect / Proceed resumes
+    ;
 END_IF;
 ]]></ST>
     </Implementation>
+    <LineIds Name="_4000_PRG_Pausing">
+      <LineId Id="1" Count="0" />
+    </LineIds>
   </POU>
 </TcPlcObject>

@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="ST_SM_Internal" Id="{cf71e483-ee98-4016-82dd-9e5e7e315f55}">
+    <Declaration><![CDATA[(* Internal State Structure *)
+TYPE ST_SM_Internal :
+STRUCT
+    PauseStep : ActiveStep;
+    PreviousState : DINT;
+    TimerReset : BOOL;
+    LsOdd : DINT;
+    ONS : DINT;
+    StepHistoryMax : DINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

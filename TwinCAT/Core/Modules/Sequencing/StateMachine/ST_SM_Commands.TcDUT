@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="ST_SM_Commands" Id="{71f8bdb8-5611-4cac-9f4e-e276d3254fee}">
+    <Declaration><![CDATA[(* Commands Structure - Groups all command inputs *)
+TYPE ST_SM_Commands :
+STRUCT
+    Abort : BOOL;
+    CompleteState : BOOL;
+    Home : BOOL;
+    Pause : BOOL;
+    Proceed : BOOL;
+    Retry : BOOL;
+    Start : BOOL;
+    Stop : BOOL;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

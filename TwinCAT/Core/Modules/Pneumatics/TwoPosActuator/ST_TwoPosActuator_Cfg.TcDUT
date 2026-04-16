@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="ST_TwoPosActuator_Cfg" Id="{A1234567-1234-1234-1234-123456789003}">
+    <Declaration><![CDATA[{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_TwoPosActuator_Cfg :
+STRUCT
+    {attribute 'OPC.UA.DA.Description' := 'Advance timeout in seconds'}
+    cfgAdvTimeoutS : INT := 5;
+    {attribute 'OPC.UA.DA.Description' := 'Retract timeout in seconds'}
+    cfgRetTimeoutS : INT := 5;
+    {attribute 'OPC.UA.DA.Description' := 'Hold valve energized when advanced'}
+    cfgHoldAtAdvanced : BOOL := FALSE;
+    {attribute 'OPC.UA.DA.Description' := 'Hold valve energized when retracted'}
+    cfgHoldAtRetracted : BOOL := FALSE;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

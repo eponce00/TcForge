@@ -23,98 +23,95 @@
     <VirtualLibrary>true</VirtualLibrary>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="DUTs\Actuators\TwoPos\E_TwoPosActuator_Fault.TcDUT">
+    <Compile Include="Modules\Common\E_Requester.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\Actuators\TwoPos\E_TwoPosActuator_State.TcDUT">
+    <Compile Include="Modules\Common\E_RpcMethodResponse.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\Actuators\TwoPos\ST_TwoPosActuator_Cfg.TcDUT">
+    <Compile Include="Modules\Common\F_ValidateRequester.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\Actuators\TwoPos\ST_TwoPosActuator_HMI.TcDUT">
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\E_TwoPosActuator_Fault.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\Actuators\TwoPos\ST_TwoPosActuator_IO.TcDUT">
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\E_TwoPosActuator_State.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\Actuators\TwoPos\ST_TwoPosActuator_Sts.TcDUT">
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\FB_TwoPosActuator.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\Permissives\ST_PermIntlk_cfg.TcDUT">
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\Permissives\ST_PermIntlk_HMI.TcDUT">
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_IO.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\Permissives\ST_PermIntlk_sts.TcDUT">
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\E_SM_State.TcDUT">
+    <Compile Include="Modules\Sequencing\Permissives\FB_Permissives.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\SM_HMI.TcDUT">
+    <Compile Include="Modules\Sequencing\Permissives\ST_PermIntlk_cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\SM_HMI_cfg.TcDUT">
+    <Compile Include="Modules\Sequencing\Permissives\ST_PermIntlk_HMI.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\SM_HMI_ocmd.TcDUT">
+    <Compile Include="Modules\Sequencing\Permissives\ST_PermIntlk_sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\SM_HMI_sts.TcDUT">
+    <Compile Include="Modules\Sequencing\StateMachine\ActiveStep.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\ST_SM_Commands.TcDUT">
+    <Compile Include="Modules\Sequencing\StateMachine\E_SM_State.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\ST_SM_Conditions.TcDUT">
+    <Compile Include="Modules\Sequencing\StateMachine\FB_SequenceStep.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\ST_SM_Internal.TcDUT">
+    <Compile Include="Modules\Sequencing\StateMachine\FB_StateMachine.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\ST_SM_PermissionGroups.TcDUT">
+    <Compile Include="Modules\Sequencing\StateMachine\FB_Step.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\ST_SM_Permissions.TcDUT">
+    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Commands.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\ST_SM_Status.TcDUT">
+    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Conditions.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\State Machine\ST_SM_StepInfo.TcDUT">
+    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Internal.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DUTs\Steps\ActiveStep.TcDUT">
+    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_PermissionGroups.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Permissions.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Status.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_StepInfo.TcDUT">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="PlcTask.TcTTO">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="POUs\FB_Permissives.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="POUs\FB_SequenceStep.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="POUs\FB_StateMachine.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="POUs\FB_TwoPosActuator.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="DUTs" />
-    <Folder Include="DUTs\State Machine" />
-    <Folder Include="DUTs\Permissives" />
-    <Folder Include="DUTs\Steps" />
-    <Folder Include="DUTs\Actuators" />
-    <Folder Include="DUTs\Actuators\TwoPos" />
+    <Folder Include="Modules" />
+    <Folder Include="Modules\Common" />
+    <Folder Include="Modules\Pneumatics" />
+    <Folder Include="Modules\Pneumatics\TwoPosActuator" />
+    <Folder Include="Modules\Sequencing" />
+    <Folder Include="Modules\Sequencing\Permissives" />
+    <Folder Include="Modules\Sequencing\StateMachine" />
     <Folder Include="GVLs" />
     <Folder Include="VISUs" />
-    <Folder Include="POUs" />
   </ItemGroup>
   <ItemGroup>
     <PlaceholderReference Include="Tc2_Standard">

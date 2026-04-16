@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="ST_SM_Conditions" Id="{489974e7-f7d2-49ba-a105-09e7bf90658d}">
+    <Declaration><![CDATA[(* Conditions Structure - Groups process condition inputs *)
+TYPE ST_SM_Conditions :
+STRUCT
+    Blocked : DINT;
+    Starved : DINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

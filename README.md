@@ -1,52 +1,52 @@
-# TwinCAT State Machine Library
+# TwinCAT Open Library
 
-A structured approach to implementing industrial automation sequences in TwinCAT PLC using state-based control with integrated safety permissions and HMI interface.
+An open-source TwinCAT 3 PLC library for industrial automation. It provides reusable, tested function blocks that follow consistent patterns — so you can build reliable automation systems without reinventing common control logic.
 
-## What It Is
+## What It Provides
 
-This library provides a framework for building robust automation sequences that follow a clear state machine pattern. Instead of writing complex ladder logic or unstructured code, you define your machine's behavior through distinct states (Homing, Running, Stopping, etc.) and individual steps within each state.
+The library is organized into modules, each covering a domain of industrial control:
 
-The system handles common industrial automation needs like safety interlocks, operator permissions, fault recovery, and step-by-step sequence execution with timeouts.
+| Module | Purpose |
+| --- | --- |
+| **Common** | Shared types, enums, and validation helpers used across all modules |
+| **Sequencing** | State machine control, sequence step execution, permissive evaluation |
+| **Pneumatics** | Pneumatic actuator control with feedback monitoring |
 
-## How It Works
+More modules will be added as the library grows (motors, analog control, alarms, etc.).
 
-The library centers around three main concepts:
+## Key Patterns
 
-**State Machine Controller** (`FB_StateMachine`) - Manages overall machine states and transitions. It knows when your machine should be homing, running, stopping, or handling faults, and ensures proper state transitions based on commands and conditions.
-
-**Sequence Steps** (`FB_SequenceStep`) - Each state contains a series of numbered steps that execute in order. Each step can have its own timeout, safety permissions, and fault handling. Steps use even numbers (1000, 1002) for normal execution and odd numbers (1001, 1003) for fault conditions.
-
-**Permission System** (`FB_Permissives`) - Validates safety conditions and interlocks before allowing operations. Supports bypass functionality for maintenance and troubleshooting while maintaining safety integrity.
-
-## Implementation Example
-
-The included code example demonstrates a typical implementation with four main states:
-
-- **Homing** (steps 1000-1999) - Machine initialization and reference positioning
-- **Running** (steps 2000-2999) - Normal production operation
-- **Stopping** (steps 3000-3999) - Controlled shutdown sequence  
-- **Aborting** (steps 4000-4999) - Emergency stop and safe state
-
-Each state has its own program (PRG_Homing, PRG_Running, etc.) that manages the step sequence for that particular operation. The main program coordinates between states and handles the overall state transitions.
+- **Method-centric commands** — All command logic lives in RPC methods exposed via OPC UA. The FB body handles only cyclic monitoring.
+- **Command source control** — Every command identifies its source (`PROG` or `OPERATOR`) and can be locked to program-only during automatic operation.
+- **Unified validation** — A shared `F_ValidateRequester` function provides consistent source, fault, and permission checks across all FBs.
+- **Permissive system** — `FB_Permissives` evaluates safety interlocks and operator permissions with bypass support for maintenance.
 
 ## Repository Layout
 
-The active TwinCAT source now lives under a single cleaned host project:
+```
+TwinCAT/
+  Core.sln              Solution entry point
+  Core/                 Library PLC source
+    Modules/
+      Common/           Shared enums, types, functions
+      Sequencing/       State machine, sequence steps, permissives
+      Pneumatics/       Pneumatic actuator control
+  CoreExample/          Example PLC application
+docs/                   Design documentation and standards
+```
 
-- `TwinCAT/Core.sln` - unified solution entry point
-- `TwinCAT/Core.tsproj` - shared TwinCAT project configuration
-- `TwinCAT/CoreExample` - example PLC application
-- `TwinCAT/Core` - library PLC source used to build the reusable state machine library
+## Getting Started
 
-This keeps the example PLC and the library PLC in one TwinCAT project instead of maintaining separate solutions or duplicate folder trees.
+1. Open `TwinCAT/Core.sln` in TwinCAT XAE (Visual Studio)
+2. Build the solution
+3. Explore `CoreExample` for a working implementation with homing, running, stopping, pausing, and aborting sequences
 
-## Key Benefits
+## Documentation
 
-- **Predictable Behavior** - Clear state definitions eliminate unexpected machine behavior
-- **Maintainable Code** - Structured approach makes troubleshooting and modifications easier
-- **Safety Integration** - Built-in permission checking ensures safe operation
-- **Operator Interface** - Ready-made HMI structures for complete operator control
-- **Fault Recovery** - Automatic fault detection with retry capabilities
+- [Programming Standards](docs/Programming-Standards.md) — coding conventions, naming, folder layout
+- [Command Source Control](docs/Command-Source-Control.md) — requester validation and source locking
+- [RPC Method Response](docs/RPC-Method-Response.md) — response codes and usage
+- [HMI Integration](docs/HMI-Integration.md) — OPC UA connectivity
 
 ## Getting Started
 

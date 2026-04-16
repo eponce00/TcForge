@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="E_SM_State" Id="{a1e46654-06a7-41f1-b89b-740e2d0d92f4}">
+    <Declaration><![CDATA[(* State Machine Enumeration *)
+TYPE E_SM_State :
+(
+    STATE_IDLE := 0,
+    STATE_RUNNING := 1,
+    STATE_STOPPING := 2,
+    STATE_HOMING := 4,
+    STATE_ABORTING := 8,
+    STATE_HOMED := 16,
+    STATE_STOPPED := 32,
+    STATE_ABORTED := 64,
+    STATE_COMPLETE := 128,
+    STATE_PAUSING := 256,
+    STATE_PAUSED := 512,
+    STATE_PROCEEDING := 1024
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

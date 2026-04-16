@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="ActiveStep" Id="{fc8c7441-89f6-4c2e-b0cd-8b6f37820432}">
+    <Declaration><![CDATA[TYPE ActiveStep  :
+STRUCT
+  Step : DINT;
+  StatusStepFaulted : BOOL;
+  PermsHMI : ST_PermIntlk_cfg;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

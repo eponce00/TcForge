@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_Requester" Id="{b1234567-1234-1234-1234-12345678B002}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE E_Requester :
+(
+    PROG := 0,
+    OPERATOR := 1
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

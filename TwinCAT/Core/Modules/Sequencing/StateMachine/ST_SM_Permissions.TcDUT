@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="ST_SM_Permissions" Id="{4a14ae9b-daf4-4205-8b93-4e82f89aefa7}">
+    <Declaration><![CDATA[(* Permissions Status Structure *)
+TYPE ST_SM_Permissions :
+STRUCT
+    AutoIntlkOK : BOOL;
+    HomePermOK : BOOL;
+    ProceedPermOK : BOOL;
+    StartPermOK : BOOL;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

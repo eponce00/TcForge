@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="ST_SM_StepInfo" Id="{2cc141ff-dea0-456e-b495-38729cf383eb}">
+    <Declaration><![CDATA[(* Step Information Structure *)
+TYPE ST_SM_StepInfo :
+STRUCT
+    CurrentStep : DINT;
+    NextStep : DINT;
+    ReturnNextStep : DINT;
+    ReturnState : DINT;  // Changed from enum to DINT for compatibility
+    LastState : DINT;    // Changed from enum to DINT for compatibility
+    CurrentState : DINT; // Changed from enum to DINT for compatibility
+    StateString : STRING(40);
+    StepTimerSeconds : REAL;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="E_TwoPosActuator_Fault" Id="{A1234567-1234-1234-1234-123456789002}">
+    <Declaration><![CDATA[TYPE E_TwoPosActuator_Fault :
+(
+    None := 0,
+    AdvanceTimeout := 1,
+    RetractTimeout := 2,
+    BothFeedbackOn := 3,
+    UndefinedState := 4,
+    PermissivesNotOK := 5,
+    ConflictingCommands := 6,
+    NoFeedback := 7
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

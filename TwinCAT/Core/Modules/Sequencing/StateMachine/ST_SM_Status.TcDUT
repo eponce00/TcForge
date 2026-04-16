@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="ST_SM_Status" Id="{39a199e7-258a-40bd-9b50-d87ecba1041b}">
+    <Declaration><![CDATA[(* Status Structure - Groups all status outputs *)
+TYPE ST_SM_Status :
+STRUCT
+    Aborted : BOOL;
+    Aborting : BOOL;
+    ActiveState : BOOL;
+    AutoCycleRequest : BOOL;
+    Automatic : BOOL;
+    AutoStartRequest : BOOL;
+    Blocked : BOOL;
+    Complete : BOOL;
+    Faulted : BOOL;
+    Homed : BOOL;
+    Homing : BOOL;
+    Manual : BOOL;
+    Mode : DINT;
+    Paused : BOOL;
+    Pausing : BOOL;
+    Proceeding : BOOL;
+    ReadyToHome : BOOL;
+    ReadyToProceed : BOOL;
+    ReadyToStart : BOOL;
+    Running : BOOL;
+    Starved : BOOL;
+    Stopped : BOOL;
+    Stopping : BOOL;
+    SubmoduleFaulted : BOOL;
+    WaitingState : BOOL;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

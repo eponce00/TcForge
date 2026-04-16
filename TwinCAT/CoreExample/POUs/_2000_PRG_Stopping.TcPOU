@@ -1,128 +1,92 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
-  <POU Name="_2000_PRG_Stopping" Id="{12345678-1234-1234-1234-123456789003}" SpecialFunc="None">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="_2000_PRG_Stopping" Id="{12345678-1234-1234-1234-123456789002}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM _2000_PRG_Stopping
 VAR_IN_OUT
-    CurrentStep : ActiveStep;  // Shared step structure with state machine
-	NextStep: DINT; // Next step to be modified by sequences
+    sm : FB_StateMachine;
 END_VAR
-
-VAR_INPUT
-    StepTimerSeconds : DINT;   // Timer value from state machine
-    RetrySignal : BOOL;        // Retry signal from state machine
-    StateMachineStatus : ST_SM_Status;  // Complete state machine status
-END_VAR
-
 VAR
-    // Step function blocks for stopping sequence
-    fbStep2000 : FB_SequenceStep;  // Stop Prepare
-    fbStep2002 : FB_SequenceStep;  // Stop Execute
-    
-    // Step permissives (simulation for testing)
-    step2000Perms : INT := -1;     // All OK for step 2000
-    step2002Perms : INT := -1;     // All OK for step 2002
-    
+    step2000 : FB_Step;
+    step2002 : FB_Step;
+    step2004 : FB_Step;
+
+    // Simulated signals
+    bMotorsStopped     : BOOL;
+    bConveyorEmpty     : BOOL;
+    bBrakeEngaged      : BOOL;
+    tonDecel           : TON;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[//=============================================================================
-// PRG_Stopping - Handles STOPPING state sequence (2000-2999)
+      <ST><![CDATA[
 //=============================================================================
-// Step numbering: 2000, 2002 (even numbers)
-// Fault steps: 2001, 2003 (odd numbers, +1 of original)
-// NOTE: Initial step setting (CurrentStep.Step = 0) is handled in MAIN program
-
-
+// STEP 2000 - Controlled Deceleration
+// Demonstrates: Entry (command stop), Execute (monitor decel), Exiting (confirm)
 //=============================================================================
-// STEP 2000 - STOP PREPARE
-//=============================================================================
-fbStep2000(
-    inpStep := CurrentStep.Step,
-    cfgStep := 2000,
-    cfgNextStep := 2002,
-    inpStepTimerSeconds := StepTimerSeconds,
-    inpRetry := RetrySignal,
-    inpStepPermissives := step2000Perms,
-    cfgStepTimeout := 8,  // 8 second timeout
-    inpFaultStep := FALSE,
-    ActiveStep := CurrentStep
-);
+step2000(sm := sm, nStep := 2000, nNextStep := 2002, nTimeout := 10, sName := 'Decelerate');
 
-// Step 2000 Active Logic
-IF fbStep2000.outStepActive THEN
-    // Only simulate permissives if step is active but not advancing
-    IF fbStep2000.outNextStep = fbStep2000.cfgStep THEN  // Step is waiting for permissives
-        // Permissives simulation - Simulate based on timer
-        IF StepTimerSeconds < 4 THEN
-            step2000Perms := 16#FFFE;  // Bit 0 not OK (not ready yet)
-        ELSE
-            step2000Perms := -1;  // All permissives OK after 4 seconds
-        END_IF;
-    END_IF;
-    
-    // HMI configuration and actions
-    CurrentStep.PermsHMI.Name := 'Stop Prepare';
-    CurrentStep.PermsHMI.Desc[0] := 'Production Safe to Stop';
-    CurrentStep.PermsHMI.Desc[1] := 'Work in Progress Clear';
-    CurrentStep.PermsHMI.Desc[2] := 'Equipment Ready for Stop';
-    
-    // Add any step-specific actions here
-    // Example: Complete current work cycle, prepare for safe stop, etc.
-    
-    // FB_SequenceStep determines next step automatically based on permissives
-    NextStep := fbStep2000.outNextStep;
-ELSE
-    // Reset permissives when step is not active (ensures fresh start next time)
-    step2000Perms := 16#FFFE;  // Reset to NOT OK when leaving step
+IF step2000.Entry THEN
+    // One-shot: command all axes to decelerate
+    bMotorsStopped := FALSE;
+    bBrakeEngaged := FALSE;
+    tonDecel(IN := FALSE);
+END_IF;
+
+IF step2000.Execute THEN
+    // Simulate controlled deceleration over 4 seconds
+    tonDecel(IN := TRUE, PT := T#4S);
+    bMotorsStopped := tonDecel.Q;
+
+    step2000.MapPerm(nIndex := 0, sDescription := 'Motors Stopped',   bValue := bMotorsStopped);
+    step2000.MapPerm(nIndex := 1, sDescription := 'No Motion Faults', bValue := TRUE);
+END_IF;
+
+IF step2000.Exiting THEN
+    tonDecel(IN := FALSE);
 END_IF;
 
 //=============================================================================
-// STEP 2002 - STOP EXECUTE
+// STEP 2002 - Clear Conveyor
+// Demonstrates: Entry (start flush), Execute (wait empty), Exiting (disengage)
 //=============================================================================
-fbStep2002(
-    inpStep := CurrentStep.Step,
-    cfgStep := 2002,
-    cfgNextStep := 0,  // sequence complete
-    inpStepTimerSeconds := StepTimerSeconds,
-    inpRetry := RetrySignal,
-    inpStepPermissives := step2002Perms,
-    cfgStepTimeout := 12,  // 12 second timeout
-    inpFaultStep := FALSE,
-    ActiveStep := CurrentStep
-);
+step2002(sm := sm, nStep := 2002, nNextStep := 2004, nTimeout := 15, sName := 'Clear Conveyor');
 
-// Step 2002 Active Logic
-IF fbStep2002.outStepActive THEN
-    // Only simulate permissives if step is active but not advancing
-    IF fbStep2002.outNextStep = fbStep2002.cfgStep THEN  // Step is waiting for permissives
-        // Permissives simulation - Simulate based on timer
-        IF StepTimerSeconds < 8 THEN
-            step2002Perms := 16#FFFD;  // Bit 1 not OK (stop not complete)
-        ELSE
-            step2002Perms := -1;  // All permissives OK after 8 seconds
-        END_IF;
-    END_IF;
-    
-    // HMI configuration and actions
-    CurrentStep.PermsHMI.Name := 'Stop Execute';
-    CurrentStep.PermsHMI.Desc[0] := 'Motors Stopping';
-    CurrentStep.PermsHMI.Desc[1] := 'Systems Powering Down';
-    CurrentStep.PermsHMI.Desc[2] := 'Safe State Achieved';
-    
-    // Add any step-specific actions here
-    // Example: Stop motors, power down systems, secure valves, etc.
-    
-    // FB_SequenceStep determines next step automatically based on permissives
-    NextStep := fbStep2002.outNextStep;
-ELSE
-    // Reset permissives when step is not active (ensures fresh start next time)
-    step2002Perms := 16#FFFD;  // Reset to NOT OK when leaving step
+IF step2002.Entry THEN
+    bConveyorEmpty := FALSE;
+END_IF;
+
+IF step2002.Execute THEN
+    // Simulate conveyor clearing in 6 seconds
+    bConveyorEmpty := sm.StepInfo.StepTimerSeconds >= 6.0;
+
+    step2002.MapPerm(nIndex := 0, sDescription := 'Conveyor Empty',      bValue := bConveyorEmpty);
+    step2002.MapPerm(nIndex := 1, sDescription := 'Product Accounted For', bValue := TRUE);
+END_IF;
+
+IF step2002.Exiting THEN
+    // Conveyor off
+    ;
+END_IF;
+
+//=============================================================================
+// STEP 2004 - Engage Brakes & Safe State
+// Demonstrates: Entry (engage brakes), nNextStep := 0 completes sequence
+//=============================================================================
+step2004(sm := sm, nStep := 2004, nNextStep := 0, nTimeout := 5, sName := 'Engage Brakes');
+
+IF step2004.Entry THEN
+    bBrakeEngaged := FALSE;
+END_IF;
+
+IF step2004.Execute THEN
+    bBrakeEngaged := sm.StepInfo.StepTimerSeconds >= 1.0;
+
+    step2004.MapPerm(nIndex := 0, sDescription := 'Brakes Engaged',   bValue := bBrakeEngaged);
+    step2004.MapPerm(nIndex := 1, sDescription := 'Safe State Active', bValue := TRUE);
 END_IF;
 ]]></ST>
     </Implementation>
     <LineIds Name="_2000_PRG_Stopping">
-      <LineId Id="1" Count="6" />
-      <LineId Id="19" Count="72" />
-      <LineId Id="94" Count="1" />
+      <LineId Id="1" Count="0" />
     </LineIds>
   </POU>
 </TcPlcObject>

@@ -1,252 +1,153 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
-  <POU Name="_3000_PRG_Running" Id="{12345678-1234-1234-1234-123456789002}" SpecialFunc="None">
+  <POU Name="_3000_PRG_Running" Id="{12345678-1234-1234-1234-123456789003}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM _3000_PRG_Running
 VAR_IN_OUT
-    CurrentStep : ActiveStep;  // Shared step structure with state machine
-	NextStep: DINT; // Next step to be modified by sequences
+    sm : FB_StateMachine;
 END_VAR
-VAR_INPUT
-    StepTimerSeconds : DINT;   // Timer value from state machine
-    RetrySignal : BOOL;        // Retry signal from state machine
-    StateMachineStatus : ST_SM_Status;  // Complete state machine status
-END_VAR
-
 VAR
-    // Step function blocks for running sequence
-    fbStep3000 : FB_SequenceStep;  // Production Start
-    fbStep3002 : FB_SequenceStep;  // Production Execute
-    fbStep3004 : FB_SequenceStep;  // Production Quality Check
-    fbStep3006 : FB_SequenceStep;  // Packaging Prepare
-    fbStep3008 : FB_SequenceStep;  // Production Finalize
-    
-    // Step permissives (simulation for testing)
-    step3000Perms : INT := -1;     // All OK for step 3000
-    step3002Perms : INT := -1;     // All OK for step 3002
-    step3004Perms : INT := -1;     // All OK for step 3004
-    step3006Perms : INT := -1;     // All OK for step 3006
-    step3008Perms : INT := -1;     // All OK for step 3008
-    
+    step3000 : FB_Step;
+    step3002 : FB_Step;
+    step3004 : FB_Step;
+    step3006 : FB_Step;
+    step3008 : FB_Step;
+
+    // Simulated process signals
+    bMaterialLoaded    : BOOL;
+    bProcessRunning    : BOOL;
+    bQualityOK         : BOOL;
+    bPackagingReady    : BOOL;
+    nPartCount         : INT;
+    nBatchTarget       : INT := 10;
+    tonProcess         : TON;
+    tonInspect         : TON;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[//=============================================================================
-// PRG_Running - Handles RUNNING state sequence (3000-3999)
+      <ST><![CDATA[
 //=============================================================================
-// Step numbering: 3000, 3002 (even numbers)
-// Fault steps: 3001, 3003 (odd numbers, +1 of original)
-// NOTE: Initial step setting (CurrentStep.Step = 0) is handled in MAIN program
-
-
+// STEP 3000 - Load Raw Material
+// Demonstrates: Entry (command loader), Execute (wait for material sensor)
 //=============================================================================
-// STEP 3000 - PRODUCTION START
-//=============================================================================
-fbStep3000(
-    inpStep := CurrentStep.Step +2,
-    cfgStep := 3000,
-    cfgNextStep := 3002,
-    inpStepTimerSeconds := StepTimerSeconds,
-    inpRetry := RetrySignal,
-    inpStepPermissives := step3000Perms,
-    cfgStepTimeout := 12,  // 12 second timeout
-    inpFaultStep := FALSE,
-    ActiveStep := CurrentStep
-);
+step3000(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 12, sName := 'Load Material');
 
-// Step 3000 Active Logic
-IF fbStep3000.outStepActive  THEN
-    // Only simulate permissives if step is active but not advancing
-    IF fbStep3000.outNextStep = fbStep3000.cfgStep THEN  // Step is waiting for permissives
-        // Permissives simulation - Simulate based on timer
-        IF StepTimerSeconds < 60 THEN
-            step3000Perms := 16#FFFE;  // Bit 0 not OK (not ready yet)
-        ELSE
-            step3000Perms := -1;  // All permissives OK after 5 seconds
-        END_IF;
-    END_IF;
-    
-    // HMI configuration and actions
-    CurrentStep.PermsHMI.Name := 'Production Start';
-    CurrentStep.PermsHMI.Desc[0] := 'Raw Material Available';
-    CurrentStep.PermsHMI.Desc[1] := 'Process Temperature OK';
-    CurrentStep.PermsHMI.Desc[2] := 'Quality System Ready';
-    
-    // Add any step-specific actions here
-    // Example: Start production line, initialize process parameters, etc.
-    
-    // FB_SequenceStep determines next step automatically based on permissives
-    NextStep := fbStep3000.outNextStep;
-ELSE
-    // Reset permissives when step is not active (ensures fresh start next time)
-    step3000Perms := 16#FFFE;  // Reset to NOT OK when leaving step
+IF step3000.Entry THEN
+    // One-shot: command the loader to feed material
+    bMaterialLoaded := FALSE;
+    nPartCount := 0;
+    tonProcess(IN := FALSE);
+END_IF;
+
+IF step3000.Execute THEN
+    // Simulate material arriving after 3s
+    bMaterialLoaded := sm.StepInfo.StepTimerSeconds >= 3.0;
+
+    step3000.MapPerm(nIndex := 0, sDescription := 'Material Loaded',    bValue := bMaterialLoaded);
+    step3000.MapPerm(nIndex := 1, sDescription := 'Temperature In Range', bValue := TRUE);
+    step3000.MapPerm(nIndex := 2, sDescription := 'Recipe Selected',    bValue := TRUE);
+END_IF;
+
+IF step3000.Exiting THEN
+    // Material confirmed, clear loader command
+    ;
 END_IF;
 
 //=============================================================================
-// STEP 3002 - PRODUCTION EXECUTE
+// STEP 3002 - Run Production Cycle
+// Demonstrates: Entry (start process), Execute (count parts), Exiting (stop)
 //=============================================================================
-fbStep3002(
-    inpStep := CurrentStep.Step,
-    cfgStep := 3002,
-    cfgNextStep := 3004,
-    inpStepTimerSeconds := StepTimerSeconds,
-    inpRetry := RetrySignal,
-    inpStepPermissives := step3002Perms,
-    cfgStepTimeout := 20,  // 20 second timeout
-    inpFaultStep := FALSE,
-    ActiveStep := CurrentStep
-);
+step3002(sm := sm, nStep := 3002, nNextStep := 3004, nTimeout := 30, sName := 'Production Cycle');
 
-// Step 3002 Active Logic
-IF fbStep3002.outStepActive THEN
-    // Only simulate permissives if step is active but not advancing
-    IF fbStep3002.outNextStep = fbStep3002.cfgStep THEN  // Step is waiting for permissives
-        // Permissives simulation - Simulate based on timer
-        IF StepTimerSeconds < 4 THEN
-            step3002Perms := 16#FFFD;  // Bit 1 not OK (production not complete)
-        ELSE
-            step3002Perms := -1;  // All permissives OK after 15 seconds
-        END_IF;
-    END_IF;
-    
-    // HMI configuration and actions
-    CurrentStep.PermsHMI.Name := 'Production Execute';
-    CurrentStep.PermsHMI.Desc[0] := 'Production Line Running';
-    CurrentStep.PermsHMI.Desc[1] := 'Quality Checks Passing';
-    CurrentStep.PermsHMI.Desc[2] := 'Output Quality OK';
-    
-    // Add any step-specific actions here
-    // Example: Monitor production process, quality checks, output control, etc.
-    
-    // FB_SequenceStep determines next step automatically based on permissives
-    NextStep := fbStep3002.outNextStep;
-ELSE
-    // Reset permissives when step is not active (ensures fresh start next time)
-    step3002Perms := 16#FFFD;  // Reset to NOT OK when leaving step
+IF step3002.Entry THEN
+    bProcessRunning := FALSE;
+    tonProcess(IN := FALSE);
+END_IF;
+
+IF step3002.Execute THEN
+    // Simulate process running, completes after 5s
+    tonProcess(IN := TRUE, PT := T#5S);
+    bProcessRunning := TRUE;
+    nPartCount := nPartCount + 1;  // In real code this would be edge-triggered
+
+    step3002.MapPerm(nIndex := 0, sDescription := 'Cycle Complete',   bValue := tonProcess.Q);
+    step3002.MapPerm(nIndex := 1, sDescription := 'No Alarms Active', bValue := TRUE);
+END_IF;
+
+IF step3002.Exiting THEN
+    tonProcess(IN := FALSE);
+    bProcessRunning := FALSE;
 END_IF;
 
 //=============================================================================
-// STEP 3004 - PRODUCTION QUALITY CHECK
+// STEP 3004 - Quality Inspection
+// Demonstrates: SetNextStep for dynamic branching (pass → pack, fail → reject)
 //=============================================================================
-fbStep3004(
-    inpStep := CurrentStep.Step,
-    cfgStep := 3004,
-    cfgNextStep := 3006,
-    inpStepTimerSeconds := StepTimerSeconds,
-    inpRetry := RetrySignal,
-    inpStepPermissives := step3004Perms,
-    cfgStepTimeout := 12,  // 12 second timeout
-    inpFaultStep := FALSE,
-    ActiveStep := CurrentStep
-);
+step3004(sm := sm, nStep := 3004, nNextStep := 3006, nTimeout := 12, sName := 'Quality Inspect');
 
-IF fbStep3004.outStepActive THEN
-    // Only simulate permissives if step is active but not advancing
-    IF fbStep3004.outNextStep = fbStep3004.cfgStep THEN  // Step is waiting for permissives
-        // Simulate based on timer: delay bit 2
-        IF StepTimerSeconds < 3 THEN
-            step3004Perms := 16#FFFB;  // Bit 2 not OK
-        ELSE
-            step3004Perms := -1;       // All OK
-        END_IF;
+IF step3004.Entry THEN
+    bQualityOK := FALSE;
+    tonInspect(IN := FALSE);
+END_IF;
+
+IF step3004.Execute THEN
+    // Simulate inspection taking 2s, always passes in this example
+    tonInspect(IN := TRUE, PT := T#2S);
+    bQualityOK := tonInspect.Q;
+
+    // Dynamic branching: if quality fails, skip packaging and go to finalize
+    IF tonInspect.Q AND NOT bQualityOK THEN
+        step3004.SetNextStep(nStep := 3008);  // Skip to finalize (reject path)
     END_IF;
+    // Otherwise default nNextStep := 3006 (packaging) is used
 
-    // HMI configuration and actions
-    CurrentStep.PermsHMI.Name := 'Production Quality Check';
-    CurrentStep.PermsHMI.Desc[0] := 'Inspection Running';
-    CurrentStep.PermsHMI.Desc[1] := 'Reject Bin Clear';
-    CurrentStep.PermsHMI.Desc[2] := 'Measurements In Spec';
+    step3004.MapPerm(nIndex := 0, sDescription := 'Inspection Complete', bValue := tonInspect.Q);
+END_IF;
 
-    // Advance handled by FB
-    NextStep := fbStep3004.outNextStep;
-ELSE
-    step3004Perms := 16#FFFB;  // Reset to NOT OK when leaving step
+IF step3004.Exiting THEN
+    tonInspect(IN := FALSE);
 END_IF;
 
 //=============================================================================
-// STEP 3006 - PACKAGING PREPARE
+// STEP 3006 - Package Product
+// Demonstrates: Entry (prepare packaging), Execute (seal & label)
 //=============================================================================
-fbStep3006(
-    inpStep := CurrentStep.Step,
-    cfgStep := 3006,
-    cfgNextStep := 3008,
-    inpStepTimerSeconds := StepTimerSeconds,
-    inpRetry := RetrySignal,
-    inpStepPermissives := step3006Perms,
-    cfgStepTimeout := 15,  // 15 second timeout
-    inpFaultStep := FALSE,
-    ActiveStep := CurrentStep
-);
+step3006(sm := sm, nStep := 3006, nNextStep := 3008, nTimeout := 15, sName := 'Package Product');
 
-IF fbStep3006.outStepActive THEN
-    // Only simulate permissives if step is active but not advancing
-    IF fbStep3006.outNextStep = fbStep3006.cfgStep THEN  // Step is waiting for permissives
-        // Simulate based on timer: delay bit 3
-        IF StepTimerSeconds < 3 THEN
-            step3006Perms := 16#FFF7;  // Bit 3 not OK
-        ELSE
-            step3006Perms := -1;       // All OK
-        END_IF;
-    END_IF;
+IF step3006.Entry THEN
+    bPackagingReady := FALSE;
+END_IF;
 
-    // HMI configuration and actions
-    CurrentStep.PermsHMI.Name := 'Packaging Prepare';
-    CurrentStep.PermsHMI.Desc[0] := 'Empty Boxes Available';
-    CurrentStep.PermsHMI.Desc[1] := 'Labeler Ready';
-    CurrentStep.PermsHMI.Desc[2] := 'Conveyor Clear';
+IF step3006.Execute THEN
+    bPackagingReady := sm.StepInfo.StepTimerSeconds >= 3.0;
 
-    // Advance handled by FB
-    NextStep := fbStep3006.outNextStep;
-ELSE
-    step3006Perms := 16#FFF7;  // Reset to NOT OK when leaving step
+    step3006.MapPerm(nIndex := 0, sDescription := 'Box Sealed',   bValue := bPackagingReady);
+    step3006.MapPerm(nIndex := 1, sDescription := 'Label Applied', bValue := bPackagingReady);
+    step3006.MapPerm(nIndex := 2, sDescription := 'Conveyor Clear', bValue := TRUE);
+END_IF;
+
+IF step3006.Exiting THEN
+    // Package dispatched
+    ;
 END_IF;
 
 //=============================================================================
-// STEP 3008 - PRODUCTION FINALIZE
+// STEP 3008 - Finalize Batch
+// Demonstrates: Exiting (generate reports), nNextStep := 0 ends sequence
 //=============================================================================
-fbStep3008(
-    inpStep := CurrentStep.Step,
-    cfgStep := 3008,
-    cfgNextStep := 0,  // sequence complete
-    inpStepTimerSeconds := StepTimerSeconds,
-    inpRetry := RetrySignal,
-    inpStepPermissives := step3008Perms,
-    cfgStepTimeout := 10,  // 10 second timeout
-    inpFaultStep := FALSE,
-    ActiveStep := CurrentStep
-);
+step3008(sm := sm, nStep := 3008, nNextStep := 0, nTimeout := 10, sName := 'Finalize Batch');
 
-IF fbStep3008.outStepActive THEN
-    // Only simulate permissives if step is active but not advancing
-    IF fbStep3008.outNextStep = fbStep3008.cfgStep THEN  // Step is waiting for permissives
-        // Simulate based on timer: delay bit 4
-        IF StepTimerSeconds < 4 THEN
-            step3008Perms := 16#FFEF;  // Bit 4 not OK
-        ELSE
-            step3008Perms := -1;       // All OK
-        END_IF;
-    END_IF;
+IF step3008.Execute THEN
+    step3008.MapPerm(nIndex := 0, sDescription := 'Batch Record Saved', bValue := sm.StepInfo.StepTimerSeconds >= 2.0);
+    step3008.MapPerm(nIndex := 1, sDescription := 'Counters Reset',     bValue := TRUE);
+END_IF;
 
-    // HMI configuration and actions
-    CurrentStep.PermsHMI.Name := 'Production Finalize';
-    CurrentStep.PermsHMI.Desc[0] := 'Batch Closed';
-    CurrentStep.PermsHMI.Desc[1] := 'Reports Generated';
-    CurrentStep.PermsHMI.Desc[2] := 'Area Clear';
-
-    // Advance handled by FB
-    NextStep := fbStep3008.outNextStep;
-ELSE
-    step3008Perms := 16#FFEF;  // Reset to NOT OK when leaving step
+IF step3008.Exiting THEN
+    // Final cleanup: reset batch counters
+    nPartCount := 0;
 END_IF;
 ]]></ST>
     </Implementation>
     <LineIds Name="_3000_PRG_Running">
-      <LineId Id="1" Count="6" />
-      <LineId Id="19" Count="72" />
-      <LineId Id="94" Count="1" />
-      <LineId Id="210" Count="6" />
-      <LineId Id="92" Count="1" />
-      <LineId Id="217" Count="1" />
-      <LineId Id="96" Count="113" />
-      <LineId Id="219" Count="0" />
+      <LineId Id="1" Count="0" />
     </LineIds>
   </POU>
 </TcPlcObject>

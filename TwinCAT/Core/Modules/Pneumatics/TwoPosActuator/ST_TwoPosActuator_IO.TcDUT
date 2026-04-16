@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="ST_TwoPosActuator_IO" Id="{A1234567-1234-1234-1234-123456789005}">
+    <Declaration><![CDATA[TYPE ST_TwoPosActuator_IO :
+STRUCT
+    // Input feedbacks from field
+    inFbkAdvanced AT %I* : BOOL;       // Advanced position feedback
+    inFbkRetracted AT %I* : BOOL;      // Retracted position feedback
+    
+    // Output commands to field
+    outValveAdvance AT %Q* : BOOL;     // Advance valve command
+    outValveRetract AT %Q* : BOOL;     // Retract valve command
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>
