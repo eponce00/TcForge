@@ -18,10 +18,10 @@
     <LibraryReferences>{5a50abef-9dcc-4283-91b1-6ea1a6fecc9a}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Testing.TcTTO">
+    <Compile Include="POUs\MAIN.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="POUs\MAIN.TcPOU">
+    <Compile Include="Testing.TcTTO">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Tests\FB_F_ValidateRequester_Test.TcPOU">
@@ -57,11 +57,6 @@
       <DefaultResolution>TcUnit, * (www.tcunit.org)</DefaultResolution>
       <Namespace>TcUnit</Namespace>
     </PlaceholderReference>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Testing.tmc">
-      <SubType>Content</SubType>
-    </None>
   </ItemGroup>
   <ProjectExtensions>
     <PlcProjectOptions>
