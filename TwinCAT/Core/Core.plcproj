@@ -86,7 +86,7 @@
     <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Status.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_StepInfo.TcDUT">
+    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Step.TcDUT">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="PlcTask.TcTTO">

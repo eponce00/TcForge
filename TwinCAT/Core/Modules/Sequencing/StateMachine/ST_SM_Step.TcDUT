@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_SM_Step" Id="{b2c3d4e5-0001-4000-8000-000000000001}">
+    <Declaration><![CDATA[(*
+Active step snapshot published by FB_StateMachine.
+FB_Step writes the name and permissives into here while it is the
+active step. Number, next target, and timer are owned by the state
+machine itself.
+*)
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_SM_Step :
+STRUCT
+    {attribute 'OPC.UA.DA.Description' := 'Active step number'}
+    Current : DINT;
+
+    {attribute 'OPC.UA.DA.Description' := 'Active step name (published by FB_Step)'}
+    Name : STRING(40);
+
+    {attribute 'OPC.UA.DA.Description' := 'Step the state machine will transition to next'}
+    Next : DINT;
+
+    {attribute 'OPC.UA.DA.Description' := 'Seconds spent in the active step'}
+    TimerSeconds : REAL;
+
+    {attribute 'OPC.UA.DA.Description' := 'Config of the active step permissives'}
+    PermCfg : ST_Permissive_Config;
+
+    {attribute 'OPC.UA.DA.Description' := 'Status of the active step permissives'}
+    PermStatus : ST_Permissive_Status;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

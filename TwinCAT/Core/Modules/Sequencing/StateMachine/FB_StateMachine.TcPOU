@@ -13,13 +13,6 @@ END_VAR
 VAR_OUTPUT
     EnableOut : BOOL;
     Status : ST_SM_Status;
-    StepInfo : ST_SM_StepInfo;
-    StepPermCfg : ST_Permissive_Config;
-    StepPermStatus : ST_Permissive_Status;
-    BlockedCondition : DINT;
-    StarvedCondition : DINT;
-    RunningIntlkCfg : ST_Interlock_Config;
-    RunningIntlkStatus : ST_Interlock_Status;
 END_VAR
 
 VAR CONSTANT
@@ -59,13 +52,13 @@ VAR
     ReturnNextStep : DINT;
     
     // Permission handlers
-    internalAutoPerm : FB_Permissives;
-    internalHomePerm : FB_Permissives;
-    internalProceedPerm : FB_Permissives;
-    internalStartPerm : FB_Permissives;
+    permAuto : FB_Permissives;
+    permHome : FB_Permissives;
+    permProceed : FB_Permissives;
+    permStart : FB_Permissives;
     
     // Running interlock (latching - auto-aborts from any active state)
-    runningIntlk : FB_Interlock;
+    intlkRunning : FB_Interlock;
     
     // Temp variables
     permIndex : UDINT;
@@ -90,16 +83,15 @@ IF EnableIn THEN
     //-------------------------------------------------------------------------
     // Process permissions for different states
     //-------------------------------------------------------------------------
-    internalHomePerm();
-    internalStartPerm();
-    internalProceedPerm();
-    internalAutoPerm();
+    permHome();
+    permStart();
+    permProceed();
+    permAuto();
     
-    runningIntlk(cfg := RunningIntlkCfg);
-    RunningIntlkStatus := runningIntlk.sts;
+    intlkRunning();
     
     // Auto-abort if any running interlock trips (e-stop, safety gate, etc.)
-    IF NOT RunningIntlkStatus.bOK AND
+    IF NOT intlkRunning.sts.bOK AND
        NOT (Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTING) THEN
         _abortRequested := TRUE;
     END_IF;
@@ -108,25 +100,25 @@ IF EnableIn THEN
     // Ready state calculations
     //-------------------------------------------------------------------------
     Status.ReadyToHome := (Status.State = E_SM_State.STOPPED) AND
-                          internalHomePerm.sts.bOK AND
-                          internalAutoPerm.sts.bOK;
+                          permHome.sts.bOK AND
+                          permAuto.sts.bOK;
 
     Status.ReadyToStart := (Status.State = E_SM_State.READY) AND
-                          internalStartPerm.sts.bOK AND
-                          internalAutoPerm.sts.bOK AND
+                          permStart.sts.bOK AND
+                          permAuto.sts.bOK AND
                           NOT Status.AutoStartRequest;
 
     Status.ReadyToProceed := (Status.State = E_SM_State.PAUSED) AND
-                            internalProceedPerm.sts.bOK AND
-                            internalAutoPerm.sts.bOK;
+                            permProceed.sts.bOK AND
+                            permAuto.sts.bOK;
 
     //-------------------------------------------------------------------------
     // Auto-start request logic
     // AutoCycle fires when we just finished a RUNNING cycle (READY with LastState=RUNNING)
     //-------------------------------------------------------------------------
-    Status.AutoStartRequest := _startRequested AND NOT internalStartPerm.sts.bOK;
+    Status.AutoStartRequest := _startRequested AND NOT permStart.sts.bOK;
     Status.AutoCycleRequest := cfgAutoRun AND (Status.State = E_SM_State.READY) AND
-                              (Status.LastState = E_SM_State.RUNNING) AND NOT internalStartPerm.sts.bOK;
+                              (Status.LastState = E_SM_State.RUNNING) AND NOT permStart.sts.bOK;
 
     //-------------------------------------------------------------------------
     // Remember last state before change
@@ -136,7 +128,7 @@ IF EnableIn THEN
     //-------------------------------------------------------------------------
     // Auto-run handling (internal - not from external command)
     //-------------------------------------------------------------------------
-    IF cfgAutoRun AND internalAutoPerm.sts.bOK AND internalStartPerm.sts.bOK AND
+    IF cfgAutoRun AND permAuto.sts.bOK AND permStart.sts.bOK AND
        (Status.State = E_SM_State.READY) AND (Status.LastState = E_SM_State.RUNNING) THEN
         _startRequested := TRUE;
     END_IF;
@@ -146,7 +138,7 @@ IF EnableIn THEN
     //-------------------------------------------------------------------------
     seqDone := _IsStepInStateRange(
         state := Status.State,
-        nStep := StepInfo.CurrentStep
+        nStep := Status.Step.Current
     ) AND (_nextStep = 0);
 
     R_TRIG_5(CLK := seqDone);
@@ -194,7 +186,7 @@ IF EnableIn THEN
     // Running + Pause → Pausing (save context for Proceed)
     IF _pauseRequested AND (Status.State = E_SM_State.RUNNING) THEN
         _returnState := Status.State;
-        ReturnNextStep := StepInfo.CurrentStep;  // resume re-enters same step
+        ReturnNextStep := Status.Step.Current;  // resume re-enters same step
         Status.State := E_SM_State.PAUSING;
         _nextStep := 0;
     END_IF;
@@ -215,7 +207,7 @@ IF EnableIn THEN
 
     // Ready + Start → Running
     IF (_startRequested OR
-        (Status.AutoStartRequest AND internalStartPerm.sts.bOK AND internalAutoPerm.sts.bOK)) AND
+        (Status.AutoStartRequest AND permStart.sts.bOK AND permAuto.sts.bOK)) AND
         (Status.State = E_SM_State.READY) THEN
         _nextStep := 0;
         Status.State := E_SM_State.RUNNING;
@@ -267,41 +259,41 @@ IF EnableIn THEN
     //-------------------------------------------------------------------------
     
     // Reset timer and clear step name when transitioning to step 0
-    stepIsZero := (StepInfo.CurrentStep = 0);
+    stepIsZero := (Status.Step.Current = 0);
     R_TRIG_1(CLK := stepIsZero);
     IF R_TRIG_1.Q THEN
-        StepInfo.CurrentStepName := '';
+        Status.Step.Name := '';
         _ClearStepPermissives();
         TimerReset := TRUE;
         StepTimer(IN := FALSE, PT := T#99H);
-        StepInfo.StepTimerSeconds := 0.0;
+        Status.Step.TimerSeconds := 0.0;
     END_IF;
     
     // Auto-initialize first step when entering an active state
-    IF StepInfo.CurrentStep = 0 AND Status.ActiveState THEN
+    IF Status.Step.Current = 0 AND Status.ActiveState THEN
         _nextStep := _GetFirstStepForState(state := Status.State);
     END_IF;
     
     // Detect step change and update
-    IF StepInfo.CurrentStep <> _nextStep THEN
-        PreviousStep := StepInfo.CurrentStep;
-        StepInfo.CurrentStep := _nextStep;
+    IF Status.Step.Current <> _nextStep THEN
+        PreviousStep := Status.Step.Current;
+        Status.Step.Current := _nextStep;
         TimerReset := TRUE;
         StepTimer(IN := FALSE, PT := T#99H);
-        StepInfo.StepTimerSeconds := 0.0;
+        Status.Step.TimerSeconds := 0.0;
     END_IF;
     
-    StepInfo.NextStep := _nextStep;
+    Status.Step.Next := _nextStep;
     
     // Step timer logic
     IF NOT (Status.State = E_SM_State.PAUSED) OR ((Status.State = E_SM_State.PAUSED) AND _completeStateRequested) THEN
         IF TimerReset THEN
             StepTimer(IN := FALSE, PT := T#99H);
-            StepInfo.StepTimerSeconds := 0.0;
+            Status.Step.TimerSeconds := 0.0;
             TimerReset := FALSE;
         ELSE
             StepTimer(IN := TRUE, PT := T#99H);
-            StepInfo.StepTimerSeconds := UDINT_TO_REAL(TIME_TO_UDINT(StepTimer.ET)) / 1000.0;
+            Status.Step.TimerSeconds := UDINT_TO_REAL(TIME_TO_UDINT(StepTimer.ET)) / 1000.0;
         END_IF;
     ELSE
         StepTimer(IN := FALSE, PT := T#99H);
@@ -310,7 +302,7 @@ IF EnableIn THEN
     //-------------------------------------------------------------------------
     // Fault detection
     //-------------------------------------------------------------------------
-    LsOdd := StepInfo.CurrentStep MOD 2;
+    LsOdd := Status.Step.Current MOD 2;
     Status.Faulted := LsOdd <> 0;
     Status.SubmoduleFaulted := inpSubmoduleFaulted;
     
@@ -328,33 +320,31 @@ IF EnableIn THEN
     
     IF _retryActive AND Status.Faulted THEN
         // Roll back to previous (even, non-faulted) step to re-enter it
-        _nextStep := StepInfo.CurrentStep - 1;
+        _nextStep := Status.Step.Current - 1;
     END_IF;
     
     //-------------------------------------------------------------------------
-    // Blocked and Starved condition handling for OEE
+    // OEE condition codes (Blocked / Starved)
     //-------------------------------------------------------------------------
     IF inpBlockedCondition = 0 THEN
-        BlockedCondition := 0;
+        Status.BlockedCondition := 0;
     END_IF;
     
     IF inpBlockedCondition <> 0 AND
        (Status.State = E_SM_State.RUNNING OR Status.State = E_SM_State.STOPPING OR
         Status.State = E_SM_State.READY) THEN
-        BlockedCondition := inpBlockedCondition;
-        Status.Blocked := TRUE;
+        Status.BlockedCondition := inpBlockedCondition;
         inpBlockedCondition := 0;
     END_IF;
     
     IF inpStarvedCondition = 0 THEN
-        StarvedCondition := 0;
+        Status.StarvedCondition := 0;
     END_IF;
     
     IF inpStarvedCondition <> 0 AND
        (Status.State = E_SM_State.RUNNING OR Status.State = E_SM_State.STOPPING OR
         Status.State = E_SM_State.READY) THEN
-        StarvedCondition := inpStarvedCondition;
-        Status.Starved := TRUE;
+        Status.StarvedCondition := inpStarvedCondition;
         inpStarvedCondition := 0;
     END_IF;
     
@@ -367,7 +357,7 @@ ELSE
     _pauseRequested := FALSE;
     _proceedRequested := FALSE;
     _completeStateRequested := FALSE;
-    StepInfo.CurrentStepName := '';
+    Status.Step.Name := '';
         _ClearStepPermissives();
 END_IF;
 ]]></ST>
@@ -378,19 +368,19 @@ END_IF;
         <Method Name="_ClearStepPermissives" Id="{d4e5f6a7-b8c9-0123-def0-123456789abf}" FolderPath="Private\">
             <Declaration><![CDATA[METHOD PRIVATE _ClearStepPermissives]]></Declaration>
             <Implementation>
-                <ST><![CDATA[StepPermCfg.nBypassable := 0;
-StepPermStatus.bOK := FALSE;
-StepPermStatus.nPermissives := 0;
-StepPermStatus.nBypassMask := 0;
-StepPermStatus.nFirstFailureBitIndex := 999;
+                <ST><![CDATA[Status.Step.PermCfg.nBypassable := 0;
+Status.Step.PermStatus.bOK := FALSE;
+Status.Step.PermStatus.nPermissives := 0;
+Status.Step.PermStatus.nBypassMask := 0;
+Status.Step.PermStatus.nFirstFailureBitIndex := 999;
 
 FOR permIndex := 0 TO 63 DO
-        StepPermCfg.aNames[permIndex] := '';
-        StepPermStatus.aFaceplates[permIndex].name := '';
-        StepPermStatus.aFaceplates[permIndex].stsOK := FALSE;
-        StepPermStatus.aFaceplates[permIndex].stsMapped := FALSE;
-        StepPermStatus.aFaceplates[permIndex].stsBypassed := FALSE;
-        StepPermStatus.aFaceplates[permIndex].cfgBypassable := FALSE;
+        Status.Step.PermCfg.aNames[permIndex] := '';
+        Status.Step.PermStatus.aFaceplates[permIndex].name := '';
+        Status.Step.PermStatus.aFaceplates[permIndex].stsOK := FALSE;
+        Status.Step.PermStatus.aFaceplates[permIndex].stsMapped := FALSE;
+        Status.Step.PermStatus.aFaceplates[permIndex].stsBypassed := FALSE;
+        Status.Step.PermStatus.aFaceplates[permIndex].cfgBypassable := FALSE;
 END_FOR;]]></ST>
             </Implementation>
         </Method>
@@ -483,13 +473,13 @@ IF NOT (Status.State = E_SM_State.STOPPED) THEN
 END_IF;
 
 // Permission check (Home-specific)
-IF NOT internalHomePerm.sts.bOK THEN
+IF NOT permHome.sts.bOK THEN
     Home := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
 
 // Permission check (global auto permissives)
-IF NOT internalAutoPerm.sts.bOK THEN
+IF NOT permAuto.sts.bOK THEN
     Home := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
@@ -560,13 +550,13 @@ IF NOT (Status.State = E_SM_State.PAUSED) THEN
 END_IF;
 
 // Permission check (Proceed-specific)
-IF NOT internalProceedPerm.sts.bOK THEN
+IF NOT permProceed.sts.bOK THEN
     Proceed := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
 
 // Permission check (global auto permissives)
-IF NOT internalAutoPerm.sts.bOK THEN
+IF NOT permAuto.sts.bOK THEN
     Proceed := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
@@ -616,13 +606,13 @@ IF NOT (Status.State = E_SM_State.READY) THEN
 END_IF;
 
 // Permission check (Start-specific)
-IF NOT internalStartPerm.sts.bOK THEN
+IF NOT permStart.sts.bOK THEN
     Start := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
 
 // Permission check (global auto permissives)
-IF NOT internalAutoPerm.sts.bOK THEN
+IF NOT permAuto.sts.bOK THEN
     Start := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
@@ -672,7 +662,7 @@ VAR_INPUT
     bGood    : BOOL;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[runningIntlk.MapInput(bitIndex := bitIndex, inputValue := bGood);]]></ST>
+        <ST><![CDATA[intlkRunning.MapInput(bitIndex := bitIndex, inputValue := bGood);]]></ST>
       </Implementation>
     </Method>
     <Method Name="ResetRunningIntlk" Id="{f7a8b9c0-d1e2-4f30-a001-000000000002}" FolderPath="Public\">
@@ -681,7 +671,7 @@ END_VAR]]></Declaration>
 // The machine will still be in STOPPED/ABORTING — issue Home/Start separately.
 METHOD ResetRunningIntlk]]></Declaration>
       <Implementation>
-        <ST><![CDATA[runningIntlk.Reset();]]></ST>
+        <ST><![CDATA[intlkRunning.Reset();]]></ST>
       </Implementation>
     </Method>
     <Method Name="SetNextStep" Id="{d4e5f6a7-b8c9-0123-def0-123456789abc}" FolderPath="Internal\">
@@ -701,7 +691,7 @@ VAR_INPUT
     sName : STRING(40);
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[StepInfo.CurrentStepName := sName;]]></ST>
+        <ST><![CDATA[Status.Step.Name := sName;]]></ST>
       </Implementation>
     </Method>
         <Method Name="SetStepPermissives" Id="{d4e5f6a7-b8c9-0123-def0-123456789abe}" FolderPath="Internal\">
@@ -712,8 +702,8 @@ VAR_INPUT
         sts : ST_Permissive_Status;
 END_VAR]]></Declaration>
             <Implementation>
-                <ST><![CDATA[StepPermCfg := cfg;
-StepPermStatus := sts;]]></ST>
+                <ST><![CDATA[Status.Step.PermCfg := cfg;
+Status.Step.PermStatus := sts;]]></ST>
             </Implementation>
         </Method>
     <Method Name="SetStepFault" Id="{e5f6a7b8-c9d0-1234-ef01-23456789abcd}" FolderPath="Internal\">
@@ -726,7 +716,7 @@ VAR_INPUT
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[IF bFault THEN
-    _nextStep := StepInfo.CurrentStep + 1;
+    _nextStep := Status.Step.Current + 1;
 END_IF;]]></ST>
       </Implementation>
     </Method>

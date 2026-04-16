@@ -65,7 +65,7 @@ END_IF;
 
 IF step1002.Execute THEN
     // Simulate homing motion completing after some time
-    bHomeSensorReached := sm.StepInfo.StepTimerSeconds >= 5.0;
+    bHomeSensorReached := sm.Status.Step.TimerSeconds >= 5.0;
     bServoReady := bHomeSensorReached;
 
     step1002.MapPerm(nIndex := 0, sDescription := 'Home Sensor Reached', bValue := bHomeSensorReached);
@@ -90,7 +90,7 @@ END_IF;
 
 IF step1004.Execute THEN
     // Verify the home position is stable
-    step1004.MapPerm(nIndex := 0, sDescription := 'Position Stable', bValue := sm.StepInfo.StepTimerSeconds >= 1.0);
+    step1004.MapPerm(nIndex := 0, sDescription := 'Position Stable', bValue := sm.Status.Step.TimerSeconds >= 1.0);
     step1004.MapPerm(nIndex := 1, sDescription := 'Encoder Valid',   bValue := TRUE);
 END_IF;
 ]]></ST>

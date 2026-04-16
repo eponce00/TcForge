@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="_4000_PRG_Pausing" Id="{12345678-1234-1234-1234-123456789004}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM _4000_PRG_Pausing
@@ -54,7 +54,7 @@ END_IF;
 
 IF step4002.Execute THEN
     // Simulate process freeze
-    bProcessSuspended := sm.StepInfo.StepTimerSeconds >= 1.0;
+    bProcessSuspended := sm.Status.Step.TimerSeconds >= 1.0;
 
     step4002.MapPerm(nIndex := 0, sDescription := 'Process State Saved',  bValue := bProcessSuspended);
     step4002.MapPerm(nIndex := 1, sDescription := 'Heaters in Standby',   bValue := TRUE);

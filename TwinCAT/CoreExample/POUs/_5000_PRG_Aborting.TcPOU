@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="_5000_PRG_Aborting" Id="{12345678-1234-1234-1234-123456789005}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM _5000_PRG_Aborting
@@ -58,7 +58,7 @@ END_IF;
 
 IF step5002.Execute THEN
     // Simulate pressure bleed-off over 3s
-    bPneumaticsVented := sm.StepInfo.StepTimerSeconds >= 3.0;
+    bPneumaticsVented := sm.Status.Step.TimerSeconds >= 3.0;
 
     step5002.MapPerm(nIndex := 0, sDescription := 'Pressure Below 0.5 bar', bValue := bPneumaticsVented);
     step5002.MapPerm(nIndex := 1, sDescription := 'Vent Valves Open',       bValue := TRUE);
@@ -71,7 +71,7 @@ END_IF;
 step5004(sm := sm, nStep := 5004, nNextStep := 0, nTimeout := 5, sName := 'Confirm Safe State');
 
 IF step5004.Execute THEN
-    step5004.MapPerm(nIndex := 0, sDescription := 'All Energy Isolated',  bValue := sm.StepInfo.StepTimerSeconds >= 1.0);
+    step5004.MapPerm(nIndex := 0, sDescription := 'All Energy Isolated',  bValue := sm.Status.Step.TimerSeconds >= 1.0);
     step5004.MapPerm(nIndex := 1, sDescription := 'Safety Relay Latched', bValue := TRUE);
 END_IF;
 

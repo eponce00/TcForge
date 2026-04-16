@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="_2000_PRG_Stopping" Id="{12345678-1234-1234-1234-123456789002}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM _2000_PRG_Stopping
@@ -56,7 +56,7 @@ END_IF;
 
 IF step2002.Execute THEN
     // Simulate conveyor clearing in 6 seconds
-    bConveyorEmpty := sm.StepInfo.StepTimerSeconds >= 6.0;
+    bConveyorEmpty := sm.Status.Step.TimerSeconds >= 6.0;
 
     step2002.MapPerm(nIndex := 0, sDescription := 'Conveyor Empty',      bValue := bConveyorEmpty);
     step2002.MapPerm(nIndex := 1, sDescription := 'Product Accounted For', bValue := TRUE);
@@ -78,7 +78,7 @@ IF step2004.Entry THEN
 END_IF;
 
 IF step2004.Execute THEN
-    bBrakeEngaged := sm.StepInfo.StepTimerSeconds >= 1.0;
+    bBrakeEngaged := sm.Status.Step.TimerSeconds >= 1.0;
 
     step2004.MapPerm(nIndex := 0, sDescription := 'Brakes Engaged',   bValue := bBrakeEngaged);
     step2004.MapPerm(nIndex := 1, sDescription := 'Safe State Active', bValue := TRUE);

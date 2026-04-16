@@ -13,11 +13,13 @@ VAR
     btnPause   : BOOL;
     btnProceed : BOOL;
     btnRetry   : BOOL;
+	
+	bTestcfgAutoRun : BOOL := TRUE;
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[fbStateMachine(
     EnableIn := TRUE,
-    cfgAutoRun := FALSE  // disable auto-run so manual buttons stay in control
+    cfgAutoRun := bTestcfgAutoRun  // disable auto-run so manual buttons stay in control
 );
 
 // --- Online command buttons (write TRUE in TwinCAT online view to trigger) ---
@@ -39,6 +41,8 @@ _6000_PRG_Proceeding(sm := fbStateMachine);
     </Implementation>
     <LineIds Name="MAIN">
       <LineId Id="1" Count="0" />
+      <LineId Id="4" Count="18" />
+      <LineId Id="2" Count="0" />
     </LineIds>
   </POU>
 </TcPlcObject>

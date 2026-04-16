@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="_3000_PRG_Running" Id="{12345678-1234-1234-1234-123456789003}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM _3000_PRG_Running
@@ -39,7 +39,7 @@ END_IF;
 
 IF step3000.Execute THEN
     // Simulate material arriving after 3s
-    bMaterialLoaded := sm.StepInfo.StepTimerSeconds >= 3.0;
+    bMaterialLoaded := sm.Status.Step.TimerSeconds >= 3.0;
 
     step3000.MapPerm(nIndex := 0, sDescription := 'Material Loaded',    bValue := bMaterialLoaded);
     step3000.MapPerm(nIndex := 1, sDescription := 'Temperature In Range', bValue := TRUE);
@@ -117,7 +117,7 @@ IF step3006.Entry THEN
 END_IF;
 
 IF step3006.Execute THEN
-    bPackagingReady := sm.StepInfo.StepTimerSeconds >= 3.0;
+    bPackagingReady := sm.Status.Step.TimerSeconds >= 3.0;
 
     step3006.MapPerm(nIndex := 0, sDescription := 'Box Sealed',   bValue := bPackagingReady);
     step3006.MapPerm(nIndex := 1, sDescription := 'Label Applied', bValue := bPackagingReady);
@@ -136,7 +136,7 @@ END_IF;
 step3008(sm := sm, nStep := 3008, nNextStep := 0, nTimeout := 10, sName := 'Finalize Batch');
 
 IF step3008.Execute THEN
-    step3008.MapPerm(nIndex := 0, sDescription := 'Batch Record Saved', bValue := sm.StepInfo.StepTimerSeconds >= 2.0);
+    step3008.MapPerm(nIndex := 0, sDescription := 'Batch Record Saved', bValue := sm.Status.Step.TimerSeconds >= 2.0);
     step3008.MapPerm(nIndex := 1, sDescription := 'Counters Reset',     bValue := TRUE);
 END_IF;
 

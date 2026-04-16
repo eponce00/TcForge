@@ -62,7 +62,7 @@ _perms();
 _permsSatisfied := _perms.sts.bOK;
 
 // Check if this step is the active step in the state machine
-_active := (sm.StepInfo.CurrentStep = nStep);
+_active := (sm.Status.Step.Current = nStep);
 
 // Reset lifecycle outputs each scan
 Entry := FALSE;
@@ -99,7 +99,7 @@ IF _active THEN
         END_IF;
 
         // Timeout fault detection
-        IF nTimeout > 0 AND sm.StepInfo.StepTimerSeconds > DINT_TO_REAL(nTimeout) THEN
+        IF nTimeout > 0 AND sm.Status.Step.TimerSeconds > DINT_TO_REAL(nTimeout) THEN
             sm.SetStepFault(bFault := TRUE);
         END_IF;
 
