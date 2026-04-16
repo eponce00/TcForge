@@ -1440,8 +1440,8 @@ External Setpoint Generation:
 			</Settings>
 			<Licenses>
 				<Target>
-					<ManualSelect Instances="1">{87DBEEFC-A548-4B37-9797-C9521D3A43A2}</ManualSelect>
 					<ManualSelect>{BDCC0070-42D5-49AE-ABF1-1D4434813D60}</ManualSelect>
+					<ManualSelect Instances="1">{87DBEEFC-A548-4B37-9797-C9521D3A43A2}</ManualSelect>
 				</Target>
 			</Licenses>
 			<Tasks>
@@ -1449,7 +1449,7 @@ External Setpoint Generation:
 					<Name>PlcTask</Name>
 				</Task>
 				<Task Id="8" Priority="21" CycleTime="100000" AmsPort="352" AdtTasks="true">
-					<Name>Testing</Name>
+					<Name>)</Name>
 				</Task>
 			</Tasks>
 		</System>
