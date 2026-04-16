@@ -2,7 +2,7 @@
 
 All RPC methods across the library return `E_RpcMethodResponse`, a standardized enumeration that tells the caller whether a command was accepted or rejected — and why.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](Programming-Standards.md) · [Command Source Control](Command-Source-Control.md) · [HMI Integration →](HMI-Integration.md)
+> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [HMI Integration →](4-HMI-Integration.md)
 
 ---
 

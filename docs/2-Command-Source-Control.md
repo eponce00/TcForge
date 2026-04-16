@@ -2,7 +2,7 @@
 
 All commands in this library are issued through **RPC methods** on function blocks — there are no `pcmd` or `ocmd` input pins. Each method validates the request, checks permissions, and executes internally. The FB body handles only cyclic evaluation.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](Programming-Standards.md) · [RPC Method Response →](RPC-Method-Response.md) · [HMI Integration →](HMI-Integration.md)
+> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md)
 
 ---
 

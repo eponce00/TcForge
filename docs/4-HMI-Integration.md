@@ -2,7 +2,7 @@
 
 This document describes the OPC UA / HMI integration strategy for function blocks. The PLC exposes `cfg`, `sts`, and RPC methods directly — no parallel HMI structures.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](Programming-Standards.md) · [Command Source Control](Command-Source-Control.md) · [RPC Method Response](RPC-Method-Response.md)
+> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [RPC Method Response](3-RPC-Method-Response.md)
 
 ---
 
@@ -126,7 +126,7 @@ Requirements:
 2. Method has RPC enabled: `{attribute 'TcRpcEnable' := '1'}`
 3. Method is `PUBLIC`
 
-See [§3 RPC Method Response](RPC-Method-Response.md) for return codes.
+See [§3 RPC Method Response](3-RPC-Method-Response.md) for return codes.
 
 ---
 

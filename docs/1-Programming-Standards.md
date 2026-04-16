@@ -2,7 +2,7 @@
 
 These standards govern the `Core` library and any projects built on it. They ensure consistency across all function blocks, from device-level actuators to the state machine.
 
-> **Navigation:** [← README](../README.md) · [Command Source Control →](Command-Source-Control.md) · [RPC Method Response →](RPC-Method-Response.md) · [HMI Integration →](HMI-Integration.md)
+> **Navigation:** [← README](../README.md) · [Command Source Control →](2-Command-Source-Control.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md)
 
 ---
 
@@ -16,25 +16,17 @@ These standards govern the `Core` library and any projects built on it. They ens
 
 ---
 
-## 1.2 File and Folder Layout
+## 1.2 Project Organization Philosophy
 
-```
-Core/
-  Modules/
-    Common/                  Shared enums, structs, functions
-    Sequencing/
-      StateMachine/          FB_StateMachine, FB_Step, FB_SequenceStep + DUTs
-      Permissives/           FB_Permissives + ST_PermIntlk_*
-    Pneumatics/
-      TwoPosActuator/        FB_TwoPosActuator + related DUTs
-```
+The library is organized around **modules** — self-contained domains of functionality (e.g., sequencing, pneumatics, analog control). Each module groups its function blocks and related DUTs together, so everything you need to understand a module lives in one place.
 
-Rules:
+Principles:
 
-- One DUT per `.TcDUT` file.
-- One FB per `.TcPOU` file.
-- Place types used by multiple modules in `Modules/Common/`.
-- Place types used by a single module alongside that module's FB.
+- **One module, one folder** — each module has its own directory containing its FBs, DUTs, and any sub-modules.
+- **One POU per file** — each function block gets its own `.TcPOU` file; each DUT gets its own `.TcDUT` file.
+- **Shared types go to Common** — types used by multiple modules live in a shared `Common` module. Types used by only one module stay alongside that module's FB.
+- **Nest by domain, not by POU type** — organize by what the code *does* (e.g., `Pneumatics/TwoPosActuator/`), not by what it *is* (e.g., `DUTs/`, `POUs/`). This keeps related code together as the project scales.
+- **Flat within a module** — avoid deep nesting inside a single module. If a module grows too large, split it into sub-modules rather than adding hierarchy.
 
 ---
 
@@ -98,7 +90,7 @@ Use descriptive suffixes:
 
 ## 1.4 Method-Centric Pattern
 
-All command logic lives inside **methods**. The FB body handles only cyclic monitoring. See [§2 Command Source Control](Command-Source-Control.md) for the full command pattern.
+All command logic lives inside **methods**. The FB body handles only cyclic monitoring. See [§2 Command Source Control](2-Command-Source-Control.md) for the full command pattern.
 
 ### 1.4.1 Method Responsibilities
 

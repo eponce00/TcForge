@@ -28,22 +28,16 @@ More modules will be added as the library grows (motors, analog control, alarms,
 
 ---
 
-## 2 Repository Layout
+## 2 Project Organization
 
-```
-TwinCAT/
-  Core.sln                  Solution entry point
-  Core/                     Library PLC project
-    Modules/
-      Common/               E_Requester, E_RpcMethodResponse, F_ValidateRequester
-      Sequencing/
-        StateMachine/       FB_StateMachine, FB_Step, FB_SequenceStep + DUTs
-        Permissives/        FB_Permissives + ST_PermIntlk_*
-      Pneumatics/
-        TwoPosActuator/     FB_TwoPosActuator + DUTs
-  CoreExample/              Example PLC application (MAIN + 6 sequences)
-docs/                       Design documentation
-```
+The library is organized around **modules** — self-contained domains of functionality. Each module groups its function blocks and related data types together. Code is organized by *what it does* (e.g., sequencing, pneumatics), not by *what it is* (e.g., DUTs, POUs).
+
+- `TwinCAT/Core.sln` — solution entry point
+- `Core/` — reusable library PLC project, organized into modules
+- `CoreExample/` — example PLC application consuming the library (MAIN + 6 sequences)
+- `docs/` — design documentation
+
+See [§1.2 Project Organization Philosophy](docs/1-Programming-Standards.md#12-project-organization-philosophy) for the full set of principles.
 
 ---
 
@@ -60,10 +54,10 @@ docs/                       Design documentation
 
 | # | Document | Description |
 |---|----------|-------------|
-| 1 | [Programming Standards](docs/Programming-Standards.md) | Coding conventions, naming, folder layout, FB structure patterns |
-| 2 | [Command Source Control](docs/Command-Source-Control.md) | Requester validation, source locking, method pattern |
-| 3 | [RPC Method Response](docs/RPC-Method-Response.md) | Standardized response codes, method inventory, OPC UA usage |
-| 4 | [HMI Integration](docs/HMI-Integration.md) | OPC UA pragmas, cfg/sts exposure, RPC method connectivity |
+| 1 | [Programming Standards](docs/1-Programming-Standards.md) | Coding conventions, naming, organization philosophy, FB structure patterns |
+| 2 | [Command Source Control](docs/2-Command-Source-Control.md) | Requester validation, source locking, method pattern |
+| 3 | [RPC Method Response](docs/3-RPC-Method-Response.md) | Standardized response codes, method inventory, OPC UA usage |
+| 4 | [HMI Integration](docs/4-HMI-Integration.md) | OPC UA pragmas, cfg/sts exposure, RPC method connectivity |
 
 Each document uses section numbering consistent with this index (e.g., Programming Standards = Chapter 1, sections 1.1–1.x).
 
