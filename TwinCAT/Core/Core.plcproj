@@ -8,7 +8,7 @@
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>true</WriteProductVersion>
     <GenerateTpy>true</GenerateTpy>
-    <Name>TcForge</Name>
+    <Name>Core</Name>
     <ProgramVersion>3.1.4026.17</ProgramVersion>
     <Application>{3e8d9abc-3123-42ab-93ad-a721324fdb78}</Application>
     <TypeSystem>{8770fba7-8d90-4aee-b41d-0da656d9de95}</TypeSystem>
@@ -18,7 +18,7 @@
     <LibraryReferences>{07f2a7a2-0d34-40b5-ac8d-f85dc2fe7fb0}</LibraryReferences>
     <Company>Home</Company>
     <Released>false</Released>
-    <Title>TcForge</Title>
+    <Title>Twincat Open Library</Title>
     <ProjectVersion>1.0.0.4</ProjectVersion>
     <VirtualLibrary>true</VirtualLibrary>
   </PropertyGroup>
@@ -155,16 +155,6 @@
       <SubType>Content</SubType>
     </None>
   </ItemGroup>
-  <ItemGroup>
-    <None Include="Forge.tmc">
-      <SubType>Content</SubType>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="TcForge.tmc">
-      <SubType>Content</SubType>
-    </None>
-  </ItemGroup>
   <ProjectExtensions>
     <PlcProjectOptions>
       <XmlArchive>
@@ -258,10 +248,7 @@
         <o>
           <v n="Name">"{F66C7017-BDD8-4114-926C-81D6D687E35F}"</v>
           <d n="SubKeys" t="Hashtable" />
-          <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
-            <v>CalcActiveTransOnly</v>
-            <v>True</v>
-          </d>
+          <d n="Values" t="Hashtable" />
         </o>
       </d>
       <d n="Values" t="Hashtable" />

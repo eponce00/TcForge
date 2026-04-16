@@ -19,24 +19,24 @@ AcceptsWhenFaultedButAllowed();
     <Method Name="AcceptsNormally" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560002}">
       <Declaration><![CDATA[METHOD AcceptsNormally
 VAR
-    Result   : Twincat_Open_Library.E_RpcMethodResponse;
-    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.ACCEPTED;
+    nExpected : DINT := TcForge.E_RpcMethodResponse.ACCEPTED;
+    nActual   : DINT;
 END_VAR
 ]]>
       </Declaration>
       <Implementation>
         <ST><![CDATA[TEST('AcceptsNormally');
 
-Result := Twincat_Open_Library.F_ValidateRequester(
-    eRequester        := Twincat_Open_Library.E_Requester.OPERATOR,
+nActual := TcForge.F_ValidateRequester(
+    eRequester        := TcForge.E_Requester.OPERATOR,
     bSourceLocked     := FALSE,
     bFaulted          := FALSE,
     bAllowWhenFaulted := FALSE,
     bSkipSourceCheck  := FALSE);
 
 AssertEquals_DINT(
-    Expected := DINT(Expected),
-    Actual   := DINT(Result),
+    Expected := nExpected,
+    Actual   := nActual,
     Message  := 'Should accept when there are no restrictions');
 
 TEST_FINISHED();
@@ -47,24 +47,24 @@ TEST_FINISHED();
     <Method Name="AcceptsProgramWhenLocked" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560003}">
       <Declaration><![CDATA[METHOD AcceptsProgramWhenLocked
 VAR
-    Result   : Twincat_Open_Library.E_RpcMethodResponse;
-    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.ACCEPTED;
+    nExpected : DINT := TcForge.E_RpcMethodResponse.ACCEPTED;
+    nActual   : DINT;
 END_VAR
 ]]>
       </Declaration>
       <Implementation>
         <ST><![CDATA[TEST('AcceptsProgramWhenLocked');
 
-Result := Twincat_Open_Library.F_ValidateRequester(
-    eRequester        := Twincat_Open_Library.E_Requester.PROG,
+nActual := TcForge.F_ValidateRequester(
+    eRequester        := TcForge.E_Requester.PROG,
     bSourceLocked     := TRUE,
     bFaulted          := FALSE,
     bAllowWhenFaulted := FALSE,
     bSkipSourceCheck  := FALSE);
 
 AssertEquals_DINT(
-    Expected := DINT(Expected),
-    Actual   := DINT(Result),
+    Expected := nExpected,
+    Actual   := nActual,
     Message  := 'PROG requester should be accepted even when source is locked');
 
 TEST_FINISHED();
@@ -75,24 +75,24 @@ TEST_FINISHED();
     <Method Name="RejectsOperatorWhenLocked" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560004}">
       <Declaration><![CDATA[METHOD RejectsOperatorWhenLocked
 VAR
-    Result   : Twincat_Open_Library.E_RpcMethodResponse;
-    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED;
+    nExpected : DINT := TcForge.E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED;
+    nActual   : DINT;
 END_VAR
 ]]>
       </Declaration>
       <Implementation>
         <ST><![CDATA[TEST('RejectsOperatorWhenLocked');
 
-Result := Twincat_Open_Library.F_ValidateRequester(
-    eRequester        := Twincat_Open_Library.E_Requester.OPERATOR,
+nActual := TcForge.F_ValidateRequester(
+    eRequester        := TcForge.E_Requester.OPERATOR,
     bSourceLocked     := TRUE,
     bFaulted          := FALSE,
     bAllowWhenFaulted := FALSE,
     bSkipSourceCheck  := FALSE);
 
 AssertEquals_DINT(
-    Expected := DINT(Expected),
-    Actual   := DINT(Result),
+    Expected := nExpected,
+    Actual   := nActual,
     Message  := 'OPERATOR must be rejected when source is locked');
 
 TEST_FINISHED();
@@ -103,24 +103,24 @@ TEST_FINISHED();
     <Method Name="SkipSourceCheckAllowsOperator" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560005}">
       <Declaration><![CDATA[METHOD SkipSourceCheckAllowsOperator
 VAR
-    Result   : Twincat_Open_Library.E_RpcMethodResponse;
-    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.ACCEPTED;
+    nExpected : DINT := TcForge.E_RpcMethodResponse.ACCEPTED;
+    nActual   : DINT;
 END_VAR
 ]]>
       </Declaration>
       <Implementation>
         <ST><![CDATA[TEST('SkipSourceCheckAllowsOperator');
 
-Result := Twincat_Open_Library.F_ValidateRequester(
-    eRequester        := Twincat_Open_Library.E_Requester.OPERATOR,
+nActual := TcForge.F_ValidateRequester(
+    eRequester        := TcForge.E_Requester.OPERATOR,
     bSourceLocked     := TRUE,
     bFaulted          := FALSE,
     bAllowWhenFaulted := FALSE,
     bSkipSourceCheck  := TRUE);
 
 AssertEquals_DINT(
-    Expected := DINT(Expected),
-    Actual   := DINT(Result),
+    Expected := nExpected,
+    Actual   := nActual,
     Message  := 'bSkipSourceCheck should bypass the lock and accept OPERATOR');
 
 TEST_FINISHED();
@@ -131,24 +131,24 @@ TEST_FINISHED();
     <Method Name="RejectsWhenFaulted" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560006}">
       <Declaration><![CDATA[METHOD RejectsWhenFaulted
 VAR
-    Result   : Twincat_Open_Library.E_RpcMethodResponse;
-    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.REJECTED_FAULTED;
+    nExpected : DINT := TcForge.E_RpcMethodResponse.REJECTED_FAULTED;
+    nActual   : DINT;
 END_VAR
 ]]>
       </Declaration>
       <Implementation>
         <ST><![CDATA[TEST('RejectsWhenFaulted');
 
-Result := Twincat_Open_Library.F_ValidateRequester(
-    eRequester        := Twincat_Open_Library.E_Requester.OPERATOR,
+nActual := TcForge.F_ValidateRequester(
+    eRequester        := TcForge.E_Requester.OPERATOR,
     bSourceLocked     := FALSE,
     bFaulted          := TRUE,
     bAllowWhenFaulted := FALSE,
     bSkipSourceCheck  := FALSE);
 
 AssertEquals_DINT(
-    Expected := DINT(Expected),
-    Actual   := DINT(Result),
+    Expected := nExpected,
+    Actual   := nActual,
     Message  := 'Should reject when faulted and bAllowWhenFaulted is FALSE');
 
 TEST_FINISHED();
@@ -159,24 +159,24 @@ TEST_FINISHED();
     <Method Name="AcceptsWhenFaultedButAllowed" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560007}">
       <Declaration><![CDATA[METHOD AcceptsWhenFaultedButAllowed
 VAR
-    Result   : Twincat_Open_Library.E_RpcMethodResponse;
-    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.ACCEPTED;
+    nExpected : DINT := TcForge.E_RpcMethodResponse.ACCEPTED;
+    nActual   : DINT;
 END_VAR
 ]]>
       </Declaration>
       <Implementation>
         <ST><![CDATA[TEST('AcceptsWhenFaultedButAllowed');
 
-Result := Twincat_Open_Library.F_ValidateRequester(
-    eRequester        := Twincat_Open_Library.E_Requester.OPERATOR,
+nActual := TcForge.F_ValidateRequester(
+    eRequester        := TcForge.E_Requester.OPERATOR,
     bSourceLocked     := FALSE,
     bFaulted          := TRUE,
     bAllowWhenFaulted := TRUE,
     bSkipSourceCheck  := FALSE);
 
 AssertEquals_DINT(
-    Expected := DINT(Expected),
-    Actual   := DINT(Result),
+    Expected := nExpected,
+    Actual   := nActual,
     Message  := 'Should accept when faulted but bAllowWhenFaulted is TRUE');
 
 TEST_FINISHED();

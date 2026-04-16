@@ -2,7 +2,6 @@
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <DUT Name="E_RpcMethodResponse" Id="{b1234567-1234-1234-1234-12345678B001}">
     <Declaration><![CDATA[{attribute 'qualified_only'}
-{attribute 'strict'}
 {attribute 'to_string'}
 TYPE E_RpcMethodResponse :
 (

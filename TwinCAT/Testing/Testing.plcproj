@@ -9,7 +9,7 @@
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
     <Name>Testing</Name>
-    <ProgramVersion>3.1.4026.1+653d78bce6e40422a309eda6f1fe035d3a430f22</ProgramVersion>
+    <ProgramVersion>3.1.4026.17</ProgramVersion>
     <Application>{ffed23f0-38c5-458e-9b98-5712a4943d66}</Application>
     <TypeSystem>{89b9120d-c47d-4cb3-b60f-c5de5d9c6006}</TypeSystem>
     <Implicit_Task_Info>{5f14ed6f-3600-4569-b702-b030763ad1e4}</Implicit_Task_Info>
@@ -18,7 +18,7 @@
     <LibraryReferences>{5a50abef-9dcc-4283-91b1-6ea1a6fecc9a}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="PlcTask.TcTTO">
+    <Compile Include="Testing.TcTTO">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\MAIN.TcPOU">
@@ -49,14 +49,19 @@
       <Namespace>Tc3_Module</Namespace>
       <SystemLibrary>true</SystemLibrary>
     </PlaceholderReference>
+    <PlaceholderReference Include="TcForge">
+      <DefaultResolution>[TcForge], * (Home)</DefaultResolution>
+      <Namespace>TcForge</Namespace>
+    </PlaceholderReference>
     <PlaceholderReference Include="TcUnit">
       <DefaultResolution>TcUnit, * (www.tcunit.org)</DefaultResolution>
       <Namespace>TcUnit</Namespace>
     </PlaceholderReference>
-    <PlaceholderReference Include="Twincat Open Library">
-      <DefaultResolution>[Twincat Open Library], * (Home)</DefaultResolution>
-      <Namespace>Twincat_Open_Library</Namespace>
-    </PlaceholderReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Testing.tmc">
+      <SubType>Content</SubType>
+    </None>
   </ItemGroup>
   <ProjectExtensions>
     <PlcProjectOptions>
