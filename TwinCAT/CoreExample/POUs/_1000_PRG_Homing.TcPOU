@@ -24,7 +24,7 @@ END_VAR]]></Declaration>
 // Demonstrates: Entry (one-shot initialization), Execute (wait for perms),
 //               Exiting (cleanup before advancing)
 //=============================================================================
-step1000(sm := sm, nStep := 1000, nNextStep := 1002, nTimeout := 10, sName := 'Home Initialize');
+step1000(sm := sm, nStep := 1000, nNextStep := 1002, nTimeout := 10, sName := 'Init Homing');
 
 IF step1000.Entry THEN
     // One-shot: reset state from any prior attempt
@@ -55,7 +55,7 @@ END_IF;
 // Demonstrates: Entry (command actuator), Execute (monitor completion),
 //               SetNextStep (dynamic branching on success/failure)
 //=============================================================================
-step1002(sm := sm, nStep := 1002, nNextStep := 1004, nTimeout := 20, sName := 'Home Move');
+step1002(sm := sm, nStep := 1002, nNextStep := 1004, nTimeout := 20, sName := 'Execute Home Move');
 
 IF step1002.Entry THEN
     // One-shot: command the axis to home
@@ -81,7 +81,7 @@ END_IF;
 // STEP 1004 - Verify Home Position
 // Demonstrates: Simple verification step, nNextStep := 0 ends the sequence
 //=============================================================================
-step1004(sm := sm, nStep := 1004, nNextStep := 0, nTimeout := 5, sName := 'Home Verify');
+step1004(sm := sm, nStep := 1004, nNextStep := 0, nTimeout := 5, sName := 'Verify Home Position');
 
 IF step1004.Entry THEN
     // Nothing special to initialize

@@ -4,13 +4,11 @@
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
     fbStateMachine : FB_StateMachine;
-    smCommands : ST_SM_Commands;
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[fbStateMachine(
     EnableIn := TRUE,
-    cfgAutoRun := TRUE,
-    Commands := smCommands
+    cfgAutoRun := TRUE
 );
 
 _1000_PRG_Homing(sm := fbStateMachine);

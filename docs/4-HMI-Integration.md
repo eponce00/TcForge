@@ -151,3 +151,20 @@ When adding a new FB with HMI/OPC support:
 - **No `_UpdateHMI()` methods** — derive values in the main body.
 - **No writable OPC tags for commands** — use RPC methods exclusively.
 - **No ad-hoc command booleans** — all commands go through typed methods with `E_RpcMethodResponse`.
+
+---
+
+## 4.7 Sequencing HMI Pattern
+
+For the sequencing module, the HMI reads the active step directly from the state machine:
+
+- `FB_StateMachine.StepInfo.CurrentStep`
+- `FB_StateMachine.StepInfo.CurrentStepName`
+- `FB_StateMachine.StepInfo.NextStep`
+- `FB_StateMachine.StepInfo.StepTimerSeconds`
+- `FB_StateMachine.StepPermCfg`
+- `FB_StateMachine.StepPermStatus`
+
+This keeps the HMI bound to the one object that owns the sequence rather than browsing individual `FB_Step` instances in each program.
+
+Dynamic branching is still fully online-change friendly: the sequence program recalculates `nNextStep` every scan, and the active step hands that target back to the state machine only after `Exiting` completes.

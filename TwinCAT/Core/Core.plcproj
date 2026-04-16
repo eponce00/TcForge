@@ -62,13 +62,7 @@
     <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Faceplate.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ActiveStep.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="Modules\Sequencing\StateMachine\E_SM_State.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\FB_SequenceStep.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Modules\Sequencing\StateMachine\FB_StateMachine.TcPOU">
@@ -77,16 +71,7 @@
     <Compile Include="Modules\Sequencing\StateMachine\FB_Step.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Commands.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Conditions.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Internal.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_PermissionGroups.TcDUT">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Permissions.TcDUT">

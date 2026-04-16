@@ -23,7 +23,7 @@ END_VAR]]></Declaration>
 // Demonstrates: Entry (kill outputs immediately), Execute (verify halted)
 // NOTE: Abort is an emergency path — minimal delays, prioritize safety
 //=============================================================================
-step5000(sm := sm, nStep := 5000, nNextStep := 5002, nTimeout := 3, sName := 'Emergency Halt');
+step5000(sm := sm, nStep := 5000, nNextStep := 5002, nTimeout := 3, sName := 'Immediate Halt');
 
 IF step5000.Entry THEN
     // One-shot: immediately disable all outputs
@@ -68,7 +68,7 @@ END_IF;
 // STEP 5004 - Confirm Safe State
 // Demonstrates: Exiting (log abort reason), nNextStep := 0 enters Aborted
 //=============================================================================
-step5004(sm := sm, nStep := 5004, nNextStep := 0, nTimeout := 5, sName := 'Confirm Safe');
+step5004(sm := sm, nStep := 5004, nNextStep := 0, nTimeout := 5, sName := 'Confirm Safe State');
 
 IF step5004.Execute THEN
     step5004.MapPerm(nIndex := 0, sDescription := 'All Energy Isolated',  bValue := sm.StepInfo.StepTimerSeconds >= 1.0);

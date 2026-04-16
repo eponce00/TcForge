@@ -1,7 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_Step" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234567890}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_Step
+    <Declaration><![CDATA[(*
+FB_Step - Lightweight step lifecycle wrapper
+============================================
+Each step in a sequence is one FB_Step instance. The parent FB_StateMachine
+owns the active step number, step timer, fault detection, and command handling.
+This FB only reports "am I active?" and drives the Entry/Execute/Exit/Advance
+lifecycle for the user's code.
+
+Lifecycle (while this step is the SM's active step):
+  Entry   : TRUE one scan on activation         -> one-shot init
+  Execute : TRUE every scan until perms satisfied -> cyclic work + MapPerm
+  Exiting : TRUE one scan after perms satisfied  -> one-shot cleanup
+  Advance : writes nNextStep to the SM, SM increments on next scan
+
+Branching / looping / jumping:
+  nNextStep is a VAR_INPUT re-evaluated every scan. To branch, loop, or jump,
+  just assign nNextStep dynamically in the call. There is no separate override
+  method -- the input IS the dynamic target.
+
+      step(sm := sm, nStep := 3004,
+           nNextStep := SEL(bPass, 3500, 3006),  // branch inline
+           nTimeout := 12, sName := 'Inspect');
+
+  nNextStep := 0   -> completes the sequence (SM transitions to waiting state)
+  nNextStep := N   -> SM advances to step N (any valid step; forward/back)
+
+Note: 'Exiting' is used instead of 'Exit' because EXIT is an IEC reserved word.
+*)
+FUNCTION_BLOCK FB_Step
 VAR_IN_OUT
     sm : FB_StateMachine;
 END_VAR
@@ -10,7 +38,7 @@ VAR_INPUT
     nStep : DINT;
     nNextStep : DINT;
     nTimeout : DINT;
-    sName : STRING(80);
+    sName : STRING(40);
 END_VAR
 
 VAR_OUTPUT
@@ -26,8 +54,6 @@ VAR
     _permsSatisfied : BOOL;
     _permsEvalReady : BOOL;
     _exitDone : BOOL;
-    _effectiveNextStep : DINT;
-    _hasOverride : BOOL;
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[
@@ -38,19 +64,15 @@ _permsSatisfied := _perms.sts.bOK;
 // Check if this step is the active step in the state machine
 _active := (sm.StepInfo.CurrentStep = nStep);
 
-// Default next step unless overridden
-IF NOT _hasOverride THEN
-    _effectiveNextStep := nNextStep;
-END_IF;
-
 // Reset lifecycle outputs each scan
 Entry := FALSE;
 Execute := FALSE;
 Exiting := FALSE;
 
 IF _active THEN
-    // Report step metadata to state machine for HMI visibility
-    sm.ReportStepInfo(sName := sName, stPerms := _perms.cfg);
+    // Publish step name to SM for HMI / diagnostics
+    sm.SetStepName(sName);
+  sm.SetStepPermissives(cfg := _perms.cfg, sts := _perms.sts);
 
     IF NOT _prevActive THEN
         //---------------------------------------------------------------------
@@ -59,11 +81,11 @@ IF _active THEN
         Entry := TRUE;
         _permsEvalReady := FALSE;
         _exitDone := FALSE;
-        _hasOverride := FALSE;
 
     ELSIF NOT _permsEvalReady THEN
         //---------------------------------------------------------------------
-        // First EXECUTE scan: perms are being mapped, eval next cycle
+        // First EXECUTE scan: user is mapping perms this scan; evaluate next
+        // scan so the first evaluation sees all MapPerm calls from this cycle.
         //---------------------------------------------------------------------
         Execute := TRUE;
         _permsEvalReady := TRUE;
@@ -90,16 +112,17 @@ IF _active THEN
 
     ELSE
         //---------------------------------------------------------------------
-        // ADVANCE: post-exit, request next step from state machine
+        // ADVANCE: post-exit, hand the (current-scan) nNextStep to the SM.
+        // Because nNextStep is re-evaluated every scan, the user's latest
+        // branch decision wins -- no override method needed.
         //---------------------------------------------------------------------
-        sm.SetNextStep(nStep := _effectiveNextStep);
+        sm.SetNextStep(nStep := nNextStep);
     END_IF;
 
 ELSE
     // Reset lifecycle tracking when step is not active
     _permsEvalReady := FALSE;
     _exitDone := FALSE;
-    _hasOverride := FALSE;
 END_IF;
 
 _prevActive := _active;
@@ -118,23 +141,10 @@ END_VAR]]></Declaration>
 _perms.cfg.aNames[nIndex] := sDescription;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="SetNextStep" Id="{c3d4e5f6-a7b8-9012-cdef-123456789012}" FolderPath="Public\">
-      <Declaration><![CDATA[METHOD SetNextStep
-VAR_INPUT
-    nStep : DINT;
-END_VAR]]></Declaration>
-      <Implementation>
-        <ST><![CDATA[_effectiveNextStep := nStep;
-_hasOverride := TRUE;]]></ST>
-      </Implementation>
-    </Method>
     <LineIds Name="FB_Step">
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_Step.MapPerm">
-      <LineId Id="1" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_Step.SetNextStep">
       <LineId Id="1" Count="0" />
     </LineIds>
   </POU>

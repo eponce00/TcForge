@@ -55,7 +55,7 @@ END_IF;
 // STEP 3002 - Run Production Cycle
 // Demonstrates: Entry (start process), Execute (count parts), Exiting (stop)
 //=============================================================================
-step3002(sm := sm, nStep := 3002, nNextStep := 3004, nTimeout := 30, sName := 'Production Cycle');
+step3002(sm := sm, nStep := 3002, nNextStep := 3004, nTimeout := 30, sName := 'Run Cycle');
 
 IF step3002.Entry THEN
     bProcessRunning := FALSE;
@@ -79,9 +79,15 @@ END_IF;
 
 //=============================================================================
 // STEP 3004 - Quality Inspection
-// Demonstrates: SetNextStep for dynamic branching (pass → pack, fail → reject)
+// Demonstrates: Inline dynamic branching via nNextStep (pass -> pack, fail -> finalize).
+// nNextStep is re-evaluated every scan, so a SEL / IF computed before the call
+// is all you need -- no override method, no init-time registration.
 //=============================================================================
-step3004(sm := sm, nStep := 3004, nNextStep := 3006, nTimeout := 12, sName := 'Quality Inspect');
+step3004(sm := sm,
+         nStep     := 3004,
+         nNextStep := SEL(bQualityOK, 3008, 3006),   // fail -> skip packaging
+         nTimeout  := 12,
+         sName     := 'Quality Inspection');
 
 IF step3004.Entry THEN
     bQualityOK := FALSE;
@@ -92,12 +98,6 @@ IF step3004.Execute THEN
     // Simulate inspection taking 2s, always passes in this example
     tonInspect(IN := TRUE, PT := T#2S);
     bQualityOK := tonInspect.Q;
-
-    // Dynamic branching: if quality fails, skip packaging and go to finalize
-    IF tonInspect.Q AND NOT bQualityOK THEN
-        step3004.SetNextStep(nStep := 3008);  // Skip to finalize (reject path)
-    END_IF;
-    // Otherwise default nNextStep := 3006 (packaging) is used
 
     step3004.MapPerm(nIndex := 0, sDescription := 'Inspection Complete', bValue := tonInspect.Q);
 END_IF;

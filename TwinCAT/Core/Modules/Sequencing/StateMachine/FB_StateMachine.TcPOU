@@ -16,26 +16,12 @@ VAR_OUTPUT
     Status : ST_SM_Status;
     Permissions : ST_SM_Permissions;
     StepInfo : ST_SM_StepInfo;
+    StepPermCfg : ST_Permissive_Config;
+    StepPermStatus : ST_Permissive_Status;
     ConditionStatus : ST_SM_Conditions;
-    ActiveStepInfo : ActiveStep;
 END_VAR
 
 VAR CONSTANT
-    internalClearStep : ActiveStep;
-    
-    STATE_IDLE : INT := 0;
-    STATE_RUNNING : INT := 1;
-    STATE_STOPPING : INT := 2;
-    STATE_HOMING : INT := 4;
-    STATE_ABORTING : INT := 8;
-    STATE_HOMED : INT := 16;
-    STATE_STOPPED : INT := 32;
-    STATE_ABORTED : INT := 64;
-    STATE_COMPLETE : INT := 128;
-    STATE_PAUSING : INT := 256;
-    STATE_PAUSED : INT := 512;
-    STATE_PROCEEDING : INT := 1024;
-
     HOMING_MIN   : DINT := 1000; HOMING_MAX   : DINT := 1999;
     RUNNING_MIN  : DINT := 3000; RUNNING_MAX  : DINT := 3999;
     STOPPING_MIN : DINT := 2000; STOPPING_MAX : DINT := 2999;
@@ -45,8 +31,14 @@ VAR CONSTANT
 END_VAR
 
 VAR
-    // Internal command request tracking (set by methods)
-    CommandsRequested : ST_SM_Commands;
+    // Internal command request flags (set by methods, consumed by body)
+    _abortRequested : BOOL;
+    _completeStateRequested : BOOL;
+    _homeRequested : BOOL;
+    _pauseRequested : BOOL;
+    _proceedRequested : BOOL;
+    _startRequested : BOOL;
+    _stopRequested : BOOL;
     RetryComplete : BOOL;
     
     // Timer
@@ -54,17 +46,14 @@ VAR
     
     // Edge detection
     R_TRIG_1 : R_TRIG;
-    R_TRIG_2 : R_TRIG;
-    R_TRIG_4 : R_TRIG;
     R_TRIG_5 : R_TRIG;
     
     // Internal state tracking
-    PauseStep : ActiveStep;
-    PreviousState : DINT;
+    _previousState : E_SM_State;
     PreviousStep : DINT;
     TimerReset : BOOL;
     LsOdd : DINT;
-    ReturnState : DINT;
+    _returnState : E_SM_State;
     ReturnNextStep : DINT;
     
     // Permission handlers
@@ -74,20 +63,15 @@ VAR
     internalStartPerm : FB_Permissives;
     
     // Temp variables
+    permIndex : UDINT;
     stepIsZero : BOOL;
-    transitionActive : BOOL;
     seqDone : BOOL;
     
     // Source control
     bSourceLockedToProg : BOOL;
     
     // Step ownership (internal)
-    _activeStep : ActiveStep;
     _nextStep : DINT;
-END_VAR
-
-VAR_IN_OUT
-    Commands : ST_SM_Commands;
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[
@@ -101,416 +85,244 @@ IF EnableIn THEN
     //-------------------------------------------------------------------------
     // Process permissions for different states
     //-------------------------------------------------------------------------
-    
-    // Home permission evaluation
     internalHomePerm();
     Permissions.HomePermOK := internalHomePerm.sts.bOK;
     
-    // Start permission evaluation
     internalStartPerm();
     Permissions.StartPermOK := internalStartPerm.sts.bOK;
     
-    // Proceed permission evaluation
     internalProceedPerm();
     Permissions.ProceedPermOK := internalProceedPerm.sts.bOK;
     
-    // Auto interlock evaluation
     internalAutoIntlk();
     Permissions.AutoIntlkOK := internalAutoIntlk.sts.bOK;
     
     //-------------------------------------------------------------------------
     // Ready state calculations
     //-------------------------------------------------------------------------
-    
-    // Ready to Home: Stopped or Aborted + Home permissions OK + Auto interlock OK
-    Status.ReadyToHome := (Status.Stopped OR Status.Aborted) AND 
+    Status.ReadyToHome := (Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTED) AND 
                           Permissions.HomePermOK AND 
                           Permissions.AutoIntlkOK;
     
-    // Ready to Start: (Homed or Complete) + Start permissions OK + Auto interlock OK + Not auto-start requested
-    Status.ReadyToStart := (Status.Homed OR Status.Complete) AND 
+    Status.ReadyToStart := (Status.State = E_SM_State.HOMED OR Status.State = E_SM_State.COMPLETE) AND 
                           Permissions.StartPermOK AND 
                           Permissions.AutoIntlkOK AND 
                           NOT Status.AutoStartRequest;
     
-    // Ready to Proceed: Paused + Proceed permissions OK + Auto interlock OK
-    Status.ReadyToProceed := Status.Paused AND 
+    Status.ReadyToProceed := (Status.State = E_SM_State.PAUSED) AND 
                             Permissions.ProceedPermOK AND 
                             Permissions.AutoIntlkOK;
 
     //-------------------------------------------------------------------------
-    // Clear Active Step if in waiting state
-    //-------------------------------------------------------------------------
-    IF Status.Homed OR Status.Complete OR Status.Stopped OR Status.Aborted THEN
-        _activeStep := internalClearStep;
-    END_IF;
-    
-    // Clear pause step on proceeding or aborting
-    transitionActive := Status.Proceeding OR Status.Aborting;
-    R_TRIG_4(CLK := transitionActive);
-    IF R_TRIG_4.Q THEN
-        PauseStep := internalClearStep;
-    END_IF;
-    
-    //-------------------------------------------------------------------------
     // Auto-start request logic
     //-------------------------------------------------------------------------
-    
-    // Auto start request handling
-    Status.AutoStartRequest := CommandsRequested.Start AND NOT Permissions.StartPermOK;
-    
-    // Auto cycle request for auto-run when complete
-    Status.AutoCycleRequest := cfgAutoRun AND Status.Complete AND NOT Permissions.StartPermOK;
+    Status.AutoStartRequest := _startRequested AND NOT Permissions.StartPermOK;
+    Status.AutoCycleRequest := cfgAutoRun AND (Status.State = E_SM_State.COMPLETE) AND NOT Permissions.StartPermOK;
     
     //-------------------------------------------------------------------------
     // Remember last state before change
     //-------------------------------------------------------------------------
-    PreviousState := StepInfo.CurrentState;
+    _previousState := Status.State;
     
     //-------------------------------------------------------------------------
-    // Process command requests (only CompleteState from sequences)
-    //-------------------------------------------------------------------------
-    
-    // Complete State Request (from sequence programs via Commands VAR_IN_OUT)
-    IF Commands.CompleteState THEN
-        CommandsRequested.CompleteState := TRUE;
-        Commands.CompleteState := FALSE;
-        CommandsRequested.Start := FALSE;
-        CommandsRequested.Abort := FALSE;
-        CommandsRequested.Pause := FALSE;
-        CommandsRequested.Home := FALSE;
-        CommandsRequested.Proceed := FALSE;
-        CommandsRequested.Stop := FALSE;
-    END_IF;
-    
     // Auto-run handling (internal - not from external command)
-    IF cfgAutoRun AND Permissions.AutoIntlkOK AND Permissions.StartPermOK AND Status.Complete THEN
-        CommandsRequested.Start := TRUE;
+    //-------------------------------------------------------------------------
+    IF cfgAutoRun AND Permissions.AutoIntlkOK AND Permissions.StartPermOK AND (Status.State = E_SM_State.COMPLETE) THEN
+        _startRequested := TRUE;
     END_IF;
     
     //-------------------------------------------------------------------------
     // Sequence completion inference
     //-------------------------------------------------------------------------
-    // If in an active state with a defined sequence range and the sequence
-    // drives NextStep to 0 while the current step is within that state's
-    // range, infer completion and trigger CompleteState internally.
-    seqDone := FALSE;
-    IF Status.Homing THEN
-        seqDone := (StepInfo.CurrentStep >= HOMING_MIN) AND (StepInfo.CurrentStep <= HOMING_MAX) AND (_nextStep = 0);
-    ELSIF Status.Running THEN
-        seqDone := (StepInfo.CurrentStep >= RUNNING_MIN) AND (StepInfo.CurrentStep <= RUNNING_MAX) AND (_nextStep = 0);
-    ELSIF Status.Stopping THEN
-        seqDone := (StepInfo.CurrentStep >= STOPPING_MIN) AND (StepInfo.CurrentStep <= STOPPING_MAX) AND (_nextStep = 0);
-    ELSIF Status.Aborting THEN
-        seqDone := (StepInfo.CurrentStep >= ABORTING_MIN) AND (StepInfo.CurrentStep <= ABORTING_MAX) AND (_nextStep = 0);
-    ELSIF Status.Pausing THEN
-        seqDone := (StepInfo.CurrentStep >= PAUSING_MIN) AND (StepInfo.CurrentStep <= PAUSING_MAX) AND (_nextStep = 0);
-    ELSIF Status.Proceeding THEN
-        seqDone := (StepInfo.CurrentStep >= PROCEEDING_MIN) AND (StepInfo.CurrentStep <= PROCEEDING_MAX) AND (_nextStep = 0);
-    END_IF;
+    seqDone := _IsStepInStateRange(
+        state := Status.State,
+        nStep := StepInfo.CurrentStep
+    ) AND (_nextStep = 0);
 
     R_TRIG_5(CLK := seqDone);
     IF R_TRIG_5.Q THEN
-        CommandsRequested.CompleteState := TRUE;
+        _completeStateRequested := TRUE;
     END_IF;
 
     //-------------------------------------------------------------------------
     // State Transitions
     //-------------------------------------------------------------------------
 
-    // Complete to Homed
-    IF CommandsRequested.CompleteState AND Status.Homing THEN
+    // Homing complete → Homed
+    IF _completeStateRequested AND (Status.State = E_SM_State.HOMING) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_HOMED;
-        CommandsRequested.CompleteState := FALSE;  // Clear after transition
+        Status.State := E_SM_State.HOMED;
+        _completeStateRequested := FALSE;
     END_IF;
     
-    // Running to Complete
-    IF CommandsRequested.CompleteState AND Status.Running THEN
+    // Running complete → Complete
+    IF _completeStateRequested AND (Status.State = E_SM_State.RUNNING) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_COMPLETE;
-        CommandsRequested.CompleteState := FALSE;  // Clear after transition
+        Status.State := E_SM_State.COMPLETE;
+        _completeStateRequested := FALSE;
     END_IF;
     
-    // Running to Stopping
-    IF CommandsRequested.Stop AND Status.Running THEN
-        StepInfo.CurrentState := STATE_STOPPING;
+    // Running + Stop → Stopping
+    IF _stopRequested AND (Status.State = E_SM_State.RUNNING) THEN
+        Status.State := E_SM_State.STOPPING;
     END_IF;
     
-    // Stopping to Stopped
-    IF CommandsRequested.CompleteState AND Status.Stopping THEN
+    // Stopping complete → Stopped
+    IF _completeStateRequested AND (Status.State = E_SM_State.STOPPING) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_STOPPED;
-        CommandsRequested.CompleteState := FALSE;  // Clear after transition
+        Status.State := E_SM_State.STOPPED;
+        _completeStateRequested := FALSE;
     END_IF;
     
-    // Aborting to Aborted
-    IF CommandsRequested.CompleteState AND Status.Aborting THEN
+    // Aborting complete → Aborted
+    IF _completeStateRequested AND (Status.State = E_SM_State.ABORTING) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_ABORTED;
-        CommandsRequested.CompleteState := FALSE;  // Clear after transition
+        Status.State := E_SM_State.ABORTED;
+        _completeStateRequested := FALSE;
     END_IF;
     
-    // Active State to Pausing
-    // Handle state transitions to Pausing and remember the state to return to
-    IF CommandsRequested.Pause AND (
-        Status.Homing OR Status.Stopping OR Status.Aborting OR 
-        Status.Homed OR Status.Complete OR Status.Proceeding OR Status.Running) THEN
+    // Active → Pausing
+    IF _pauseRequested AND (
+        Status.State = E_SM_State.HOMING OR Status.State = E_SM_State.STOPPING OR 
+        Status.State = E_SM_State.ABORTING OR Status.State = E_SM_State.HOMED OR 
+        Status.State = E_SM_State.COMPLETE OR Status.State = E_SM_State.PROCEEDING OR 
+        Status.State = E_SM_State.RUNNING) THEN
         
-        // Remember the current state and next step for later return
-        IF NOT (Status.Homed OR Status.Complete OR Status.Proceeding) THEN
-            ReturnState := StepInfo.CurrentState;
-            ReturnNextStep := _nextStep;
+        // Remember state + step for resume after Proceed (for mid-sequence paused only)
+        IF NOT (Status.State = E_SM_State.HOMED OR Status.State = E_SM_State.COMPLETE OR Status.State = E_SM_State.PROCEEDING) THEN
+            _returnState := Status.State;
+            ReturnNextStep := StepInfo.CurrentStep;  // resume re-enters same step
         END_IF;
         
-        // Save the current step for paused state
-        IF NOT (Status.Homed OR Status.Complete OR Status.Proceeding) THEN
-            PauseStep := _activeStep;
-        ELSE
-            PauseStep := internalClearStep;
-        END_IF;
-        
-        // Transition to pausing state
-        StepInfo.CurrentState := STATE_PAUSING;
+        Status.State := E_SM_State.PAUSING;
         _nextStep := 0;
     END_IF;
     
-    // Pausing to Paused
-    IF CommandsRequested.CompleteState AND Status.Pausing THEN
+    // Pausing complete → Paused
+    IF _completeStateRequested AND (Status.State = E_SM_State.PAUSING) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_PAUSED;
-        CommandsRequested.CompleteState := FALSE;  // Clear after transition
+        Status.State := E_SM_State.PAUSED;
+        _completeStateRequested := FALSE;
     END_IF;
     
-    // Proceeding to Step before Pausing
-    IF CommandsRequested.CompleteState AND Status.Proceeding THEN
-        _activeStep := PauseStep;
+    // Proceeding complete → return to state before pause, re-enter the paused step
+    IF _completeStateRequested AND (Status.State = E_SM_State.PROCEEDING) THEN
         _nextStep := ReturnNextStep;
-        StepInfo.CurrentState := ReturnState;
-        CommandsRequested.CompleteState := FALSE;  // Clear after transition
+        Status.State := _returnState;
+        _completeStateRequested := FALSE;
     END_IF;
     
-    // Homed to Running
-    IF (CommandsRequested.Start OR 
+    // Homed/Complete + Start → Running
+    IF (_startRequested OR 
         (Status.AutoStartRequest AND Permissions.StartPermOK AND Permissions.AutoIntlkOK)) AND 
-        (Status.Homed OR Status.Complete) THEN
-        
+        (Status.State = E_SM_State.HOMED OR Status.State = E_SM_State.COMPLETE) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_RUNNING;
-        CommandsRequested.Start := FALSE;
+        Status.State := E_SM_State.RUNNING;
+        _startRequested := FALSE;
     END_IF;
     
-    // Homed to Stopped
-    IF CommandsRequested.Stop AND Status.Homed THEN
+    // Homed + Stop → Stopped
+    IF _stopRequested AND (Status.State = E_SM_State.HOMED) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_STOPPED;
+        Status.State := E_SM_State.STOPPED;
     END_IF;
     
-    // Complete to Stopped
-    IF CommandsRequested.Stop AND Status.Complete THEN
+    // Complete + Stop → Stopped
+    IF _stopRequested AND (Status.State = E_SM_State.COMPLETE) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_STOPPED;
+        Status.State := E_SM_State.STOPPED;
     END_IF;
     
-    // Stopped or Aborted to Homing
-    IF CommandsRequested.Home AND (Status.Stopped OR Status.Aborted) THEN
+    // Stopped/Aborted + Home → Homing
+    IF _homeRequested AND (Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTED) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_HOMING;
+        Status.State := E_SM_State.HOMING;
     END_IF;
     
-    // Paused to Proceeding
-    IF CommandsRequested.Proceed AND Status.Paused THEN
+    // Paused + Proceed → Proceeding
+    IF _proceedRequested AND (Status.State = E_SM_State.PAUSED) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_PROCEEDING;
+        Status.State := E_SM_State.PROCEEDING;
     END_IF;
     
     // Abort (from any state except Stopped/Aborted/Aborting)
-    IF CommandsRequested.Abort AND NOT (Status.Stopped OR Status.Aborted OR Status.Aborting) THEN
+    IF _abortRequested AND NOT (Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTED OR Status.State = E_SM_State.ABORTING) THEN
         _nextStep := 0;
-        StepInfo.CurrentState := STATE_ABORTING;
+        Status.State := E_SM_State.ABORTING;
     END_IF;
     
     //-------------------------------------------------------------------------
-    // Save last state when changing
+    // Track state changes
     //-------------------------------------------------------------------------
-    IF StepInfo.CurrentState <> PreviousState THEN
-        StepInfo.LastState := PreviousState;
+    IF Status.State <> _previousState THEN
+        Status.LastState := _previousState;
     END_IF;
     
     //-------------------------------------------------------------------------
-    // Update status flags based on current state
+    // Derived status flags
     //-------------------------------------------------------------------------
-    // Reset all status flags first
-    Status.Running := FALSE;
-    Status.Stopping := FALSE;
-    Status.Homing := FALSE;
-    Status.Aborting := FALSE;
-    Status.Homed := FALSE;
-    Status.Stopped := FALSE;
-    Status.Aborted := FALSE;
-    Status.Complete := FALSE;
-    Status.Pausing := FALSE;
-    Status.Paused := FALSE;
-    Status.Proceeding := FALSE;
-    
-    // Set corresponding status flag based on current state
-    CASE StepInfo.CurrentState OF
-        STATE_RUNNING:
-            Status.Running := TRUE;
-            StepInfo.StateString := 'Running';
-        
-        STATE_STOPPING:
-            Status.Stopping := TRUE;
-            StepInfo.StateString := 'Stopping';
-        
-        STATE_HOMING:
-            Status.Homing := TRUE;
-            StepInfo.StateString := 'Homing';
-        
-        STATE_ABORTING:
-            Status.Aborting := TRUE;
-            StepInfo.StateString := 'Aborting';
-        
-        STATE_HOMED:
-            Status.Homed := TRUE;
-            StepInfo.StateString := 'Homed';
-        
-        STATE_STOPPED:
-            Status.Stopped := TRUE;
-            StepInfo.StateString := 'Stopped';
-        
-        STATE_ABORTED:
-            Status.Aborted := TRUE;
-            StepInfo.StateString := 'Aborted';
-        
-        STATE_COMPLETE:
-            Status.Complete := TRUE;
-            StepInfo.StateString := 'Complete';
-        
-        STATE_PAUSING:
-            Status.Pausing := TRUE;
-            StepInfo.StateString := 'Pausing';
-        
-        STATE_PAUSED:
-            Status.Paused := TRUE;
-            StepInfo.StateString := 'Paused';
-        
-        STATE_PROCEEDING:
-            Status.Proceeding := TRUE;
-            StepInfo.StateString := 'Proceeding';
-    END_CASE;
-    
-    // Set the active/waiting state flags
-    Status.WaitingState := Status.Homed OR Status.Complete OR Status.Stopped OR Status.Paused OR Status.Aborted;
-    Status.ActiveState := Status.Homing OR Status.Running OR Status.Stopping OR Status.Pausing OR Status.Proceeding OR Status.Aborting;
-    
-    // Set mode (0 = Manual, 1 = Automatic)
-    IF Status.Stopped OR Status.Aborted OR Status.Paused THEN
-        Status.Mode := 0;
-        Status.Manual := TRUE;
-        Status.Automatic := FALSE;
-    ELSE
-        Status.Mode := 1;
-        Status.Manual := FALSE;
-        Status.Automatic := TRUE;
-    END_IF;
+    Status.WaitingState := (Status.State = E_SM_State.HOMED) OR (Status.State = E_SM_State.COMPLETE) OR 
+                           (Status.State = E_SM_State.STOPPED) OR (Status.State = E_SM_State.PAUSED) OR 
+                           (Status.State = E_SM_State.ABORTED);
+    Status.ActiveState  := (Status.State = E_SM_State.HOMING) OR (Status.State = E_SM_State.RUNNING) OR 
+                           (Status.State = E_SM_State.STOPPING) OR (Status.State = E_SM_State.PAUSING) OR 
+                           (Status.State = E_SM_State.PROCEEDING) OR (Status.State = E_SM_State.ABORTING);
 
     //-------------------------------------------------------------------------
     // Step and timer management
     //-------------------------------------------------------------------------
     
-    // Clear ActiveStep when transitioning to step 0 (when step becomes zero)
+    // Reset timer and clear step name when transitioning to step 0
     stepIsZero := (StepInfo.CurrentStep = 0);
     R_TRIG_1(CLK := stepIsZero);
     IF R_TRIG_1.Q THEN
-        _activeStep := internalClearStep;
-        // Also reset timer when entering step 0 (state transitions)
+        StepInfo.CurrentStepName := '';
+        _ClearStepPermissives();
         TimerReset := TRUE;
         StepTimer(IN := FALSE, PT := T#99H);
-        StepInfo.StepTimerSeconds := 0.0;  // Immediately clear the timer output
+        StepInfo.StepTimerSeconds := 0.0;
     END_IF;
     
     // Auto-initialize first step when entering an active state
     IF StepInfo.CurrentStep = 0 AND Status.ActiveState THEN
-        IF Status.Homing THEN
-            _nextStep := HOMING_MIN;
-        ELSIF Status.Running THEN
-            _nextStep := RUNNING_MIN;
-        ELSIF Status.Stopping THEN
-            _nextStep := STOPPING_MIN;
-        ELSIF Status.Aborting THEN
-            _nextStep := ABORTING_MIN;
-        ELSIF Status.Pausing THEN
-            _nextStep := PAUSING_MIN;
-        ELSIF Status.Proceeding THEN
-            _nextStep := PROCEEDING_MIN;
-        END_IF;
+        _nextStep := _GetFirstStepForState(state := Status.State);
     END_IF;
     
-    // Detect step change and update step - AFTER clearing logic
+    // Detect step change and update
     IF StepInfo.CurrentStep <> _nextStep THEN
-        // Store previous step for reference
         PreviousStep := StepInfo.CurrentStep;
         StepInfo.CurrentStep := _nextStep;
         TimerReset := TRUE;
-        // Immediately reset timer when step changes
         StepTimer(IN := FALSE, PT := T#99H);
-        StepInfo.StepTimerSeconds := 0.0;  // Immediately clear the timer output
+        StepInfo.StepTimerSeconds := 0.0;
     END_IF;
     
-    // Synchronize shared ActiveStep.Step with internal step tracking - AFTER all step updates
-    IF _activeStep.Step <> StepInfo.CurrentStep THEN
-        _activeStep.Step := StepInfo.CurrentStep;
-    END_IF;
-    
-    // Update StepInfo.NextStep output
     StepInfo.NextStep := _nextStep;
     
     // Step timer logic
-    IF NOT Status.Paused OR (Status.Paused AND CommandsRequested.CompleteState) THEN
+    IF NOT (Status.State = E_SM_State.PAUSED) OR ((Status.State = E_SM_State.PAUSED) AND _completeStateRequested) THEN
         IF TimerReset THEN
-            // Keep timer reset for one scan, then clear flag
             StepTimer(IN := FALSE, PT := T#99H);
-            StepInfo.StepTimerSeconds := 0.0;  // Ensure timer value is zero during reset
+            StepInfo.StepTimerSeconds := 0.0;
             TimerReset := FALSE;
         ELSE
-            // Normal timer operation
             StepTimer(IN := TRUE, PT := T#99H);
-            // Convert timer value to seconds only when not resetting
             StepInfo.StepTimerSeconds := UDINT_TO_REAL(TIME_TO_UDINT(StepTimer.ET)) / 1000.0;
         END_IF;
     ELSE
         StepTimer(IN := FALSE, PT := T#99H);
-        // Don't update StepTimerSeconds when paused unless transitioning
     END_IF;
     
     //-------------------------------------------------------------------------
     // Fault detection
     //-------------------------------------------------------------------------
-    
-    // Check if step is odd (indicates fault)
     LsOdd := StepInfo.CurrentStep MOD 2;
     Status.Faulted := LsOdd <> 0;
-    
-    // Submodule fault handling
     Status.SubmoduleFaulted := inpSubmoduleFaulted;
     
     //-------------------------------------------------------------------------
-    // Retry logic (set by Retry method, consumed here)
+    // Retry logic
     //-------------------------------------------------------------------------
-    
-    // Retry command from command input (sequence programs)
-    IF Commands.Retry THEN
-        R_TRIG_2(CLK := TRUE);
-        IF R_TRIG_2.Q THEN
-            outRetry := TRUE;
-        END_IF;
-        Commands.Retry := FALSE;
-    ELSE
-        R_TRIG_2(CLK := FALSE);
-    END_IF;
-    
-    // Ensure retry signal stays on for at least one scan
     IF RetryComplete THEN
         outRetry := FALSE;
         RetryComplete := FALSE;
@@ -520,62 +332,121 @@ IF EnableIn THEN
         RetryComplete := TRUE;
     END_IF;
     
-    // On retry, return faulted step (odd) to normal step (even)
     IF outRetry AND Status.Faulted THEN
+        // Roll back to previous (even, non-faulted) step to re-enter it
         _nextStep := StepInfo.CurrentStep - 1;
-        _activeStep.StatusStepFaulted := FALSE;
     END_IF;
     
     //-------------------------------------------------------------------------
     // Blocked and Starved condition handling for OEE
     //-------------------------------------------------------------------------
-    
-    // Reset blocked condition if not present
     IF inpBlockedCondition = 0 THEN
         ConditionStatus.Blocked := 0;
     END_IF;
     
-    // Check for blocked condition in appropriate states
     IF inpBlockedCondition <> 0 AND 
-       (Status.Running OR Status.Stopping OR Status.Complete OR 
-        (Status.Homed AND Status.AutoStartRequest)) THEN
-        
+       (Status.State = E_SM_State.RUNNING OR Status.State = E_SM_State.STOPPING OR Status.State = E_SM_State.COMPLETE OR 
+        (Status.State = E_SM_State.HOMED AND Status.AutoStartRequest)) THEN
         ConditionStatus.Blocked := inpBlockedCondition;
         Status.Blocked := TRUE;
         inpBlockedCondition := 0;
     END_IF;
     
-    // Reset starved condition if not present
     IF inpStarvedCondition = 0 THEN
         ConditionStatus.Starved := 0;
     END_IF;
     
-    // Check for starved condition in appropriate states
     IF inpStarvedCondition <> 0 AND 
-       (Status.Running OR Status.Stopping OR Status.Complete OR 
-        (Status.Homed AND Status.AutoStartRequest)) THEN
-        
+       (Status.State = E_SM_State.RUNNING OR Status.State = E_SM_State.STOPPING OR Status.State = E_SM_State.COMPLETE OR 
+        (Status.State = E_SM_State.HOMED AND Status.AutoStartRequest)) THEN
         ConditionStatus.Starved := inpStarvedCondition;
         Status.Starved := TRUE;
         inpStarvedCondition := 0;
     END_IF;
     
-    // Expose active step info for HMI
-    ActiveStepInfo := _activeStep;
-    
 ELSE
     // Reset command requests when disabled
-    CommandsRequested.Start := FALSE;
-    CommandsRequested.Stop := FALSE;
-    CommandsRequested.Home := FALSE;
-    CommandsRequested.Abort := FALSE;
-    CommandsRequested.Pause := FALSE;
-    CommandsRequested.Proceed := FALSE;
-    CommandsRequested.CompleteState := FALSE;
+    _startRequested := FALSE;
+    _stopRequested := FALSE;
+    _homeRequested := FALSE;
+    _abortRequested := FALSE;
+    _pauseRequested := FALSE;
+    _proceedRequested := FALSE;
+    _completeStateRequested := FALSE;
+    StepInfo.CurrentStepName := '';
+        _ClearStepPermissives();
 END_IF;
 ]]></ST>
     </Implementation>
     <Folder Name="Public" Id="{f0c10001-0001-0001-0001-000000000001}" />
+    <Folder Name="Internal" Id="{f0c10002-0001-0001-0001-000000000002}" />
+        <Folder Name="Private" Id="{f0c10003-0001-0001-0001-000000000003}" />
+        <Method Name="_ClearStepPermissives" Id="{d4e5f6a7-b8c9-0123-def0-123456789abf}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PRIVATE _ClearStepPermissives]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[StepPermCfg.nBypassable := 0;
+StepPermStatus.bOK := FALSE;
+StepPermStatus.nPermissives := 0;
+StepPermStatus.nBypassMask := 0;
+StepPermStatus.nFirstFailureBitIndex := 999;
+
+FOR permIndex := 0 TO 63 DO
+        StepPermCfg.aNames[permIndex] := '';
+        StepPermStatus.aFaceplates[permIndex].name := '';
+        StepPermStatus.aFaceplates[permIndex].stsOK := FALSE;
+        StepPermStatus.aFaceplates[permIndex].stsMapped := FALSE;
+        StepPermStatus.aFaceplates[permIndex].stsBypassed := FALSE;
+        StepPermStatus.aFaceplates[permIndex].cfgBypassable := FALSE;
+END_FOR;]]></ST>
+            </Implementation>
+        </Method>
+        <Method Name="_GetFirstStepForState" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac0}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PRIVATE _GetFirstStepForState : DINT
+VAR_INPUT
+        state : E_SM_State;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[CASE state OF
+        E_SM_State.HOMING:     _GetFirstStepForState := HOMING_MIN;
+        E_SM_State.RUNNING:    _GetFirstStepForState := RUNNING_MIN;
+        E_SM_State.STOPPING:   _GetFirstStepForState := STOPPING_MIN;
+        E_SM_State.ABORTING:   _GetFirstStepForState := ABORTING_MIN;
+        E_SM_State.PAUSING:    _GetFirstStepForState := PAUSING_MIN;
+        E_SM_State.PROCEEDING: _GetFirstStepForState := PROCEEDING_MIN;
+ELSE
+        _GetFirstStepForState := 0;
+END_CASE;]]></ST>
+            </Implementation>
+        </Method>
+        <Method Name="_GetLastStepForState" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac1}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PRIVATE _GetLastStepForState : DINT
+VAR_INPUT
+        state : E_SM_State;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[CASE state OF
+        E_SM_State.HOMING:     _GetLastStepForState := HOMING_MAX;
+        E_SM_State.RUNNING:    _GetLastStepForState := RUNNING_MAX;
+        E_SM_State.STOPPING:   _GetLastStepForState := STOPPING_MAX;
+        E_SM_State.ABORTING:   _GetLastStepForState := ABORTING_MAX;
+        E_SM_State.PAUSING:    _GetLastStepForState := PAUSING_MAX;
+        E_SM_State.PROCEEDING: _GetLastStepForState := PROCEEDING_MAX;
+ELSE
+        _GetLastStepForState := 0;
+END_CASE;]]></ST>
+            </Implementation>
+        </Method>
+        <Method Name="_IsStepInStateRange" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac2}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PRIVATE _IsStepInStateRange : BOOL
+VAR_INPUT
+        state : E_SM_State;
+        nStep : DINT;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[_IsStepInStateRange := (nStep >= _GetFirstStepForState(state := state)) AND
+                                             (nStep <= _GetLastStepForState(state := state));]]></ST>
+            </Implementation>
+        </Method>
     <Method Name="Abort" Id="{c1234567-1234-1234-1234-12345678C001}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD Abort : E_RpcMethodResponse
@@ -584,19 +455,19 @@ VAR_INPUT
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[// Safety command - skip source check, skip fault check
-IF Status.Stopped OR Status.Aborted OR Status.Aborting THEN
+IF Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTED OR Status.State = E_SM_State.ABORTING THEN
     Abort := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
 
 // Execute - clear other requests, set abort
-CommandsRequested.Start := FALSE;
-CommandsRequested.Stop := FALSE;
-CommandsRequested.Home := FALSE;
-CommandsRequested.Pause := FALSE;
-CommandsRequested.Proceed := FALSE;
-CommandsRequested.CompleteState := FALSE;
-CommandsRequested.Abort := TRUE;
+_startRequested := FALSE;
+_stopRequested := FALSE;
+_homeRequested := FALSE;
+_pauseRequested := FALSE;
+_proceedRequested := FALSE;
+_completeStateRequested := FALSE;
+_abortRequested := TRUE;
 Abort := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
@@ -612,7 +483,7 @@ Home := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FAL
 IF Home <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 // State check
-IF NOT (Status.Stopped OR Status.Aborted) THEN
+IF NOT (Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTED) THEN
     Home := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
@@ -630,13 +501,13 @@ IF NOT Permissions.AutoIntlkOK THEN
 END_IF;
 
 // Execute
-CommandsRequested.Abort := FALSE;
-CommandsRequested.Pause := FALSE;
-CommandsRequested.Proceed := FALSE;
-CommandsRequested.Start := FALSE;
-CommandsRequested.Stop := FALSE;
-CommandsRequested.CompleteState := FALSE;
-CommandsRequested.Home := TRUE;
+_abortRequested := FALSE;
+_pauseRequested := FALSE;
+_proceedRequested := FALSE;
+_startRequested := FALSE;
+_stopRequested := FALSE;
+_completeStateRequested := FALSE;
+_homeRequested := TRUE;
 Home := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
@@ -661,19 +532,19 @@ Pause := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FA
 IF Pause <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 // State check
-IF NOT Status.Running THEN
+IF NOT (Status.State = E_SM_State.RUNNING) THEN
     Pause := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
 
 // Execute
-CommandsRequested.Abort := FALSE;
-CommandsRequested.Home := FALSE;
-CommandsRequested.Proceed := FALSE;
-CommandsRequested.Start := FALSE;
-CommandsRequested.Stop := FALSE;
-CommandsRequested.CompleteState := FALSE;
-CommandsRequested.Pause := TRUE;
+_abortRequested := FALSE;
+_homeRequested := FALSE;
+_proceedRequested := FALSE;
+_startRequested := FALSE;
+_stopRequested := FALSE;
+_completeStateRequested := FALSE;
+_pauseRequested := TRUE;
 Pause := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
@@ -689,7 +560,7 @@ Proceed := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, 
 IF Proceed <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 // State check
-IF NOT Status.Paused THEN
+IF NOT (Status.State = E_SM_State.PAUSED) THEN
     Proceed := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
@@ -707,13 +578,13 @@ IF NOT Permissions.AutoIntlkOK THEN
 END_IF;
 
 // Execute
-CommandsRequested.Abort := FALSE;
-CommandsRequested.Home := FALSE;
-CommandsRequested.Pause := FALSE;
-CommandsRequested.Start := FALSE;
-CommandsRequested.Stop := FALSE;
-CommandsRequested.CompleteState := FALSE;
-CommandsRequested.Proceed := TRUE;
+_abortRequested := FALSE;
+_homeRequested := FALSE;
+_pauseRequested := FALSE;
+_startRequested := FALSE;
+_stopRequested := FALSE;
+_completeStateRequested := FALSE;
+_proceedRequested := TRUE;
 Proceed := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
@@ -745,7 +616,7 @@ Start := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FA
 IF Start <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 // State check
-IF NOT (Status.Homed OR Status.Complete) THEN
+IF NOT (Status.State = E_SM_State.HOMED OR Status.State = E_SM_State.COMPLETE) THEN
     Start := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
@@ -763,13 +634,13 @@ IF NOT Permissions.AutoIntlkOK THEN
 END_IF;
 
 // Execute
-CommandsRequested.Abort := FALSE;
-CommandsRequested.Pause := FALSE;
-CommandsRequested.Home := FALSE;
-CommandsRequested.Proceed := FALSE;
-CommandsRequested.Stop := FALSE;
-CommandsRequested.CompleteState := FALSE;
-CommandsRequested.Start := TRUE;
+_abortRequested := FALSE;
+_pauseRequested := FALSE;
+_homeRequested := FALSE;
+_proceedRequested := FALSE;
+_stopRequested := FALSE;
+_completeStateRequested := FALSE;
+_startRequested := TRUE;
 Start := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
@@ -781,24 +652,25 @@ VAR_INPUT
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[// Safety command - skip source check, skip fault check
-IF Status.Stopped OR Status.Stopping THEN
+IF Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.STOPPING THEN
     Stop := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
 
 // Execute
-CommandsRequested.Abort := FALSE;
-CommandsRequested.Home := FALSE;
-CommandsRequested.Proceed := FALSE;
-CommandsRequested.Start := FALSE;
-CommandsRequested.Pause := FALSE;
-CommandsRequested.CompleteState := FALSE;
-CommandsRequested.Stop := TRUE;
+_abortRequested := FALSE;
+_homeRequested := FALSE;
+_proceedRequested := FALSE;
+_startRequested := FALSE;
+_pauseRequested := FALSE;
+_completeStateRequested := FALSE;
+_stopRequested := TRUE;
 Stop := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="SetNextStep" Id="{d4e5f6a7-b8c9-0123-def0-123456789abc}" FolderPath="Public\">
-      <Declaration><![CDATA[METHOD SetNextStep
+    <Method Name="SetNextStep" Id="{d4e5f6a7-b8c9-0123-def0-123456789abc}" FolderPath="Internal\">
+      <Declaration><![CDATA[// INTERNAL: used by FB_Step to advance the sequence. Not part of the user API.
+METHOD INTERNAL SetNextStep
 VAR_INPUT
     nStep : DINT;
 END_VAR]]></Declaration>
@@ -806,31 +678,57 @@ END_VAR]]></Declaration>
         <ST><![CDATA[_nextStep := nStep;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="SetStepFault" Id="{e5f6a7b8-c9d0-1234-ef01-23456789abcd}" FolderPath="Public\">
-      <Declaration><![CDATA[METHOD SetStepFault
+    <Method Name="SetStepName" Id="{d4e5f6a7-b8c9-0123-def0-123456789abd}" FolderPath="Internal\">
+      <Declaration><![CDATA[// INTERNAL: used by FB_Step to publish its name to StepInfo. Not part of the user API.
+METHOD INTERNAL SetStepName
+VAR_INPUT
+    sName : STRING(40);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[StepInfo.CurrentStepName := sName;]]></ST>
+      </Implementation>
+    </Method>
+        <Method Name="SetStepPermissives" Id="{d4e5f6a7-b8c9-0123-def0-123456789abe}" FolderPath="Internal\">
+            <Declaration><![CDATA[// INTERNAL: used by FB_Step to publish the active step permissive data for HMI / OPC.
+METHOD INTERNAL SetStepPermissives
+VAR_INPUT
+        cfg : ST_Permissive_Config;
+        sts : ST_Permissive_Status;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[StepPermCfg := cfg;
+StepPermStatus := sts;]]></ST>
+            </Implementation>
+        </Method>
+    <Method Name="SetStepFault" Id="{e5f6a7b8-c9d0-1234-ef01-23456789abcd}" FolderPath="Internal\">
+      <Declaration><![CDATA[// INTERNAL: used by FB_Step to fault the current step (timeout, etc.).
+// Faults by advancing to the next (odd) step number -- Status.Faulted derives
+// from (CurrentStep MOD 2). Not part of the user API.
+METHOD INTERNAL SetStepFault
 VAR_INPUT
     bFault : BOOL;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[_activeStep.StatusStepFaulted := bFault;
-IF bFault THEN
+        <ST><![CDATA[IF bFault THEN
     _nextStep := StepInfo.CurrentStep + 1;
 END_IF;]]></ST>
-      </Implementation>
-    </Method>
-    <Method Name="ReportStepInfo" Id="{f6a7b8c9-d0e1-2345-f012-3456789abcde}" FolderPath="Public\">
-      <Declaration><![CDATA[METHOD ReportStepInfo
-VAR_INPUT
-    sName : STRING(80);
-    stPerms : ST_Permissive_Config;
-END_VAR]]></Declaration>
-      <Implementation>
-        <ST><![CDATA[_activeStep.PermsHMI := stPerms;]]></ST>
       </Implementation>
     </Method>
     <LineIds Name="FB_StateMachine">
       <LineId Id="1" Count="0" />
     </LineIds>
+        <LineIds Name="FB_StateMachine._ClearStepPermissives">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+        <LineIds Name="FB_StateMachine._GetFirstStepForState">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+        <LineIds Name="FB_StateMachine._GetLastStepForState">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+        <LineIds Name="FB_StateMachine._IsStepInStateRange">
+            <LineId Id="1" Count="0" />
+        </LineIds>
     <LineIds Name="FB_StateMachine.Abort">
       <LineId Id="1" Count="0" />
     </LineIds>
@@ -858,10 +756,13 @@ END_VAR]]></Declaration>
     <LineIds Name="FB_StateMachine.SetNextStep">
       <LineId Id="1" Count="0" />
     </LineIds>
-    <LineIds Name="FB_StateMachine.SetStepFault">
+    <LineIds Name="FB_StateMachine.SetStepName">
       <LineId Id="1" Count="0" />
     </LineIds>
-    <LineIds Name="FB_StateMachine.ReportStepInfo">
+        <LineIds Name="FB_StateMachine.SetStepPermissives">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+    <LineIds Name="FB_StateMachine.SetStepFault">
       <LineId Id="1" Count="0" />
     </LineIds>
   </POU>

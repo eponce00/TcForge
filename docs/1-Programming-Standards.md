@@ -144,7 +144,13 @@ The FB body is **cyclic monitoring only**:
 ## 1.5 Permissives
 
 - Use `FB_Permissives` for all permission and interlock evaluations.
-- FBs that contain permissives (e.g., `FB_StateMachine`, `FB_TwoPosActuator`, `FB_SequenceStep`) expose their `FB_Permissives` instances directly. Callers map permissive bits from outside:
+- FBs that contain permissives expose them in the way that best matches ownership:
+
+  - `FB_TwoPosActuator` exposes device-level permissive instances directly because callers own the device conditions.
+  - `FB_StateMachine` owns state-level permissives internally because the state machine owns the command readiness model.
+  - `FB_Step` owns step-level permissive mapping via `MapPerm(...)`; the active step republishes its permissive faceplate data through `FB_StateMachine.StepPermCfg` and `FB_StateMachine.StepPermStatus` for HMI / OPC.
+
+  State-level permissives are still mapped directly on the `FB_StateMachine` instances that own them:
   ```iecst
   // Map permissive bits directly on the FB's exposed permissive instance
   fbActuator.advancePermissives.MapInput(bitIndex := 0, inputValue := bSensorOK);
@@ -184,7 +190,8 @@ The FB body is **cyclic monitoring only**:
 Additional capabilities:
 
 - `MapPerm(nIndex, sDescription, bValue)` — map per-step permissives.
-- `SetNextStep(nStep)` — override default `nNextStep` for dynamic branching.
+- Dynamic branching is done by computing `nNextStep` inline in the FB call each scan, for example `nNextStep := SEL(bLoop, 3000, 3008)`.
+- The active step republishes its permissive names and status through `FB_StateMachine.StepPermCfg` and `FB_StateMachine.StepPermStatus` for HMI / OPC.
 
 ---
 
