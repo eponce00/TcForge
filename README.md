@@ -2,58 +2,73 @@
 
 An open-source TwinCAT 3 PLC library for industrial automation. It provides reusable, tested function blocks that follow consistent patterns — so you can build reliable automation systems without reinventing common control logic.
 
-## What It Provides
+---
+
+## 1 Overview
 
 The library is organized into modules, each covering a domain of industrial control:
 
 | Module | Purpose |
 | --- | --- |
 | **Common** | Shared types, enums, and validation helpers used across all modules |
-| **Sequencing** | State machine control, sequence step execution, permissive evaluation |
+| **Sequencing** | State machine control, sequence steps with lifecycle, permissive evaluation |
 | **Pneumatics** | Pneumatic actuator control with feedback monitoring |
 
 More modules will be added as the library grows (motors, analog control, alarms, etc.).
 
-## Key Patterns
+### 1.1 Key Patterns
 
-- **Method-centric commands** — All command logic lives in RPC methods exposed via OPC UA. The FB body handles only cyclic monitoring.
-- **Command source control** — Every command identifies its source (`PROG` or `OPERATOR`) and can be locked to program-only during automatic operation.
-- **Unified validation** — A shared `F_ValidateRequester` function provides consistent source, fault, and permission checks across all FBs.
-- **Permissive system** — `FB_Permissives` evaluates safety interlocks and operator permissions with bypass support for maintenance.
+| Pattern | Summary |
+| --- | --- |
+| Method-centric commands | All command logic lives in RPC methods exposed via OPC UA. The FB body handles only cyclic monitoring. |
+| Command source control | Every command identifies its source (`PROG` or `OPERATOR`) and can be locked to program-only during automatic operation. |
+| Unified validation | `F_ValidateRequester` provides consistent source, fault, and permission checks across all FBs. |
+| Permissive system | `FB_Permissives` evaluates safety interlocks with `MapReason` and reports via `sts.OK`. |
+| Step lifecycle | `FB_Step` provides `Entry` / `Execute` / `Exiting` phases with per-step permissives and dynamic branching. |
 
-## Repository Layout
+---
+
+## 2 Repository Layout
 
 ```
 TwinCAT/
-  Core.sln              Solution entry point
-  Core/                 Library PLC source
+  Core.sln                  Solution entry point
+  Core/                     Library PLC project
     Modules/
-      Common/           Shared enums, types, functions
-      Sequencing/       State machine, sequence steps, permissives
-      Pneumatics/       Pneumatic actuator control
-  CoreExample/          Example PLC application
-docs/                   Design documentation and standards
+      Common/               E_Requester, E_RpcMethodResponse, F_ValidateRequester
+      Sequencing/
+        StateMachine/       FB_StateMachine, FB_Step, FB_SequenceStep + DUTs
+        Permissives/        FB_Permissives + ST_PermIntlk_*
+      Pneumatics/
+        TwoPosActuator/     FB_TwoPosActuator + DUTs
+  CoreExample/              Example PLC application (MAIN + 6 sequences)
+docs/                       Design documentation
 ```
 
-## Getting Started
+---
 
-1. Open `TwinCAT/Core.sln` in TwinCAT XAE (Visual Studio)
-2. Build the solution
-3. Explore `CoreExample` for a working implementation with homing, running, stopping, pausing, and aborting sequences
+## 3 Getting Started
 
-## Documentation
+1. Open `TwinCAT/Core.sln` in TwinCAT XAE (Visual Studio).
+2. Build the solution.
+3. Explore `CoreExample` for a working implementation with homing, running, stopping, pausing, aborting, and proceeding sequences.
+4. Use `Core` as the reusable library — adapt the example sequences to your machine.
 
-- [Programming Standards](docs/Programming-Standards.md) — coding conventions, naming, folder layout
-- [Command Source Control](docs/Command-Source-Control.md) — requester validation and source locking
-- [RPC Method Response](docs/RPC-Method-Response.md) — response codes and usage
-- [HMI Integration](docs/HMI-Integration.md) — OPC UA connectivity
+---
 
-## Getting Started
+## 4 Documentation Index
 
-1. Open `TwinCAT/Core.sln` in TwinCAT XAE
-2. Use `CoreExample` as the reference example for how the library is consumed
-3. Use `Core` as the source PLC for the reusable library objects
-4. Build the unified solution and adapt the example state programs to your machine
-5. Configure safety permissions and HMI interface for your application
+| # | Document | Description |
+|---|----------|-------------|
+| 1 | [Programming Standards](docs/Programming-Standards.md) | Coding conventions, naming, folder layout, FB structure patterns |
+| 2 | [Command Source Control](docs/Command-Source-Control.md) | Requester validation, source locking, method pattern |
+| 3 | [RPC Method Response](docs/RPC-Method-Response.md) | Standardized response codes, method inventory, OPC UA usage |
+| 4 | [HMI Integration](docs/HMI-Integration.md) | OPC UA pragmas, cfg/sts exposure, RPC method connectivity |
 
-This library transforms complex automation sequences into manageable, structured code that's easier to develop, debug, and maintain.
+Each document uses section numbering consistent with this index (e.g., Programming Standards = Chapter 1, sections 1.1–1.x).
+
+---
+
+## 5 License
+
+This library is open source. See [LICENSE](LICENSE) for details.
