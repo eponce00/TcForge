@@ -1,6 +1,8 @@
-# TwinCAT Open Library
+# TcForge
 
-An open-source TwinCAT 3 PLC library for industrial automation. It provides reusable, tested function blocks that follow consistent patterns — so you can build reliable automation systems without reinventing common control logic.
+An open-source TwinCAT 3 PLC library for industrial automation. **TcForge** provides reusable, well-structured function blocks for Beckhoff controllers — so you can build reliable machine software without reinventing common control logic.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
 
@@ -32,9 +34,9 @@ More modules will be added as the library grows (motors, analog control, alarms,
 
 The library is organized around **modules** — self-contained domains of functionality. Each module groups its function blocks and related data types together. Code is organized by *what it does* (e.g., sequencing, pneumatics), not by *what it is* (e.g., DUTs, POUs).
 
-- `TwinCAT/Forge.sln` — solution entry point
-- `Core/` — reusable library PLC project, organized into modules
-- `ForgeExample/` — example PLC application consuming the library (MAIN + 6 sequences)
+- `TwinCAT/TcForge.sln` — solution entry point
+- `TcForge/` — reusable library PLC project, organized into modules
+- `TcForgeExample/` — example PLC application consuming the library (MAIN + 6 sequences)
 - `docs/` — design documentation
 
 See [§1.2 Project Organization Philosophy](docs/1-Programming-Standards.md#12-project-organization-philosophy) for the full set of principles.
@@ -43,10 +45,10 @@ See [§1.2 Project Organization Philosophy](docs/1-Programming-Standards.md#12-p
 
 ## 3 Getting Started
 
-1. Open `TwinCAT/Forge.sln` in TwinCAT XAE (Visual Studio).
+1. Open `TwinCAT/TcForge.sln` in TwinCAT XAE (Visual Studio).
 2. Build the solution.
-3. Explore `ForgeExample` for a working implementation with homing, running, stopping, pausing, aborting, and proceeding sequences.
-4. Use `Forge` as the reusable library — adapt the example sequences to your machine.
+3. Explore `TcForgeExample` for a working implementation with homing, running, stopping, pausing, aborting, and proceeding sequences.
+4. Use `TcForge` as the reusable library — adapt the example sequences to your machine.
 
 ---
 
@@ -67,4 +69,4 @@ Each document uses section numbering consistent with this index (e.g., Programmi
 
 ## 5 License
 
-This library is open source. See [LICENSE](LICENSE) for details.
+MIT License — free to use, modify, and distribute in any project, commercial or otherwise. See [LICENSE](LICENSE) for the full text.

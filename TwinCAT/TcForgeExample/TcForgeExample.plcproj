@@ -3,107 +3,61 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{c50d021a-2a7e-435e-bd9b-20a91e08c1da}</ProjectGuid>
+    <ProjectGuid>{2c41d41a-2644-4d36-82d2-076e2f9459e3}</ProjectGuid>
     <SubObjectsSortedByName>True</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>true</WriteProductVersion>
-    <GenerateTpy>true</GenerateTpy>
-    <Name>Forge</Name>
+    <GenerateTpy>false</GenerateTpy>
+    <Name>TcForgeExample</Name>
     <ProgramVersion>3.1.4026.17</ProgramVersion>
-    <Application>{3e8d9abc-3123-42ab-93ad-a721324fdb78}</Application>
-    <TypeSystem>{8770fba7-8d90-4aee-b41d-0da656d9de95}</TypeSystem>
-    <Implicit_Task_Info>{e2841deb-7cb0-4ed0-95a3-4e505c3af3e9}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{1c27c020-be78-46b5-af31-3898ec6ad8d4}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{0388767e-eca5-4e8e-b77c-7e12cce16845}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{07f2a7a2-0d34-40b5-ac8d-f85dc2fe7fb0}</LibraryReferences>
-    <Company>Home</Company>
-    <Released>false</Released>
-    <Title>Twincat Open Library</Title>
-    <ProjectVersion>1.0.0.4</ProjectVersion>
-    <VirtualLibrary>true</VirtualLibrary>
+    <Application>{ecd28a30-083e-45f7-b9f5-2ee88aa24358}</Application>
+    <TypeSystem>{fdb1b960-8906-4726-9594-4dcd747881b9}</TypeSystem>
+    <Implicit_Task_Info>{42b2cf6e-a2f8-4545-8d5d-ef3208a29a21}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{bbbe52ca-2c68-4f6f-b666-e141bddde701}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{44177ae5-1adc-483a-8718-2e0a1d938f2e}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{d6554bf5-60ba-4a32-b954-56c3a5ebc381}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Modules\Common\E_Requester.TcDUT">
+    <Compile Include="DUTs\ST_CameraStates.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\E_RpcMethodResponse.TcDUT">
+    <Compile Include="GVLs\Hardware_Mapping.TcGVL">
       <SubType>Code</SubType>
+      <LinkAlways>true</LinkAlways>
     </Compile>
-    <Compile Include="Modules\Common\F_ValidateRequester.TcPOU">
+    <Compile Include="GVLs\Cognex_Mapping.TcGVL">
       <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\E_TwoPosActuator_Fault.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\E_TwoPosActuator_State.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\FB_TwoPosActuator.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Cfg.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_IO.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Sts.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Interlocks\FB_Interlock.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Interlocks\ST_Interlock_Config.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Interlocks\ST_Interlock_Status.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Interlocks\ST_Interlock_Faceplate.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\FB_Permissives.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Config.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Status.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Faceplate.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\E_SM_State.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\FB_StateMachine.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\FB_Step.TcPOU">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Status.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Step.TcDUT">
-      <SubType>Code</SubType>
+      <LinkAlways>true</LinkAlways>
     </Compile>
     <Compile Include="PlcTask.TcTTO">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="POUs\MAIN.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_5000_PRG_Aborting.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_1000_PRG_Homing.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_3000_PRG_Running.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_2000_PRG_Stopping.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_4000_PRG_Pausing.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\_6000_PRG_Proceeding.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="Modules" />
-    <Folder Include="Modules\Common" />
-    <Folder Include="Modules\Interlocks" />
-    <Folder Include="Modules\Pneumatics" />
-    <Folder Include="Modules\Pneumatics\TwoPosActuator" />
-    <Folder Include="Modules\Sequencing" />
-    <Folder Include="Modules\Sequencing\Permissives" />
-    <Folder Include="Modules\Sequencing\StateMachine" />
+    <Folder Include="DUTs" />
     <Folder Include="GVLs" />
-    <Folder Include="VISUs" />
+    <Folder Include="POUs" />
   </ItemGroup>
   <ItemGroup>
     <PlaceholderReference Include="Tc2_Standard">
@@ -113,50 +67,52 @@
     <PlaceholderReference Include="Tc2_System">
       <DefaultResolution>Tc2_System, * (Beckhoff Automation GmbH)</DefaultResolution>
       <Namespace>Tc2_System</Namespace>
-      <Parameters>
-        <Parameter ListName="PARAM" xmlns="">
-          <Key>TABLE_UPPER_BOUND</Key>
-          <Value>15</Value>
-        </Parameter>
-        <Parameter ListName="PARAM" xmlns="">
-          <Key>STRING_LENGTH_EXP</Key>
-          <Value>255</Value>
-        </Parameter>
-        <Parameter ListName="PARAM" xmlns="">
-          <Key>STRING_LENGTH_ADDRESS</Key>
-          <Value>20</Value>
-        </Parameter>
-        <Parameter ListName="PARAM" xmlns="">
-          <Key>STRING_LENGTH_COMMENT</Key>
-          <Value>255</Value>
-        </Parameter>
-        <Parameter ListName="PARAM" xmlns="">
-          <Key>STRING_LENGTH_OUTSTRING</Key>
-          <Value>255</Value>
-        </Parameter>
-        <Parameter ListName="PARAM" xmlns="">
-          <Key>TABLE_SHOW_VALID_ITEMS</Key>
-          <Value>FALSE</Value>
-        </Parameter>
-      </Parameters>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc3_JsonXml">
+      <DefaultResolution>Tc3_JsonXml, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc3_JsonXml</Namespace>
     </PlaceholderReference>
     <PlaceholderReference Include="Tc3_Module">
       <DefaultResolution>Tc3_Module, * (Beckhoff Automation GmbH)</DefaultResolution>
       <Namespace>Tc3_Module</Namespace>
     </PlaceholderReference>
+    <PlaceholderReference Include="Twincat Open Library">
+      <DefaultResolution>[Twincat Open Library], * (Home)</DefaultResolution>
+      <Namespace>Twincat_Open_Library</Namespace>
+    </PlaceholderReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Core.tmc">
+    <LibraryReference Include="VisuSymbols,3.5.10.0,System">
+      <Namespace>VisuSymbols</Namespace>
+    </LibraryReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="TcForgeExample.tmc">
       <SubType>Content</SubType>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Core.tmc">
+    <None Include="TcForgeExample.tmc">
       <SubType>Content</SubType>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Forge.tmc">
+    <None Include="TcForgeExample.tmc">
+      <SubType>Content</SubType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="TcForgeExample.tmc">
+      <SubType>Content</SubType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="TcForgeExample.tmc">
+      <SubType>Content</SubType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="TcForgeExample.tmc">
       <SubType>Content</SubType>
     </None>
   </ItemGroup>
