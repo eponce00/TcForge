@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_F_ValidateRequester_Test" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560001}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_F_ValidateRequester_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+END_VAR
+]]>
+    </Declaration>
+    <Implementation>
+      <ST><![CDATA[AcceptsNormally();
+AcceptsProgramWhenLocked();
+RejectsOperatorWhenLocked();
+SkipSourceCheckAllowsOperator();
+RejectsWhenFaulted();
+AcceptsWhenFaultedButAllowed();
+]]>
+      </ST>
+    </Implementation>
+    <Method Name="AcceptsNormally" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560002}">
+      <Declaration><![CDATA[METHOD AcceptsNormally
+VAR
+    Result   : Twincat_Open_Library.E_RpcMethodResponse;
+    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.ACCEPTED;
+END_VAR
+]]>
+      </Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AcceptsNormally');
+
+Result := Twincat_Open_Library.F_ValidateRequester(
+    eRequester        := Twincat_Open_Library.E_Requester.OPERATOR,
+    bSourceLocked     := FALSE,
+    bFaulted          := FALSE,
+    bAllowWhenFaulted := FALSE,
+    bSkipSourceCheck  := FALSE);
+
+AssertEquals_DINT(
+    Expected := DINT(Expected),
+    Actual   := DINT(Result),
+    Message  := 'Should accept when there are no restrictions');
+
+TEST_FINISHED();
+]]>
+        </ST>
+      </Implementation>
+    </Method>
+    <Method Name="AcceptsProgramWhenLocked" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560003}">
+      <Declaration><![CDATA[METHOD AcceptsProgramWhenLocked
+VAR
+    Result   : Twincat_Open_Library.E_RpcMethodResponse;
+    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.ACCEPTED;
+END_VAR
+]]>
+      </Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AcceptsProgramWhenLocked');
+
+Result := Twincat_Open_Library.F_ValidateRequester(
+    eRequester        := Twincat_Open_Library.E_Requester.PROG,
+    bSourceLocked     := TRUE,
+    bFaulted          := FALSE,
+    bAllowWhenFaulted := FALSE,
+    bSkipSourceCheck  := FALSE);
+
+AssertEquals_DINT(
+    Expected := DINT(Expected),
+    Actual   := DINT(Result),
+    Message  := 'PROG requester should be accepted even when source is locked');
+
+TEST_FINISHED();
+]]>
+        </ST>
+      </Implementation>
+    </Method>
+    <Method Name="RejectsOperatorWhenLocked" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560004}">
+      <Declaration><![CDATA[METHOD RejectsOperatorWhenLocked
+VAR
+    Result   : Twincat_Open_Library.E_RpcMethodResponse;
+    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED;
+END_VAR
+]]>
+      </Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RejectsOperatorWhenLocked');
+
+Result := Twincat_Open_Library.F_ValidateRequester(
+    eRequester        := Twincat_Open_Library.E_Requester.OPERATOR,
+    bSourceLocked     := TRUE,
+    bFaulted          := FALSE,
+    bAllowWhenFaulted := FALSE,
+    bSkipSourceCheck  := FALSE);
+
+AssertEquals_DINT(
+    Expected := DINT(Expected),
+    Actual   := DINT(Result),
+    Message  := 'OPERATOR must be rejected when source is locked');
+
+TEST_FINISHED();
+]]>
+        </ST>
+      </Implementation>
+    </Method>
+    <Method Name="SkipSourceCheckAllowsOperator" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560005}">
+      <Declaration><![CDATA[METHOD SkipSourceCheckAllowsOperator
+VAR
+    Result   : Twincat_Open_Library.E_RpcMethodResponse;
+    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.ACCEPTED;
+END_VAR
+]]>
+      </Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SkipSourceCheckAllowsOperator');
+
+Result := Twincat_Open_Library.F_ValidateRequester(
+    eRequester        := Twincat_Open_Library.E_Requester.OPERATOR,
+    bSourceLocked     := TRUE,
+    bFaulted          := FALSE,
+    bAllowWhenFaulted := FALSE,
+    bSkipSourceCheck  := TRUE);
+
+AssertEquals_DINT(
+    Expected := DINT(Expected),
+    Actual   := DINT(Result),
+    Message  := 'bSkipSourceCheck should bypass the lock and accept OPERATOR');
+
+TEST_FINISHED();
+]]>
+        </ST>
+      </Implementation>
+    </Method>
+    <Method Name="RejectsWhenFaulted" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560006}">
+      <Declaration><![CDATA[METHOD RejectsWhenFaulted
+VAR
+    Result   : Twincat_Open_Library.E_RpcMethodResponse;
+    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.REJECTED_FAULTED;
+END_VAR
+]]>
+      </Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RejectsWhenFaulted');
+
+Result := Twincat_Open_Library.F_ValidateRequester(
+    eRequester        := Twincat_Open_Library.E_Requester.OPERATOR,
+    bSourceLocked     := FALSE,
+    bFaulted          := TRUE,
+    bAllowWhenFaulted := FALSE,
+    bSkipSourceCheck  := FALSE);
+
+AssertEquals_DINT(
+    Expected := DINT(Expected),
+    Actual   := DINT(Result),
+    Message  := 'Should reject when faulted and bAllowWhenFaulted is FALSE');
+
+TEST_FINISHED();
+]]>
+        </ST>
+      </Implementation>
+    </Method>
+    <Method Name="AcceptsWhenFaultedButAllowed" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560007}">
+      <Declaration><![CDATA[METHOD AcceptsWhenFaultedButAllowed
+VAR
+    Result   : Twincat_Open_Library.E_RpcMethodResponse;
+    Expected : Twincat_Open_Library.E_RpcMethodResponse := Twincat_Open_Library.E_RpcMethodResponse.ACCEPTED;
+END_VAR
+]]>
+      </Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AcceptsWhenFaultedButAllowed');
+
+Result := Twincat_Open_Library.F_ValidateRequester(
+    eRequester        := Twincat_Open_Library.E_Requester.OPERATOR,
+    bSourceLocked     := FALSE,
+    bFaulted          := TRUE,
+    bAllowWhenFaulted := TRUE,
+    bSkipSourceCheck  := FALSE);
+
+AssertEquals_DINT(
+    Expected := DINT(Expected),
+    Actual   := DINT(Result),
+    Message  := 'Should accept when faulted but bAllowWhenFaulted is TRUE');
+
+TEST_FINISHED();
+]]>
+        </ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_F_ValidateRequester_Test">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
