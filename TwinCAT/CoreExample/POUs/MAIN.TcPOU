@@ -4,12 +4,30 @@
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
     fbStateMachine : FB_StateMachine;
+    
+    // Online-view command buttons — set TRUE in watch/online to trigger, auto-reset each scan
+    btnHome    : BOOL;
+    btnStart   : BOOL;
+    btnStop    : BOOL;
+    btnAbort   : BOOL;
+    btnPause   : BOOL;
+    btnProceed : BOOL;
+    btnRetry   : BOOL;
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[fbStateMachine(
     EnableIn := TRUE,
-    cfgAutoRun := TRUE
+    cfgAutoRun := FALSE  // disable auto-run so manual buttons stay in control
 );
+
+// --- Online command buttons (write TRUE in TwinCAT online view to trigger) ---
+IF btnHome    THEN fbStateMachine.Home();    btnHome    := FALSE; END_IF;
+IF btnStart   THEN fbStateMachine.Start();   btnStart   := FALSE; END_IF;
+IF btnStop    THEN fbStateMachine.Stop();    btnStop    := FALSE; END_IF;
+IF btnAbort   THEN fbStateMachine.Abort();   btnAbort   := FALSE; END_IF;
+IF btnPause   THEN fbStateMachine.Pause();   btnPause   := FALSE; END_IF;
+IF btnProceed THEN fbStateMachine.Proceed(); btnProceed := FALSE; END_IF;
+IF btnRetry   THEN fbStateMachine.Retry();   btnRetry   := FALSE; END_IF;
 
 _1000_PRG_Homing(sm := fbStateMachine);
 _3000_PRG_Running(sm := fbStateMachine);

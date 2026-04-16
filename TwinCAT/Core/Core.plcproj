@@ -50,6 +50,18 @@
     <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Modules\Interlocks\FB_Interlock.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Interlocks\ST_Interlock_Config.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Interlocks\ST_Interlock_Status.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Interlocks\ST_Interlock_Faceplate.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Modules\Sequencing\Permissives\FB_Permissives.TcPOU">
       <SubType>Code</SubType>
     </Compile>
@@ -71,12 +83,6 @@
     <Compile Include="Modules\Sequencing\StateMachine\FB_Step.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Conditions.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Permissions.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Status.TcDUT">
       <SubType>Code</SubType>
     </Compile>
@@ -90,6 +96,7 @@
   <ItemGroup>
     <Folder Include="Modules" />
     <Folder Include="Modules\Common" />
+    <Folder Include="Modules\Interlocks" />
     <Folder Include="Modules\Pneumatics" />
     <Folder Include="Modules\Pneumatics\TwoPosActuator" />
     <Folder Include="Modules\Sequencing" />

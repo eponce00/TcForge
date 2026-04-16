@@ -1882,7 +1882,7 @@ External Setpoint Generation:
 		</Motion>
 		<Plc>
 			<Project GUID="{2C41D41A-2644-4D36-82D2-076E2F9459E3}" Name="CoreExample" PrjFilePath="CoreExample\CoreExample.plcproj" TmcFilePath="CoreExample\CoreExample.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true">
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{815741A9-964F-524B-AEFD-7C007F1EE0F2}" TmcPath="CoreExample\CoreExample.tmc">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{B265898F-732D-60FC-A4A3-75A263ABA850}" TmcPath="CoreExample\CoreExample.tmc">
 					<Name>CoreExample Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Vars VarGrpType="2" AreaNo="1">
@@ -1949,12 +1949,12 @@ External Setpoint Generation:
 							<Type>BOOL</Type>
 						</Var>
 						<Var>
-							<Name>Cognex_Mapping.outCommand</Name>
-							<Type>UINT</Type>
-						</Var>
-						<Var>
 							<Name>Cognex_Mapping.outUserData</Name>
 							<Type>BYTE</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.outCommand</Name>
+							<Type>UINT</Type>
 						</Var>
 						<Var>
 							<Name>Cognex_Mapping.outUserData1</Name>
@@ -2084,10 +2084,6 @@ External Setpoint Generation:
 							<Type GUID="{54195CC7-3340-E483-343B-EF7951C3211B}">ARRAY [0..1] OF BOOL</Type>
 						</Var>
 						<Var>
-							<Name>Cognex_Mapping.inpInspectionResults</Name>
-							<Type>BYTE</Type>
-						</Var>
-						<Var>
 							<Name>Cognex_Mapping.inpCurrentJobID</Name>
 							<Type>UINT</Type>
 						</Var>
@@ -2102,6 +2098,10 @@ External Setpoint Generation:
 						<Var>
 							<Name>Cognex_Mapping.inpInspectionResultCode</Name>
 							<Type>INT</Type>
+						</Var>
+						<Var>
+							<Name>Cognex_Mapping.inpInspectionResults</Name>
+							<Type>BYTE</Type>
 						</Var>
 						<Var>
 							<Name>Cognex_Mapping.inpInspectionResults1</Name>

@@ -2,7 +2,7 @@
 
 All commands in this library are issued through **RPC methods** on function blocks — there are no `pcmd` or `ocmd` input pins. Each method validates the request, checks permissions, and executes internally. The FB body handles only cyclic evaluation.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md)
+> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md)
 
 ---
 
@@ -139,8 +139,8 @@ response := fbActuator.Advance(E_Requester.OPERATOR);   // OPERATOR (from HMI/OP
 
 | Method | Source Checked | Description |
 |--------|---------------|-------------|
-| `Start(eRequester)` | Yes | Must be Homed/Complete; check start perms and interlocks |
-| `Home(eRequester)` | Yes | Must be Stopped/Aborted; check home perms and interlocks |
+| `Start(eRequester)` | Yes | Must be Ready; check start perms and interlocks |
+| `Home(eRequester)` | Yes | Must be Stopped; check home perms and interlocks |
 | `Stop(eRequester)` | No (safety) | Always accepted; transition to Stopping |
 | `Abort(eRequester)` | No (safety) | Always accepted; transition to Aborting |
 | `Pause(eRequester)` | Yes | Must be Running |

@@ -2,7 +2,7 @@
 
 All RPC methods across the library return `E_RpcMethodResponse`, a standardized enumeration that tells the caller whether a command was accepted or rejected — and why.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [HMI Integration →](4-HMI-Integration.md)
+> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md)
 
 ---
 
@@ -51,8 +51,8 @@ Ranges 30–39 (Manual Override), 40–49 (Configuration), 60–69 (Output/Hardw
 
 | Method | Validation | Possible Responses |
 |--------|-----------|-------------------|
-| `Start()` | Must be Homed or Complete, start perms OK, auto interlocks OK | `ACCEPTED`, `REJECTED_WRONG_STATE`, `REJECTED_PERMISSIVE_NOT_MET`, `REJECTED_INTERLOCKED` |
-| `Home()` | Must be Stopped or Aborted, home perms OK, auto interlocks OK | `ACCEPTED`, `REJECTED_WRONG_STATE`, `REJECTED_PERMISSIVE_NOT_MET`, `REJECTED_INTERLOCKED` |
+| `Start()` | Must be Ready, start perms OK, auto interlocks OK | `ACCEPTED`, `REJECTED_WRONG_STATE`, `REJECTED_PERMISSIVE_NOT_MET`, `REJECTED_INTERLOCKED` |
+| `Home()` | Must be Stopped, home perms OK, auto interlocks OK | `ACCEPTED`, `REJECTED_WRONG_STATE`, `REJECTED_PERMISSIVE_NOT_MET`, `REJECTED_INTERLOCKED` |
 | `Proceed()` | Must be Paused, proceed perms OK, auto interlocks OK | `ACCEPTED`, `REJECTED_WRONG_STATE`, `REJECTED_PERMISSIVE_NOT_MET`, `REJECTED_INTERLOCKED` |
 | `Pause()` | Must be Running | `ACCEPTED`, `REJECTED_WRONG_STATE` |
 | `Stop()` | Always accepted (safety command) | `ACCEPTED` |

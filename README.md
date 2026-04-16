@@ -58,6 +58,8 @@ See [§1.2 Project Organization Philosophy](docs/1-Programming-Standards.md#12-p
 | 2 | [Command Source Control](docs/2-Command-Source-Control.md) | Requester validation, source locking, method pattern |
 | 3 | [RPC Method Response](docs/3-RPC-Method-Response.md) | Standardized response codes, method inventory, OPC UA usage |
 | 4 | [HMI Integration](docs/4-HMI-Integration.md) | OPC UA pragmas, cfg/sts exposure, RPC method connectivity |
+| 5 | [Sequencing](docs/5-Sequencing.md) | State model, FB_StateMachine, FB_Step lifecycle, sequence authoring, permissives |
+| 6 | [Persistent Variables](docs/6-Persistent-Variables.md) | PERSISTENT vs RETAIN, what to persist, 1-second UPS configuration |
 
 Each document uses section numbering consistent with this index (e.g., Programming Standards = Chapter 1, sections 1.1–1.x).
 
