@@ -7,12 +7,6 @@ VAR_INPUT
     {attribute 'OPC.UA.DA' := '0'}
     EnableIn : BOOL := TRUE;
     
-    // Permissive inputs (INT with -1 = all OK)
-    {attribute 'OPC.UA.DA' := '0'}
-    inPermAdv : INT := -1;
-    {attribute 'OPC.UA.DA' := '0'}
-    inPermRet : INT := -1;
-    
     // Configuration
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
@@ -65,10 +59,6 @@ VAR
     {attribute 'OPC.UA.DA' := '0'}
     lastFault : E_TwoPosActuator_Fault;
     {attribute 'OPC.UA.DA' := '0'}
-    permIdx : INT;
-    
-    // Source control
-    {attribute 'OPC.UA.DA' := '0'}
     bSourceLockedToProg : BOOL;
 END_VAR]]></Declaration>
     <Implementation>
@@ -83,22 +73,7 @@ IF EnableIn THEN
     //-------------------------------------------------------------------------
     // Permissive Evaluation
     //-------------------------------------------------------------------------
-    FOR permIdx := 0 TO 15 DO
-        advancePermissives.MapReason(
-            nIndex := permIdx,
-            sDescription := advancePermissives.cfg.Desc[permIdx],
-            bValue := (inPermAdv AND SHL(1, permIdx)) <> 0
-        );
-    END_FOR;
     advancePermissives();
-    
-    FOR permIdx := 0 TO 15 DO
-        retractPermissives.MapReason(
-            nIndex := permIdx,
-            sDescription := retractPermissives.cfg.Desc[permIdx],
-            bValue := (inPermRet AND SHL(1, permIdx)) <> 0
-        );
-    END_FOR;
     retractPermissives();
     
     //-------------------------------------------------------------------------
@@ -164,7 +139,7 @@ IF EnableIn THEN
                 sts.faultCode := E_TwoPosActuator_Fault.BothFeedbackOn;
                 faultLatched := TRUE;
                 advanceTimer(IN := FALSE);
-            ELSIF NOT advancePermissives.sts.OK THEN
+            ELSIF NOT advancePermissives.sts.bOK THEN
                 currentState := E_TwoPosActuator_State.Fault;
                 sts.faultCode := E_TwoPosActuator_Fault.PermissivesNotOK;
                 faultLatched := TRUE;
@@ -207,7 +182,7 @@ IF EnableIn THEN
                 sts.faultCode := E_TwoPosActuator_Fault.BothFeedbackOn;
                 faultLatched := TRUE;
                 retractTimer(IN := FALSE);
-            ELSIF NOT retractPermissives.sts.OK THEN
+            ELSIF NOT retractPermissives.sts.bOK THEN
                 currentState := E_TwoPosActuator_State.Fault;
                 sts.faultCode := E_TwoPosActuator_Fault.PermissivesNotOK;
                 faultLatched := TRUE;
@@ -285,7 +260,8 @@ ELSE
     retractTimer(IN := FALSE);
 END_IF;]]></ST>
     </Implementation>
-    <Method Name="Advance" Id="{a1234567-1234-1234-1234-12345678A001}">
+    <Folder Name="Public" Id="{f0a10001-0001-0001-0001-000000000001}" />
+    <Method Name="Advance" Id="{a1234567-1234-1234-1234-12345678A001}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD PUBLIC Advance : E_RpcMethodResponse
 VAR_INPUT
@@ -303,7 +279,7 @@ IF currentState = E_TwoPosActuator_State.Advanced OR currentState = E_TwoPosActu
 END_IF;
 
 // 3. Permissive check
-IF NOT advancePermissives.sts.OK THEN
+IF NOT advancePermissives.sts.bOK THEN
     Advance := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
@@ -314,7 +290,7 @@ advanceTimer(IN := FALSE);
 Advance := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="Retract" Id="{a1234567-1234-1234-1234-12345678A002}">
+    <Method Name="Retract" Id="{a1234567-1234-1234-1234-12345678A002}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD PUBLIC Retract : E_RpcMethodResponse
 VAR_INPUT
@@ -332,7 +308,7 @@ IF currentState = E_TwoPosActuator_State.Retracted OR currentState = E_TwoPosAct
 END_IF;
 
 // 3. Permissive check
-IF NOT retractPermissives.sts.OK THEN
+IF NOT retractPermissives.sts.bOK THEN
     Retract := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
@@ -343,7 +319,7 @@ retractTimer(IN := FALSE);
 Retract := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="AllOff" Id="{a1234567-1234-1234-1234-12345678A003}">
+    <Method Name="AllOff" Id="{a1234567-1234-1234-1234-12345678A003}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD PUBLIC AllOff : E_RpcMethodResponse
 VAR_INPUT
@@ -362,7 +338,7 @@ currentState := E_TwoPosActuator_State.Undefined;
 AllOff := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="Reset" Id="{a1234567-1234-1234-1234-12345678A004}">
+    <Method Name="Reset" Id="{a1234567-1234-1234-1234-12345678A004}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD PUBLIC Reset : E_RpcMethodResponse
 VAR_INPUT
@@ -389,7 +365,7 @@ IO.outValveRetract := FALSE;
 Reset := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="LockSource" Id="{a1234567-1234-1234-1234-12345678A005}">
+    <Method Name="LockSource" Id="{a1234567-1234-1234-1234-12345678A005}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD PUBLIC LockSource : E_RpcMethodResponse
 VAR_INPUT

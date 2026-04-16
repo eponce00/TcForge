@@ -8,7 +8,6 @@ VAR_INPUT
     cfgNextStep          : DINT;  // Next step if permissives are OK
     inpStepTimerSeconds  : DINT;  // Step timer value (managed externally)
     inpRetry             : BOOL;  // External retry command (to reset fault)
-    inpStepPermissives   : INT;   // Actual permissive bits (from sensors, PLC, etc.)
     cfgStepTimeout       : INT;   // Timeout configuration (in seconds)
 	inpFaultStep         : BOOL;  // Fault conditions outside of timeout 
 END_VAR
@@ -18,7 +17,7 @@ VAR_IN_OUT
     // ActiveStep holds:
     //   Step              : DINT;  (current step number)
     //   StatusStepFaulted : BOOL;  (fault flag)
-    //   PermsHMI          : ST_PermIntlk_cfg; (permissive configuration: Name, Desc, BypassPermissives)
+    //   PermsHMI          : ST_Permissive_Config; (permissive configuration)
 END_VAR
 
 VAR_OUTPUT
@@ -35,17 +34,9 @@ VAR
     rTrig_Activate : R_TRIG;         // Rising edge detector for step activation
     rTrig_Fault    : R_TRIG;         // Rising edge detector for fault detection
     rTrig_Retry    : R_TRIG;         // Rising edge detector for retry detection
-    permIdx        : INT;            // Loop index for MapReason calls
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[// 1. Evaluate Permissives using FB_Permissives
-FOR permIdx := 0 TO 15 DO
-    Step_P_Perm.MapReason(
-        nIndex := permIdx,
-        sDescription := ActiveStep.PermsHMI.Desc[permIdx],
-        bValue := (inpStepPermissives AND SHL(1, permIdx)) <> 0
-    );
-END_FOR;
 Step_P_Perm.cfg := ActiveStep.PermsHMI;
 Step_P_Perm();  // Execute permissives check
 
@@ -73,7 +64,7 @@ END_IF;
 
 // 6. Fault Condition:
 // A fault occurs if the step is active, the step has timed out, and the permissives are NOT OK.
-IF outStepActive AND outActiveStepTimedOut AND (NOT Step_P_Perm.sts.OK) 
+IF outStepActive AND outActiveStepTimedOut AND (NOT Step_P_Perm.sts.bOK) 
 OR inpFaultStep
 THEN
     ActiveStep.StatusStepFaulted := TRUE;
@@ -100,7 +91,7 @@ END_IF;
 // - Otherwise, remain on the current step.
 IF outFaultedStepActive THEN
     outNextStep := cfgStep + 1;
-ELSIF Step_P_Perm.sts.OK AND outStepActive THEN
+ELSIF Step_P_Perm.sts.bOK AND outStepActive THEN
     outNextStep := cfgNextStep;
 ELSE
     outNextStep := inpStep;

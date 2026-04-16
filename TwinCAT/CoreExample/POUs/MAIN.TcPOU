@@ -5,28 +5,11 @@
 VAR
     fbStateMachine : FB_StateMachine;
     smCommands : ST_SM_Commands;
-    
-    testAutoIntlk : INT := -1;
-    testHomePerm : INT := -1;
-    testStartPerm : INT := -1;
-    testProceedPerm : INT := -1;
-    
-    testWriteADS : REAL := 0;
-    testReadADS : REAL := 3.75;
-    testTimer : TON;
-    testTimerON : BOOL := FALSE;
-    testMCP : BOOL := FALSE;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[testTimer(IN := testTimerON, PT := T#9999S);
-
-fbStateMachine(
+      <ST><![CDATA[fbStateMachine(
     EnableIn := TRUE,
     cfgAutoRun := TRUE,
-    inpAutoIntlk := testAutoIntlk,
-    inpHomePerm := testHomePerm,
-    inpStartPerm := testStartPerm,
-    inpProceedPerm := testProceedPerm,
     Commands := smCommands
 );
 

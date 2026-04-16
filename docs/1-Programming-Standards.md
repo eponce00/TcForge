@@ -117,17 +117,48 @@ The FB body is **cyclic monitoring only**:
 
 - Use `{attribute 'TcRpcEnable' := '1'}` on all public command methods for OPC UA exposure.
 - Private helper methods use `_` prefix.
-- Place methods directly under `<POU>` — **do not** use `<Folder>` elements inside TcPOU XML (this crashes TcXaeShell 3.1.4026).
+- Organize methods into **folders** inside the POU for visual clarity in TcXaeShell:
+
+| Folder | Contents |
+| --- | --- |
+| `Public` | Command methods exposed to callers (Advance, Retract, Reset, Start, Stop, etc.) |
+| `Private` | Internal helpers not intended for external use (CleanupUnmappedBits, DetectTransitions, etc.) |
+
+**XML structure** — folders are self-closing sibling elements of methods, linked via `FolderPath` attribute:
+
+```xml
+<Folder Name="Public" Id="{guid}" />
+<Folder Name="Private" Id="{guid}" />
+<Method Name="Advance" Id="{guid}" FolderPath="Public\">
+  ...
+</Method>
+<Method Name="CleanupUnmappedBits" Id="{guid}" FolderPath="Private\">
+  ...
+</Method>
+```
+
+> **Important:** Methods must NOT be nested as children of `<Folder>`. The `FolderPath` attribute on `<Method>` is the only linkage. Trailing backslash is required.
 
 ---
 
 ## 1.5 Permissives
 
 - Use `FB_Permissives` for all permission and interlock evaluations.
-- Call `MapReason(nIndex, sDescription, bValue)` to map each permissive bit.
-- Check `sts.OK` for the aggregate result.
-- Inputs carrying live permissive bits are `INT` using two's complement (`-1` = all bits OK).
-- Permission configuration (names, descriptions, bypass) is set through `ST_PermIntlk_cfg`.
+- FBs that contain permissives (e.g., `FB_StateMachine`, `FB_TwoPosActuator`, `FB_SequenceStep`) expose their `FB_Permissives` instances directly. Callers map permissive bits from outside:
+  ```iecst
+  // Map permissive bits directly on the FB's exposed permissive instance
+  fbActuator.advancePermissives.MapInput(bitIndex := 0, inputValue := bSensorOK);
+  fbActuator.advancePermissives.MapInput(bitIndex := 1, inputValue := bPressureOK);
+  
+  fbStateMachine.internalHomePerm.MapInput(bitIndex := 0, inputValue := bDoorClosed);
+  fbStateMachine.internalStartPerm.MapInput(bitIndex := 0, inputValue := bMaterialReady);
+  ```
+- Set `cfg.aNames[bitIndex]` to provide a human-readable description for each bit.
+- Check `sts.bOK` for the aggregate result.
+- Configuration is set through `ST_Permissive_Config` (bypassable mask, names).
+- Status is exposed via `ST_Permissive_Status` (bOK, nPermissives, nBypassMask, nFirstFailureBitIndex, aFaceplates).
+- Per-bit HMI data is available via `ST_Permissive_Faceplate` (name, stsOK, stsMapped, stsBypassed, cfgBypassable).
+- Bypass control via `SetBypass(bitIndex, bEnable)` — only bits marked in `cfg.nBypassable` can be bypassed.
 
 ---
 

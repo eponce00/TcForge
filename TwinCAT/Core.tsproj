@@ -1522,8 +1522,8 @@ External Setpoint Generation:
 			</Settings>
 			<Licenses>
 				<Target>
-					<ManualSelect Instances="1">{87DBEEFC-A548-4B37-9797-C9521D3A43A2}</ManualSelect>
 					<ManualSelect>{BDCC0070-42D5-49AE-ABF1-1D4434813D60}</ManualSelect>
+					<ManualSelect Instances="1">{87DBEEFC-A548-4B37-9797-C9521D3A43A2}</ManualSelect>
 				</Target>
 			</Licenses>
 			<Tasks>
@@ -1882,7 +1882,7 @@ External Setpoint Generation:
 		</Motion>
 		<Plc>
 			<Project GUID="{2C41D41A-2644-4D36-82D2-076E2F9459E3}" Name="CoreExample" PrjFilePath="CoreExample\CoreExample.plcproj" TmcFilePath="CoreExample\CoreExample.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true">
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{F63CFA1B-2D8A-9CA9-4201-A3D5983BD933}" TmcPath="CoreExample\CoreExample.tmc">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{815741A9-964F-524B-AEFD-7C007F1EE0F2}" TmcPath="CoreExample\CoreExample.tmc">
 					<Name>CoreExample Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Vars VarGrpType="2" AreaNo="1">

@@ -1,15 +1,11 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_StateMachine" Id="{7408693c-f749-4b9e-8684-bfcba9889df8}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK FB_StateMachine
 VAR_INPUT
     EnableIn : BOOL;
     cfgAutoRun : BOOL;
-    inpAutoIntlk : INT := -1;
     inpBlockedCondition : DINT;
-    inpHomePerm : INT := -1;
-    inpProceedPerm : INT := -1;
-    inpStartPerm : INT := -1;
     inpStarvedCondition : DINT;
     inpSubmoduleFaulted : BOOL;
 END_VAR
@@ -81,7 +77,6 @@ VAR
     stepIsZero : BOOL;
     transitionActive : BOOL;
     seqDone : BOOL;
-    permIdx : INT;
     
     // Source control
     bSourceLockedToProg : BOOL;
@@ -108,48 +103,20 @@ IF EnableIn THEN
     //-------------------------------------------------------------------------
     
     // Home permission evaluation
-    FOR permIdx := 0 TO 15 DO
-        internalHomePerm.MapReason(
-            nIndex := permIdx,
-            sDescription := internalHomePerm.cfg.Desc[permIdx],
-            bValue := (inpHomePerm AND SHL(1, permIdx)) <> 0
-        );
-    END_FOR;
     internalHomePerm();
-    Permissions.HomePermOK := internalHomePerm.sts.OK;
+    Permissions.HomePermOK := internalHomePerm.sts.bOK;
     
     // Start permission evaluation
-    FOR permIdx := 0 TO 15 DO
-        internalStartPerm.MapReason(
-            nIndex := permIdx,
-            sDescription := internalStartPerm.cfg.Desc[permIdx],
-            bValue := (inpStartPerm AND SHL(1, permIdx)) <> 0
-        );
-    END_FOR;
     internalStartPerm();
-    Permissions.StartPermOK := internalStartPerm.sts.OK;
+    Permissions.StartPermOK := internalStartPerm.sts.bOK;
     
     // Proceed permission evaluation
-    FOR permIdx := 0 TO 15 DO
-        internalProceedPerm.MapReason(
-            nIndex := permIdx,
-            sDescription := internalProceedPerm.cfg.Desc[permIdx],
-            bValue := (inpProceedPerm AND SHL(1, permIdx)) <> 0
-        );
-    END_FOR;
     internalProceedPerm();
-    Permissions.ProceedPermOK := internalProceedPerm.sts.OK;
+    Permissions.ProceedPermOK := internalProceedPerm.sts.bOK;
     
     // Auto interlock evaluation
-    FOR permIdx := 0 TO 15 DO
-        internalAutoIntlk.MapReason(
-            nIndex := permIdx,
-            sDescription := internalAutoIntlk.cfg.Desc[permIdx],
-            bValue := (inpAutoIntlk AND SHL(1, permIdx)) <> 0
-        );
-    END_FOR;
     internalAutoIntlk();
-    Permissions.AutoIntlkOK := internalAutoIntlk.sts.OK;
+    Permissions.AutoIntlkOK := internalAutoIntlk.sts.bOK;
     
     //-------------------------------------------------------------------------
     // Ready state calculations
@@ -608,7 +575,8 @@ ELSE
 END_IF;
 ]]></ST>
     </Implementation>
-    <Method Name="Abort" Id="{c1234567-1234-1234-1234-12345678C001}">
+    <Folder Name="Public" Id="{f0c10001-0001-0001-0001-000000000001}" />
+    <Method Name="Abort" Id="{c1234567-1234-1234-1234-12345678C001}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD Abort : E_RpcMethodResponse
 VAR_INPUT
@@ -632,7 +600,7 @@ CommandsRequested.Abort := TRUE;
 Abort := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="Home" Id="{c1234567-1234-1234-1234-12345678C002}">
+    <Method Name="Home" Id="{c1234567-1234-1234-1234-12345678C002}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD Home : E_RpcMethodResponse
 VAR_INPUT
@@ -672,7 +640,7 @@ CommandsRequested.Home := TRUE;
 Home := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="LockSource" Id="{c1234567-1234-1234-1234-12345678C008}">
+    <Method Name="LockSource" Id="{c1234567-1234-1234-1234-12345678C008}" FolderPath="Public\">
       <Declaration><![CDATA[METHOD LockSource
 VAR_INPUT
     bLock : BOOL;
@@ -681,7 +649,7 @@ END_VAR]]></Declaration>
         <ST><![CDATA[bSourceLockedToProg := bLock;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="Pause" Id="{c1234567-1234-1234-1234-12345678C003}">
+    <Method Name="Pause" Id="{c1234567-1234-1234-1234-12345678C003}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD Pause : E_RpcMethodResponse
 VAR_INPUT
@@ -709,7 +677,7 @@ CommandsRequested.Pause := TRUE;
 Pause := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="Proceed" Id="{c1234567-1234-1234-1234-12345678C004}">
+    <Method Name="Proceed" Id="{c1234567-1234-1234-1234-12345678C004}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD Proceed : E_RpcMethodResponse
 VAR_INPUT
@@ -749,7 +717,7 @@ CommandsRequested.Proceed := TRUE;
 Proceed := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="Retry" Id="{c1234567-1234-1234-1234-12345678C005}">
+    <Method Name="Retry" Id="{c1234567-1234-1234-1234-12345678C005}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD Retry : E_RpcMethodResponse
 VAR_INPUT
@@ -765,7 +733,7 @@ outRetry := TRUE;
 Retry := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="Start" Id="{c1234567-1234-1234-1234-12345678C006}">
+    <Method Name="Start" Id="{c1234567-1234-1234-1234-12345678C006}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD Start : E_RpcMethodResponse
 VAR_INPUT
@@ -805,7 +773,7 @@ CommandsRequested.Start := TRUE;
 Start := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="Stop" Id="{c1234567-1234-1234-1234-12345678C007}">
+    <Method Name="Stop" Id="{c1234567-1234-1234-1234-12345678C007}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD Stop : E_RpcMethodResponse
 VAR_INPUT
@@ -829,7 +797,7 @@ CommandsRequested.Stop := TRUE;
 Stop := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="SetNextStep" Id="{d4e5f6a7-b8c9-0123-def0-123456789abc}">
+    <Method Name="SetNextStep" Id="{d4e5f6a7-b8c9-0123-def0-123456789abc}" FolderPath="Public\">
       <Declaration><![CDATA[METHOD SetNextStep
 VAR_INPUT
     nStep : DINT;
@@ -838,7 +806,7 @@ END_VAR]]></Declaration>
         <ST><![CDATA[_nextStep := nStep;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="SetStepFault" Id="{e5f6a7b8-c9d0-1234-ef01-23456789abcd}">
+    <Method Name="SetStepFault" Id="{e5f6a7b8-c9d0-1234-ef01-23456789abcd}" FolderPath="Public\">
       <Declaration><![CDATA[METHOD SetStepFault
 VAR_INPUT
     bFault : BOOL;
@@ -850,15 +818,14 @@ IF bFault THEN
 END_IF;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="ReportStepInfo" Id="{f6a7b8c9-d0e1-2345-f012-3456789abcde}">
+    <Method Name="ReportStepInfo" Id="{f6a7b8c9-d0e1-2345-f012-3456789abcde}" FolderPath="Public\">
       <Declaration><![CDATA[METHOD ReportStepInfo
 VAR_INPUT
     sName : STRING(80);
-    stPerms : ST_PermIntlk_cfg;
+    stPerms : ST_Permissive_Config;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[_activeStep.PermsHMI := stPerms;
-_activeStep.PermsHMI.Name := sName;]]></ST>
+        <ST><![CDATA[_activeStep.PermsHMI := stPerms;]]></ST>
       </Implementation>
     </Method>
     <LineIds Name="FB_StateMachine">

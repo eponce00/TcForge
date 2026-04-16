@@ -21,7 +21,6 @@ END_VAR
 
 VAR
     _perms : FB_Permissives;
-    _mappedBits : INT;
     _active : BOOL;
     _prevActive : BOOL;
     _permsSatisfied : BOOL;
@@ -32,13 +31,9 @@ VAR
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[
-// Evaluate permissives from previous cycle's MapPerm calls
-// Unmapped bits are automatically bypassed (auto-pass)
-_perms.cfg.BypassPermissives := NOT _mappedBits;
-_perms.cfg.Name := sName;
+// Evaluate permissives (unmapped bits automatically good)
 _perms();
-_permsSatisfied := _perms.sts.OK;
-_mappedBits := 0;
+_permsSatisfied := _perms.sts.bOK;
 
 // Check if this step is the active step in the state machine
 _active := (sm.StepInfo.CurrentStep = nStep);
@@ -110,21 +105,20 @@ END_IF;
 _prevActive := _active;
 ]]></ST>
     </Implementation>
-    <Method Name="MapPerm" Id="{b2c3d4e5-f6a7-8901-bcde-f12345678901}">
+    <Folder Name="Public" Id="{f0b10001-0001-0001-0001-000000000001}" />
+    <Method Name="MapPerm" Id="{b2c3d4e5-f6a7-8901-bcde-f12345678901}" FolderPath="Public\">
       <Declaration><![CDATA[METHOD MapPerm
 VAR_INPUT
-    nIndex : INT;
+    nIndex : UDINT;
     sDescription : STRING;
     bValue : BOOL;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[_perms.MapReason(nIndex := nIndex, sDescription := sDescription, bValue := bValue);
-IF nIndex >= 0 AND nIndex <= 15 THEN
-    _mappedBits := _mappedBits OR SHL(INT#1, nIndex);
-END_IF;]]></ST>
+        <ST><![CDATA[_perms.MapInput(bitIndex := nIndex, inputValue := bValue);
+_perms.cfg.aNames[nIndex] := sDescription;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="SetNextStep" Id="{c3d4e5f6-a7b8-9012-cdef-123456789012}">
+    <Method Name="SetNextStep" Id="{c3d4e5f6-a7b8-9012-cdef-123456789012}" FolderPath="Public\">
       <Declaration><![CDATA[METHOD SetNextStep
 VAR_INPUT
     nStep : DINT;

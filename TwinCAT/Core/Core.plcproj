@@ -53,13 +53,13 @@
     <Compile Include="Modules\Sequencing\Permissives\FB_Permissives.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\ST_PermIntlk_cfg.TcDUT">
+    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Config.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\ST_PermIntlk_HMI.TcDUT">
+    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Status.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\ST_PermIntlk_sts.TcDUT">
+    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Faceplate.TcDUT">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Modules\Sequencing\StateMachine\ActiveStep.TcDUT">

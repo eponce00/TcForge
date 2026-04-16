@@ -5,7 +5,7 @@
 STRUCT
   Step : DINT;
   StatusStepFaulted : BOOL;
-  PermsHMI : ST_PermIntlk_cfg;
+  PermsHMI : ST_Permissive_Config;
 END_STRUCT
 END_TYPE]]></Declaration>
   </DUT>

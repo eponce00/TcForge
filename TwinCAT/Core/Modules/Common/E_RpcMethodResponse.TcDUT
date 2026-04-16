@@ -17,6 +17,10 @@ TYPE E_RpcMethodResponse :
     REJECTED_FAULTED := 21,
     REJECTED_ALREADY_AT_TARGET := 23,
     
+    // Parameter / Config (30-39)
+    REJECTED_INVALID_PARAMETER := 30,
+    REJECTED_BYPASS_NOT_ALLOWED := 31,
+    
     // Permissive / Interlock (50-59)
     REJECTED_PERMISSIVE_NOT_MET := 50,
     REJECTED_INTERLOCKED := 51,

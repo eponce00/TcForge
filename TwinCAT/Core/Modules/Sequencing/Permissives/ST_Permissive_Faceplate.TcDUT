@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_Permissive_Faceplate" Id="{5441e204-74a5-4a25-be86-035d0852c631}">
+    <Declaration><![CDATA[(*
+Permissive Faceplate Structure
+==============================
+Individual permissive bit information for HMI faceplate display
+*)
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_Permissive_Faceplate :
+STRUCT
+	{attribute 'OPC.UA.DA.Description' := 'Human readable name of the permissive'}
+	name : STRING(50);
+	{attribute 'OPC.UA.DA.Description' := 'Real-time status of this permissive bit (TRUE=good, FALSE=bad)'}
+	stsOK : BOOL;
+	{attribute 'OPC.UA.DA.Description' := 'TRUE if this bit is actively mapped via MapInput'}
+	stsMapped : BOOL;
+	{attribute 'OPC.UA.DA.Description' := 'TRUE if this bit is currently bypassed'}
+	stsBypassed : BOOL;
+	{attribute 'OPC.UA.DA.Description' := 'TRUE if this bit is configured as bypassable'}
+	cfgBypassable : BOOL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
