@@ -32,9 +32,9 @@ More modules will be added as the library grows (motors, analog control, alarms,
 
 The library is organized around **modules** — self-contained domains of functionality. Each module groups its function blocks and related data types together. Code is organized by *what it does* (e.g., sequencing, pneumatics), not by *what it is* (e.g., DUTs, POUs).
 
-- `TwinCAT/Core.sln` — solution entry point
+- `TwinCAT/Forge.sln` — solution entry point
 - `Core/` — reusable library PLC project, organized into modules
-- `CoreExample/` — example PLC application consuming the library (MAIN + 6 sequences)
+- `ForgeExample/` — example PLC application consuming the library (MAIN + 6 sequences)
 - `docs/` — design documentation
 
 See [§1.2 Project Organization Philosophy](docs/1-Programming-Standards.md#12-project-organization-philosophy) for the full set of principles.
@@ -43,10 +43,10 @@ See [§1.2 Project Organization Philosophy](docs/1-Programming-Standards.md#12-p
 
 ## 3 Getting Started
 
-1. Open `TwinCAT/Core.sln` in TwinCAT XAE (Visual Studio).
+1. Open `TwinCAT/Forge.sln` in TwinCAT XAE (Visual Studio).
 2. Build the solution.
-3. Explore `CoreExample` for a working implementation with homing, running, stopping, pausing, aborting, and proceeding sequences.
-4. Use `Core` as the reusable library — adapt the example sequences to your machine.
+3. Explore `ForgeExample` for a working implementation with homing, running, stopping, pausing, aborting, and proceeding sequences.
+4. Use `Forge` as the reusable library — adapt the example sequences to your machine.
 
 ---
 
