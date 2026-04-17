@@ -5,6 +5,8 @@
 VAR
     fbValidateRequester_Test : FB_F_ValidateRequester_Test;
     fbBitMatrix64_Test       : FB_BitMatrix64_Test;
+    fbPermissives_Test       : FB_Permissives_Test;
+    fbInterlock_Test         : FB_Interlock_Test;
 END_VAR
 ]]>
     </Declaration>

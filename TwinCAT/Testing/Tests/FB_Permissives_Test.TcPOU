@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_Permissives_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000100}" SpecialFunc="None">
+    <Declaration><![CDATA[// Integration tests for FB_Permissives on top of FB_BitMatrix64.
+// FB_BitMatrix64_Test already covers the shared matrix mechanics, so this
+// suite focuses on permissive-specific behaviour:
+//   - non-latching rollup: sts.bOK tracks live inputs in both directions
+//   - bypass forces the bit good in the rollup
+//   - Reset() clears bypass (the only thing Reset needs to do here — the
+//     permissive has no latched state to snap)
+//   - cfg.nBypassable gating propagates through SetBypass
+//   - first-failure and faceplate surfaces reflect core state
+FUNCTION_BLOCK FB_Permissives_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[InitialStateOk();
+BadMappedBitFailsOK();
+RecoveryFlipsOKTrueAgain();
+BypassForcesGoodInRollup();
+ResetClearsBypass();
+SetBypassRejectsWhenNotBypassable();
+FirstFailureIndexPropagates();
+FaceplateReflectsLiveState();]]></ST>
+    </Implementation>
+    <Method Name="InitialStateOk" Id="{b1c2d3e4-f5a6-7890-abcd-000000000101}">
+      <Declaration><![CDATA[METHOD InitialStateOk
+VAR
+    fb : TcForge.FB_Permissives;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('InitialStateOk');
+
+fb();  // no MapInput calls — unmapped bits default good
+
+AssertTrue(
+    Condition := fb.sts.bOK,
+    Message   := 'Fresh permissives with no mappings should report bOK = TRUE');
+AssertEquals_ULINT(
+    Expected := 16#FFFFFFFFFFFFFFFF,
+    Actual   := fb.sts.nPermissives,
+    Message  := 'Fresh permissives rollup should be all-good');
+AssertEquals_UDINT(
+    Expected := 999,
+    Actual   := fb.sts.nFirstFailureBitIndex,
+    Message  := 'Fresh permissives should expose the sentinel first-failure index');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BadMappedBitFailsOK" Id="{b1c2d3e4-f5a6-7890-abcd-000000000102}">
+      <Declaration><![CDATA[METHOD BadMappedBitFailsOK
+VAR
+    fb      : TcForge.FB_Permissives;
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BadMappedBitFailsOK');
+
+bitMask := SHL(ULINT#1, 5);
+
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+
+AssertFalse(
+    Condition := fb.sts.bOK,
+    Message   := 'bOK must be FALSE when any mapped bit is bad');
+AssertTrue(
+    Condition := (fb.sts.nPermissives AND bitMask) = 0,
+    Message   := 'Bit 5 should show as bad in the rollup');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RecoveryFlipsOKTrueAgain" Id="{b1c2d3e4-f5a6-7890-abcd-000000000103}">
+      <Declaration><![CDATA[METHOD RecoveryFlipsOKTrueAgain
+VAR
+    fb : TcForge.FB_Permissives;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RecoveryFlipsOKTrueAgain');
+
+// This is the defining permissive behaviour: when the condition recovers,
+// bOK returns to TRUE on the *same* cycle, with no Reset() required.
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+
+AssertFalse(
+    Condition := fb.sts.bOK,
+    Message   := 'Precondition: bOK should be FALSE while bit 5 is bad');
+
+fb.MapInput(bitIndex := 5, inputValue := TRUE);
+fb();
+
+AssertTrue(
+    Condition := fb.sts.bOK,
+    Message   := 'Permissive is non-latching: bOK must flip back to TRUE the cycle the input recovers');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BypassForcesGoodInRollup" Id="{b1c2d3e4-f5a6-7890-abcd-000000000104}">
+      <Declaration><![CDATA[METHOD BypassForcesGoodInRollup
+VAR
+    fb       : TcForge.FB_Permissives;
+    bitMask  : ULINT;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BypassForcesGoodInRollup');
+
+bitMask := SHL(ULINT#1, 5);
+fb.cfg.nBypassable := bitMask;
+
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+response := fb.SetBypass(bitIndex := 5, bEnable := TRUE);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := response,
+    Message  := 'SetBypass should accept when the bit is flagged bypassable in cfg');
+AssertTrue(
+    Condition := fb.sts.bOK,
+    Message   := 'A bypassed bit must be forced good in the rollup');
+AssertTrue(
+    Condition := (fb.sts.nBypassMask AND bitMask) <> 0,
+    Message   := 'sts.nBypassMask should surface the active bypass');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetClearsBypass" Id="{b1c2d3e4-f5a6-7890-abcd-000000000105}">
+      <Declaration><![CDATA[METHOD ResetClearsBypass
+VAR
+    fb      : TcForge.FB_Permissives;
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ResetClearsBypass');
+
+bitMask := SHL(ULINT#1, 3);
+fb.cfg.nBypassable := bitMask;
+
+fb.SetBypass(bitIndex := 3, bEnable := TRUE);
+fb();
+
+AssertTrue(
+    Condition := (fb.sts.nBypassMask AND bitMask) <> 0,
+    Message   := 'Precondition: bit 3 bypass should be active before Reset()');
+
+fb.Reset();
+fb();
+
+AssertEquals_ULINT(
+    Expected := 0,
+    Actual   := fb.sts.nBypassMask,
+    Message  := 'Reset() on a permissive must clear every bypass bit');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetBypassRejectsWhenNotBypassable" Id="{b1c2d3e4-f5a6-7890-abcd-000000000106}">
+      <Declaration><![CDATA[METHOD SetBypassRejectsWhenNotBypassable
+VAR
+    fb       : TcForge.FB_Permissives;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetBypassRejectsWhenNotBypassable');
+
+fb.cfg.nBypassable := 0;
+
+response := fb.SetBypass(bitIndex := 5, bEnable := TRUE);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_BYPASS_NOT_ALLOWED,
+    Actual   := response,
+    Message  := 'SetBypass must honour cfg.nBypassable and reject non-allowed bits');
+AssertEquals_ULINT(
+    Expected := 0,
+    Actual   := fb.sts.nBypassMask,
+    Message  := 'A rejected bypass must leave nBypassMask untouched');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FirstFailureIndexPropagates" Id="{b1c2d3e4-f5a6-7890-abcd-000000000107}">
+      <Declaration><![CDATA[METHOD FirstFailureIndexPropagates
+VAR
+    fb : TcForge.FB_Permissives;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FirstFailureIndexPropagates');
+
+fb.MapInput(bitIndex := 7, inputValue := TRUE);
+fb();
+
+fb.MapInput(bitIndex := 7, inputValue := FALSE);
+fb();
+
+AssertEquals_UDINT(
+    Expected := 7,
+    Actual   := fb.sts.nFirstFailureBitIndex,
+    Message  := 'sts.nFirstFailureBitIndex should surface the core first-failure index');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FaceplateReflectsLiveState" Id="{b1c2d3e4-f5a6-7890-abcd-000000000108}">
+      <Declaration><![CDATA[METHOD FaceplateReflectsLiveState
+VAR
+    fb : TcForge.FB_Permissives;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FaceplateReflectsLiveState');
+
+fb.cfg.nBypassable   := SHL(ULINT#1, 4);
+fb.cfg.aNames[4]     := 'TestPerm';
+
+fb.MapInput(bitIndex := 4, inputValue := FALSE);
+fb();
+
+AssertEquals_STRING(
+    Expected := 'TestPerm',
+    Actual   := fb.sts.aFaceplates[4].name,
+    Message  := 'Faceplate should mirror cfg.aNames[i]');
+AssertFalse(
+    Condition := fb.sts.aFaceplates[4].stsOK,
+    Message   := 'Faceplate stsOK should mirror the rollup for that bit');
+AssertTrue(
+    Condition := fb.sts.aFaceplates[4].stsMapped,
+    Message   := 'Faceplate stsMapped should mirror nActiveMask for that bit');
+AssertTrue(
+    Condition := fb.sts.aFaceplates[4].cfgBypassable,
+    Message   := 'Faceplate cfgBypassable should mirror cfg.nBypassable for that bit');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

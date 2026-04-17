@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_Interlock_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000200}" SpecialFunc="None">
+    <Declaration><![CDATA[// Integration tests for FB_Interlock on top of FB_BitMatrix64.
+// FB_BitMatrix64_Test already covers the shared matrix mechanics, so this
+// suite focuses on interlock-specific behaviour:
+//   - once a mapped bit goes bad it stays bad (latching), even if the
+//     underlying signal recovers on its own
+//   - Reset() snaps the latch to the current live value; a still-bad bit
+//     stays bad (reset is not a safety override)
+//   - unmapped-bad memory keeps bOK FALSE after a bit becomes unmapped
+//     while it was bad, and survives until Reset() clears it
+//   - bypass still forces a bit good in the effective rollup
+//   - Reset() intentionally preserves bypass state
+FUNCTION_BLOCK FB_Interlock_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[InitialStateOk();
+BadMappedBitLatches();
+RecoveryDoesNotClearLatch();
+ResetClearsLatchAfterRecovery();
+ResetWithActiveBadLeavesItBad();
+UnmappedBadMemoryKeepsBOkFalse();
+ResetClearsUnmappedBadMemory();
+BypassForcesGoodInRollup();
+ResetPreservesBypass();]]></ST>
+    </Implementation>
+    <Method Name="InitialStateOk" Id="{b1c2d3e4-f5a6-7890-abcd-000000000201}">
+      <Declaration><![CDATA[METHOD InitialStateOk
+VAR
+    fb : TcForge.FB_Interlock;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('InitialStateOk');
+
+fb();
+
+AssertTrue(
+    Condition := fb.sts.bOK,
+    Message   := 'Fresh interlock with no mappings should report bOK = TRUE');
+AssertEquals_ULINT(
+    Expected := 16#FFFFFFFFFFFFFFFF,
+    Actual   := fb.sts.nInterlocks,
+    Message  := 'Fresh interlock rollup should be all-good');
+AssertEquals_UDINT(
+    Expected := 999,
+    Actual   := fb.sts.nFirstFailureBitIndex,
+    Message  := 'Fresh interlock should expose the sentinel first-failure index');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BadMappedBitLatches" Id="{b1c2d3e4-f5a6-7890-abcd-000000000202}">
+      <Declaration><![CDATA[METHOD BadMappedBitLatches
+VAR
+    fb      : TcForge.FB_Interlock;
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BadMappedBitLatches');
+
+bitMask := SHL(ULINT#1, 5);
+
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+
+AssertFalse(
+    Condition := fb.sts.bOK,
+    Message   := 'bOK must be FALSE while bit 5 is bad');
+AssertTrue(
+    Condition := (fb.sts.nInterlocks AND bitMask) = 0,
+    Message   := 'Bit 5 should show as bad in the effective rollup');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RecoveryDoesNotClearLatch" Id="{b1c2d3e4-f5a6-7890-abcd-000000000203}">
+      <Declaration><![CDATA[METHOD RecoveryDoesNotClearLatch
+VAR
+    fb : TcForge.FB_Interlock;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RecoveryDoesNotClearLatch');
+
+// This is the defining interlock behaviour: once bad, stays bad until
+// Reset() is explicitly called, even after the input recovers on its own.
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+
+AssertFalse(
+    Condition := fb.sts.bOK,
+    Message   := 'Precondition: bOK should be FALSE while bit 5 is bad');
+
+fb.MapInput(bitIndex := 5, inputValue := TRUE);
+fb();
+fb.MapInput(bitIndex := 5, inputValue := TRUE);
+fb();
+
+AssertFalse(
+    Condition := fb.sts.bOK,
+    Message   := 'Interlock must stay latched FALSE after the input recovers until Reset() is called');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetClearsLatchAfterRecovery" Id="{b1c2d3e4-f5a6-7890-abcd-000000000204}">
+      <Declaration><![CDATA[METHOD ResetClearsLatchAfterRecovery
+VAR
+    fb : TcForge.FB_Interlock;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ResetClearsLatchAfterRecovery');
+
+// Fault -> recover -> Reset() -> bOK TRUE.
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+fb.MapInput(bitIndex := 5, inputValue := TRUE);
+fb();
+
+fb.Reset();
+fb.MapInput(bitIndex := 5, inputValue := TRUE);
+fb();
+
+AssertTrue(
+    Condition := fb.sts.bOK,
+    Message   := 'Reset() after recovery must clear the latch and restore bOK = TRUE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetWithActiveBadLeavesItBad" Id="{b1c2d3e4-f5a6-7890-abcd-000000000205}">
+      <Declaration><![CDATA[METHOD ResetWithActiveBadLeavesItBad
+VAR
+    fb : TcForge.FB_Interlock;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ResetWithActiveBadLeavesItBad');
+
+// Reset() is a latch clear, not a safety override. If the live condition
+// is still bad when Reset() is called, bOK must stay FALSE.
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+
+fb.Reset();
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+
+AssertFalse(
+    Condition := fb.sts.bOK,
+    Message   := 'Reset() while the condition is still bad must NOT clear the failure');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="UnmappedBadMemoryKeepsBOkFalse" Id="{b1c2d3e4-f5a6-7890-abcd-000000000206}">
+      <Declaration><![CDATA[METHOD UnmappedBadMemoryKeepsBOkFalse
+VAR
+    fb : TcForge.FB_Interlock;
+    i  : UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('UnmappedBadMemoryKeepsBOkFalse');
+
+// Map bit 5 as bad exactly once, then stop feeding. After MAPPING_TIMEOUT
+// the bit is removed from the active mask — but the interlock must
+// remember it was bad at the moment of unmap and keep bOK FALSE until
+// Reset() is called. This is the key safety invariant that survived the
+// FB_BitMatrix64 extraction.
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+
+FOR i := 1 TO 15 DO
+    fb();
+END_FOR;
+
+AssertFalse(
+    Condition := fb.sts.bOK,
+    Message   := 'Interlock must stay FALSE after a bit became unmapped while bad');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetClearsUnmappedBadMemory" Id="{b1c2d3e4-f5a6-7890-abcd-000000000207}">
+      <Declaration><![CDATA[METHOD ResetClearsUnmappedBadMemory
+VAR
+    fb : TcForge.FB_Interlock;
+    i  : UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ResetClearsUnmappedBadMemory');
+
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+FOR i := 1 TO 15 DO
+    fb();
+END_FOR;
+
+AssertFalse(
+    Condition := fb.sts.bOK,
+    Message   := 'Precondition: unmapped-bad memory should be holding bOK FALSE');
+
+fb.Reset();
+fb();
+
+AssertTrue(
+    Condition := fb.sts.bOK,
+    Message   := 'Reset() must clear the unmapped-bad memory and restore bOK = TRUE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BypassForcesGoodInRollup" Id="{b1c2d3e4-f5a6-7890-abcd-000000000208}">
+      <Declaration><![CDATA[METHOD BypassForcesGoodInRollup
+VAR
+    fb       : TcForge.FB_Interlock;
+    bitMask  : ULINT;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BypassForcesGoodInRollup');
+
+bitMask := SHL(ULINT#1, 5);
+fb.cfg.nBypassable := bitMask;
+
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+response := fb.SetBypass(bitIndex := 5, bEnable := TRUE);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := response,
+    Message  := 'SetBypass should accept when the bit is flagged bypassable in cfg');
+AssertTrue(
+    Condition := fb.sts.bOK,
+    Message   := 'A bypassed bit must be forced good in the effective rollup');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetPreservesBypass" Id="{b1c2d3e4-f5a6-7890-abcd-000000000209}">
+      <Declaration><![CDATA[METHOD ResetPreservesBypass
+VAR
+    fb      : TcForge.FB_Interlock;
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ResetPreservesBypass');
+
+bitMask := SHL(ULINT#1, 5);
+fb.cfg.nBypassable := bitMask;
+
+fb.SetBypass(bitIndex := 5, bEnable := TRUE);
+fb();
+
+AssertTrue(
+    Condition := (fb.sts.nBypassMask AND bitMask) <> 0,
+    Message   := 'Precondition: bit 5 bypass should be active before Reset()');
+
+fb.Reset();
+fb();
+
+AssertTrue(
+    Condition := (fb.sts.nBypassMask AND bitMask) <> 0,
+    Message   := 'Reset() on an interlock must PRESERVE bypass state (per the public contract)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
