@@ -51,6 +51,9 @@
     <Compile Include="Tests\FB_LPF_FirstOrder_IIR_Test.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Tests\FB_DigitalOutput_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="DUTs" />

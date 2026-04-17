@@ -11,6 +11,7 @@ VAR
     fbAlarmLimit_Test        : FB_AlarmLimit_Test;
     fbDeviceBase_Test        : FB_DeviceBase_Test;
     fbLpfFirstOrder_Test     : FB_LPF_FirstOrder_IIR_Test;
+    fbDigitalOutput_Test     : FB_DigitalOutput_Test;
 END_VAR
 ]]>
     </Declaration>

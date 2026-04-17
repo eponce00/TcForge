@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DigitalOutput_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000800}" SpecialFunc="None">
+    <Declaration><![CDATA[// Tests for FB_DigitalOutput. Focus is on the behavior the device exposes
+// to callers and HMIs:
+//
+//   * command routing through F_ValidateRequester (source lock)
+//   * request-vs-output bookkeeping (stsCommanded always reflects the
+//     latest intent, stsValue always reflects the physical bit)
+//   * debounce timers actually gating the output
+//   * cfgInvert in Regular mode
+//   * BAD quality holding the last-known-good output
+//   * edge pulses being exactly one scan wide
+//   * SinglePulse arming on rising edge and cancelling on commanded LOW
+//
+// Time-dependent behavior is covered by choosing timer values that either
+// clamp to zero (instant fire) or stay effectively infinite for the test
+// (T#1S), so a single cyclic call lands in the branch under test without
+// waiting real time.
+FUNCTION_BLOCK FB_DigitalOutput_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[InitialStateReady();
+SetOnFromProgDrivesOutputHigh();
+SetOffAfterSetOnDrivesOutputLow();
+SetOnAcceptedFromProgEvenWhenLocked();
+SetOnRejectedFromOperatorWhenLocked();
+DebounceOnBlocksOutputUntilElapsed();
+DebounceOffHoldsOutputHighUntilElapsed();
+InvertFlipsOutputInRegularMode();
+BadQualityHoldsLastKnownGoodOutput();
+StsCommandedMirrorsRequestEvenUnderBadQuality();
+EdgePulsesAreOneScanWide();
+SinglePulseFiresOnCommandAndCanBeCanceled();]]></ST>
+    </Implementation>
+    <Method Name="InitialStateReady" Id="{b1c2d3e4-f5a6-7890-abcd-000000000801}">
+      <Declaration><![CDATA[METHOD InitialStateReady
+VAR
+    fb : TcForge.FB_DigitalOutput;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('InitialStateReady');
+
+// Fresh instance + one good-quality cycle: no commands issued, no faults
+// raised, output dead.
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertFalse(
+    Condition := fb.sts.stsValue,
+    Message   := 'Fresh instance must start with physical output LOW');
+AssertFalse(
+    Condition := fb.sts.stsCommanded,
+    Message   := 'Fresh instance must start with commanded request LOW');
+AssertFalse(
+    Condition := fb.sts.header.stsFaulted,
+    Message   := 'Fresh instance must not be faulted');
+AssertTrue(
+    Condition := fb.sts.header.stsReady,
+    Message   := 'Fresh instance must report stsReady TRUE (no fault, not busy, not locked)');
+AssertFalse(
+    Condition := fb.sts.header.stsSourceLocked,
+    Message   := 'Fresh instance must not be source-locked');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetOnFromProgDrivesOutputHigh" Id="{b1c2d3e4-f5a6-7890-abcd-000000000802}">
+      <Declaration><![CDATA[METHOD SetOnFromProgDrivesOutputHigh
+VAR
+    fb     : TcForge.FB_DigitalOutput;
+    resp   : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetOnFromProgDrivesOutputHigh');
+
+// Default cfg: no debounce (PT = T#0MS), Regular mode, no invert.
+// A single SetOn + one cycle should flush straight through to the
+// physical output.
+resp := fb.SetOn(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := resp,
+    Message  := 'SetOn from PROG on a fresh instance must be ACCEPTED');
+AssertTrue(
+    Condition := fb.sts.stsValue,
+    Message   := 'Regular mode with no debounce must flush SetOn to the physical output in one cycle');
+AssertTrue(
+    Condition := fb.sts.stsCommanded,
+    Message   := 'stsCommanded must reflect the accepted SetOn request');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetOffAfterSetOnDrivesOutputLow" Id="{b1c2d3e4-f5a6-7890-abcd-000000000803}">
+      <Declaration><![CDATA[METHOD SetOffAfterSetOnDrivesOutputLow
+VAR
+    fb   : TcForge.FB_DigitalOutput;
+    resp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetOffAfterSetOnDrivesOutputLow');
+
+fb.SetOn(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+resp := fb.SetOff(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := resp,
+    Message  := 'SetOff from PROG must be ACCEPTED');
+AssertFalse(
+    Condition := fb.sts.stsValue,
+    Message   := 'SetOff must drop the physical output LOW in one cycle with no debounce');
+AssertFalse(
+    Condition := fb.sts.stsCommanded,
+    Message   := 'stsCommanded must follow the latest SetOff request');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetOnAcceptedFromProgEvenWhenLocked" Id="{b1c2d3e4-f5a6-7890-abcd-000000000804}">
+      <Declaration><![CDATA[METHOD SetOnAcceptedFromProgEvenWhenLocked
+VAR
+    fb   : TcForge.FB_DigitalOutput;
+    resp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetOnAcceptedFromProgEvenWhenLocked');
+
+// bSourceLockedToProg is meant to gate OPERATOR; PROG must always get
+// through so the program can still drive the output after locking out the
+// operator.
+fb.LockSource(bLock := TRUE);
+resp := fb.SetOn(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := resp,
+    Message  := 'PROG requester must be accepted even with source-lock active');
+AssertTrue(
+    Condition := fb.sts.stsValue,
+    Message   := 'Accepted SetOn from PROG must still drive the physical output');
+AssertTrue(
+    Condition := fb.sts.header.stsSourceLocked,
+    Message   := 'header must reflect source-lock state');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetOnRejectedFromOperatorWhenLocked" Id="{b1c2d3e4-f5a6-7890-abcd-000000000805}">
+      <Declaration><![CDATA[METHOD SetOnRejectedFromOperatorWhenLocked
+VAR
+    fb   : TcForge.FB_DigitalOutput;
+    resp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetOnRejectedFromOperatorWhenLocked');
+
+fb.LockSource(bLock := TRUE);
+resp := fb.SetOn(eRequester := TcForge.E_Requester.OPERATOR);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED,
+    Actual   := resp,
+    Message  := 'OPERATOR requester must be rejected while source-locked');
+AssertFalse(
+    Condition := fb.sts.stsValue,
+    Message   := 'Rejected SetOn must not touch the physical output');
+AssertFalse(
+    Condition := fb.sts.stsCommanded,
+    Message   := 'Rejected SetOn must not update stsCommanded');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DebounceOnBlocksOutputUntilElapsed" Id="{b1c2d3e4-f5a6-7890-abcd-000000000806}">
+      <Declaration><![CDATA[METHOD DebounceOnBlocksOutputUntilElapsed
+VAR
+    fb : TcForge.FB_DigitalOutput;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('DebounceOnBlocksOutputUntilElapsed');
+
+// cfgDebounceOn = T#1S — far longer than this synchronous test will run,
+// so _tonOn.Q must still be FALSE when we check: the output must be held
+// LOW while the debounce hasn't elapsed.
+fb.cfg.cfgDebounceOn := T#1S;
+fb.SetOn(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := fb.sts.stsCommanded,
+    Message   := 'stsCommanded must reflect the request immediately (debounce gates the output, not the request)');
+AssertFalse(
+    Condition := fb.sts.stsValue,
+    Message   := 'cfgDebounceOn must hold the physical output LOW until the TON elapses');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DebounceOffHoldsOutputHighUntilElapsed" Id="{b1c2d3e4-f5a6-7890-abcd-000000000807}">
+      <Declaration><![CDATA[METHOD DebounceOffHoldsOutputHighUntilElapsed
+VAR
+    fb : TcForge.FB_DigitalOutput;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('DebounceOffHoldsOutputHighUntilElapsed');
+
+// cfgDebounceOn stays at 0 so the output flushes HIGH immediately. The
+// OFF-debounce (T#1S) then holds it HIGH even after SetOff, until TOF.Q
+// falls — which it will not inside this synchronous test.
+fb.cfg.cfgDebounceOff := T#1S;
+fb.SetOn(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := fb.sts.stsValue,
+    Message   := 'Precondition: SetOn with zero ON-debounce must flush HIGH');
+
+fb.SetOff(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertFalse(
+    Condition := fb.sts.stsCommanded,
+    Message   := 'stsCommanded must follow the SetOff request regardless of debounce');
+AssertTrue(
+    Condition := fb.sts.stsValue,
+    Message   := 'cfgDebounceOff must hold the physical output HIGH until the TOF expires');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InvertFlipsOutputInRegularMode" Id="{b1c2d3e4-f5a6-7890-abcd-000000000808}">
+      <Declaration><![CDATA[METHOD InvertFlipsOutputInRegularMode
+VAR
+    fb : TcForge.FB_DigitalOutput;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('InvertFlipsOutputInRegularMode');
+
+// Active-low actuator: invert means "commanded ON -> physical LOW".
+fb.cfg.cfgInvert := TRUE;
+fb.SetOn(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := fb.sts.stsCommanded,
+    Message   := 'stsCommanded must reflect logical intent, not inverted physical output');
+AssertFalse(
+    Condition := fb.sts.stsValue,
+    Message   := 'cfgInvert must flip HIGH intent into a LOW physical output');
+
+fb.SetOff(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertFalse(
+    Condition := fb.sts.stsCommanded,
+    Message   := 'stsCommanded must follow SetOff regardless of invert');
+AssertTrue(
+    Condition := fb.sts.stsValue,
+    Message   := 'cfgInvert must flip LOW intent into a HIGH physical output');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BadQualityHoldsLastKnownGoodOutput" Id="{b1c2d3e4-f5a6-7890-abcd-000000000809}">
+      <Declaration><![CDATA[METHOD BadQualityHoldsLastKnownGoodOutput
+VAR
+    fb : TcForge.FB_DigitalOutput;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BadQualityHoldsLastKnownGoodOutput');
+
+// Establish HIGH under GOOD quality.
+fb.SetOn(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(
+    Condition := fb.sts.stsValue,
+    Message   := 'Precondition: SetOn under GOOD quality must drive HIGH');
+
+// Now drop to BAD and try to SetOff. The hardware write must be skipped
+// so the actuator stays in its last-known-good state.
+fb.SetOff(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.BAD);
+
+AssertTrue(
+    Condition := fb.sts.stsValue,
+    Message   := 'BAD quality must hold the last-known-good physical output (no hardware write)');
+AssertEquals_USINT(
+    Expected := TcForge.E_IO_Quality.BAD,
+    Actual   := fb.sts.stsQuality,
+    Message  := 'stsQuality must surface the BAD tag to downstream consumers');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StsCommandedMirrorsRequestEvenUnderBadQuality" Id="{b1c2d3e4-f5a6-7890-abcd-00000000080a}">
+      <Declaration><![CDATA[METHOD StsCommandedMirrorsRequestEvenUnderBadQuality
+VAR
+    fb : TcForge.FB_DigitalOutput;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('StsCommandedMirrorsRequestEvenUnderBadQuality');
+
+// Even when the hardware write is vetoed by quality, stsCommanded must
+// still echo the live request so HMIs can show "operator asked for OFF
+// but the output is held HIGH because quality is BAD".
+fb.SetOn(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+fb.SetOff(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.BAD);
+
+AssertFalse(
+    Condition := fb.sts.stsCommanded,
+    Message   := 'stsCommanded must reflect the current request even when BAD quality blocks the hardware write');
+AssertTrue(
+    Condition := fb.sts.stsValue,
+    Message   := 'stsValue must still show the held physical output');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="EdgePulsesAreOneScanWide" Id="{b1c2d3e4-f5a6-7890-abcd-00000000080b}">
+      <Declaration><![CDATA[METHOD EdgePulsesAreOneScanWide
+VAR
+    fb : TcForge.FB_DigitalOutput;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('EdgePulsesAreOneScanWide');
+
+// Rising-edge pulse appears the cycle the physical output goes HIGH and
+// is gone the next cycle.
+fb.SetOn(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(
+    Condition := fb.sts.stsRisingEdge,
+    Message   := 'stsRisingEdge must fire on the cycle the physical output goes HIGH');
+AssertFalse(
+    Condition := fb.sts.stsFallingEdge,
+    Message   := 'stsFallingEdge must stay LOW on a rising edge cycle');
+
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertFalse(
+    Condition := fb.sts.stsRisingEdge,
+    Message   := 'stsRisingEdge must be exactly one scan wide');
+
+// Falling edge on the way back down.
+fb.SetOff(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(
+    Condition := fb.sts.stsFallingEdge,
+    Message   := 'stsFallingEdge must fire on the cycle the physical output goes LOW');
+
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertFalse(
+    Condition := fb.sts.stsFallingEdge,
+    Message   := 'stsFallingEdge must be exactly one scan wide');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SinglePulseFiresOnCommandAndCanBeCanceled" Id="{b1c2d3e4-f5a6-7890-abcd-00000000080c}">
+      <Declaration><![CDATA[METHOD SinglePulseFiresOnCommandAndCanBeCanceled
+VAR
+    fb : TcForge.FB_DigitalOutput;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SinglePulseFiresOnCommandAndCanBeCanceled');
+
+// SinglePulse with a long pulse width (T#10S) so the _tonPulseOn.Q
+// stays FALSE inside this synchronous test and we observe the pulse
+// while it is active.
+fb.cfg.cfgMode    := TcForge.E_DigitalOutput_Mode.SinglePulse;
+fb.cfg.cfgPulseOn := T#10S;
+
+fb.SetOn(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := fb.sts.stsValue,
+    Message   := 'SinglePulse must arm on the commanded rising edge and drive HIGH while active');
+
+// Commanded LOW must cancel the pulse early — operator safety shortcut.
+fb.SetOff(eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertFalse(
+    Condition := fb.sts.stsValue,
+    Message   := 'SetOff must cancel an in-flight SinglePulse immediately');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
