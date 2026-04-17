@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_LPF_FirstOrder_IIR_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000700}" SpecialFunc="None">
+    <Declaration><![CDATA[// Tests for FB_LPF_FirstOrder_IIR — exponential-smoothing low-pass filter.
+// Pure math, no external coupling, so each test drives a fresh instance
+// with deterministic samples and checks the output against the closed-
+// form IIR recurrence:
+//     alpha = dt / (tau + dt)
+//     y[n]  = y[n-1] + alpha * (x[n] - y[n-1])
+//
+// Floating-point results are compared with a tolerance via AssertTrue on
+// ABS(actual - expected); TcUnit's primitive AssertEquals_LREAL does not
+// accept a delta.
+FUNCTION_BLOCK FB_LPF_FirstOrder_IIR_Test EXTENDS TcUnit.FB_TestSuite
+VAR CONSTANT
+    TOL : LREAL := 1E-9;  // generous floating-point tolerance for LREAL math
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[ZeroDtBypassesFilterAndRaisesError();
+ZeroTauBypassesFilterAndRaisesError();
+FirstSampleMatchesIirRecurrence();
+StateCarriesBetweenCalls();
+ConvergesTowardInputOverManySamples();
+ErrorClearsOnValidInputAfterBadInput();]]></ST>
+    </Implementation>
+    <Method Name="ZeroDtBypassesFilterAndRaisesError" Id="{b1c2d3e4-f5a6-7890-abcd-000000000701}">
+      <Declaration><![CDATA[METHOD ZeroDtBypassesFilterAndRaisesError
+VAR
+    fb : TcForge.FB_LPF_FirstOrder_IIR;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ZeroDtBypassesFilterAndRaisesError');
+
+// dt <= 0 cannot drive the recurrence, so the filter must fall back to
+// passthrough and surface bError so the caller can notice.
+fb(fInput := 42.0, fDt := 0.0, fTau := 1.0);
+
+AssertTrue(
+    Condition := ABS(fb.fOutput - 42.0) < TOL,
+    Message   := 'With fDt = 0 the filter must pass the input through unchanged');
+AssertTrue(
+    Condition := fb.bError,
+    Message   := 'With fDt = 0 the filter must raise bError');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ZeroTauBypassesFilterAndRaisesError" Id="{b1c2d3e4-f5a6-7890-abcd-000000000702}">
+      <Declaration><![CDATA[METHOD ZeroTauBypassesFilterAndRaisesError
+VAR
+    fb : TcForge.FB_LPF_FirstOrder_IIR;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ZeroTauBypassesFilterAndRaisesError');
+
+fb(fInput := 7.5, fDt := 0.1, fTau := 0.0);
+
+AssertTrue(
+    Condition := ABS(fb.fOutput - 7.5) < TOL,
+    Message   := 'With fTau = 0 the filter must pass the input through unchanged');
+AssertTrue(
+    Condition := fb.bError,
+    Message   := 'With fTau = 0 the filter must raise bError');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FirstSampleMatchesIirRecurrence" Id="{b1c2d3e4-f5a6-7890-abcd-000000000703}">
+      <Declaration><![CDATA[METHOD FirstSampleMatchesIirRecurrence
+VAR
+    fb       : TcForge.FB_LPF_FirstOrder_IIR;
+    expected : LREAL;
+    alpha    : LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FirstSampleMatchesIirRecurrence');
+
+// Fresh instance: _prevOutput_sync = 0. With input 10, dt 0.1, tau 1.0:
+//   alpha = 0.1 / 1.1
+//   y[0]  = 0 + alpha * (10 - 0) = alpha * 10
+alpha    := 0.1 / 1.1;
+expected := alpha * 10.0;
+
+fb(fInput := 10.0, fDt := 0.1, fTau := 1.0);
+
+AssertFalse(
+    Condition := fb.bError,
+    Message   := 'Valid dt / tau must clear bError');
+AssertTrue(
+    Condition := ABS(fb.fOutput - expected) < TOL,
+    Message   := 'First sample must match the IIR recurrence against zero state');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StateCarriesBetweenCalls" Id="{b1c2d3e4-f5a6-7890-abcd-000000000704}">
+      <Declaration><![CDATA[METHOD StateCarriesBetweenCalls
+VAR
+    fb        : TcForge.FB_LPF_FirstOrder_IIR;
+    alpha     : LREAL;
+    y1        : LREAL;
+    yExpected : LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('StateCarriesBetweenCalls');
+
+alpha := 0.1 / 1.1;
+
+fb(fInput := 10.0, fDt := 0.1, fTau := 1.0);
+y1 := fb.fOutput;
+
+// Second sample: y[1] = y[0] + alpha * (10 - y[0])
+yExpected := y1 + alpha * (10.0 - y1);
+
+fb(fInput := 10.0, fDt := 0.1, fTau := 1.0);
+
+AssertTrue(
+    Condition := ABS(fb.fOutput - yExpected) < TOL,
+    Message   := 'Second sample must fold the previous output through the IIR recurrence (state is preserved across calls)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ConvergesTowardInputOverManySamples" Id="{b1c2d3e4-f5a6-7890-abcd-000000000705}">
+      <Declaration><![CDATA[METHOD ConvergesTowardInputOverManySamples
+VAR
+    fb     : TcForge.FB_LPF_FirstOrder_IIR;
+    target : LREAL := 10.0;
+    i      : UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ConvergesTowardInputOverManySamples');
+
+// 200 samples at dt = tau/20 is well past steady-state — the output must
+// be within ~1e-3 of the input regardless of the exact alpha value.
+FOR i := 1 TO 200 DO
+    fb(fInput := target, fDt := 0.05, fTau := 1.0);
+END_FOR;
+
+AssertTrue(
+    Condition := ABS(fb.fOutput - target) < 1E-3,
+    Message   := 'After many samples the filter output must converge toward the input');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ErrorClearsOnValidInputAfterBadInput" Id="{b1c2d3e4-f5a6-7890-abcd-000000000706}">
+      <Declaration><![CDATA[METHOD ErrorClearsOnValidInputAfterBadInput
+VAR
+    fb : TcForge.FB_LPF_FirstOrder_IIR;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ErrorClearsOnValidInputAfterBadInput');
+
+// A bad sample raises the flag; the very next valid sample must clear it.
+fb(fInput := 5.0, fDt := 0.0, fTau := 1.0);
+AssertTrue(
+    Condition := fb.bError,
+    Message   := 'Precondition: bError should be TRUE after a bad sample');
+
+fb(fInput := 5.0, fDt := 0.1, fTau := 1.0);
+AssertFalse(
+    Condition := fb.bError,
+    Message   := 'bError must clear the cycle a valid sample lands');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
