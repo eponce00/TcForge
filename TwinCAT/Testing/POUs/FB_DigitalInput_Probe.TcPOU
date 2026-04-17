@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DigitalInput_Probe" Id="{b1c2d3e4-f5a6-7890-abcd-000000000a00}" SpecialFunc="None">
+    <Declaration><![CDATA[// Test-only child of FB_DigitalInput. The production FB keeps `io` in its
+// private VAR section so external callers can't poke the hardware-linked
+// struct; this probe adds a SetRawInput() method so FB_DigitalInput_Test
+// can inject the raw wire value each cycle without touching the public
+// surface.
+//
+// Lives in the Testing project only — not part of TcForge's public API.
+FUNCTION_BLOCK FB_DigitalInput_Probe EXTENDS TcForge.FB_DigitalInput]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Delegate the cyclic body to FB_DigitalInput. In IEC 61131-3 the child's
+// implementation REPLACES the parent's; SUPER^() is required to run the
+// inherited conditioning pipeline against the probe's injected value.
+SUPER^();]]></ST>
+    </Implementation>
+    <Method Name="SetRawInput" Id="{b1c2d3e4-f5a6-7890-abcd-000000000a01}">
+      <Declaration><![CDATA[// Drive the internal hardware-linked bit. Call immediately before the
+// cyclic body runs to simulate a physical transition.
+METHOD PUBLIC SetRawInput
+VAR_INPUT
+    bValue : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[io.inSignal := bValue;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

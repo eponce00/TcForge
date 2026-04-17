@@ -24,6 +24,9 @@
     <Compile Include="POUs\FB_DeviceBase_Probe.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="POUs\FB_DigitalInput_Probe.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Testing.TcTTO">
       <SubType>Code</SubType>
     </Compile>
@@ -52,6 +55,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Tests\FB_DigitalOutput_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Tests\FB_DigitalInput_Test.TcPOU">
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>
