@@ -1,0 +1,512 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_TwoPosActuator_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c00}" SpecialFunc="None">
+    <Declaration><![CDATA[// Tests for FB_TwoPosActuator. This is the highest-safety-payoff device in
+// TcForge: pneumatic valves, dual feedback, timeouts, stuck / mismatch
+// faults, and source-locked command arbitration all meet here.
+//
+// Tests drive the private io struct and advance/retract permissives
+// through FB_TwoPosActuator_Probe. The probe delegates the cyclic body
+// back to the parent via SUPER^() so the inherited state machine runs
+// against the probe-injected signals.
+//
+// Time-dependent paths (advance / retract timeouts) are out of scope —
+// they depend on TON with real-time PT and are better covered by an
+// integration suite. All state transitions that fire the fault
+// book-keeping synchronously are covered here.
+FUNCTION_BLOCK FB_TwoPosActuator_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[InitialStateIsUndefined();
+UndefinedBecomesAdvancedOnFeedback();
+UndefinedBecomesRetractedOnFeedback();
+UndefinedFaultsWhenBothFeedbacksAssertSimultaneously();
+AdvanceCommandDrivesStateToAdvancing();
+AdvanceRejectedWhenAlreadyAdvanced();
+AdvanceRejectedWhenPermissiveNotMet();
+AdvanceRejectedFromOperatorWhileSourceLocked();
+AdvancingCompletesOnAdvancedFeedback();
+AdvancingFaultsOnBothFeedback();
+AdvancedFaultsOnLostFeedback();
+RetractFromAdvancedDrivesRetracting();
+AbortAlwaysAcceptedAndReturnsToUndefined();
+ResetClearsFaultAndReturnsToUndefined();
+HeaderBusyMirrorsMovingState();]]></ST>
+    </Implementation>
+    <Method Name="InitialStateIsUndefined" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c01}">
+      <Declaration><![CDATA[METHOD InitialStateIsUndefined
+VAR
+    fb : FB_TwoPosActuator_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('InitialStateIsUndefined');
+
+// No feedbacks, one cycle. currentState init is Undefined and the body
+// only transitions out when a single feedback asserts.
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Undefined,
+    Actual   := fb.sts.state,
+    Message  := 'Fresh instance with no feedbacks must stay in Undefined');
+AssertFalse(
+    Condition := fb.GetValveAdvance(),
+    Message   := 'Undefined state must de-energize outValveAdvance');
+AssertFalse(
+    Condition := fb.GetValveRetract(),
+    Message   := 'Undefined state must de-energize outValveRetract');
+AssertFalse(
+    Condition := fb.sts.header.stsFaulted,
+    Message   := 'Fresh instance must not be faulted');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="UndefinedBecomesAdvancedOnFeedback" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c02}">
+      <Declaration><![CDATA[METHOD UndefinedBecomesAdvancedOnFeedback
+VAR
+    fb : FB_TwoPosActuator_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('UndefinedBecomesAdvancedOnFeedback');
+
+// Simulate a device that was already at the advanced end-stop on boot.
+fb.SetAdvancedFeedback(bValue := TRUE);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Advanced,
+    Actual   := fb.sts.state,
+    Message  := 'Undefined must latch to Advanced when only inFbkAdvanced is TRUE');
+AssertTrue(
+    Condition := fb.sts.stsAdvanced,
+    Message   := 'stsAdvanced must follow the resolved state');
+AssertFalse(
+    Condition := fb.sts.stsRetracted,
+    Message   := 'stsRetracted must be FALSE when Advanced');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="UndefinedBecomesRetractedOnFeedback" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c03}">
+      <Declaration><![CDATA[METHOD UndefinedBecomesRetractedOnFeedback
+VAR
+    fb : FB_TwoPosActuator_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('UndefinedBecomesRetractedOnFeedback');
+
+fb.SetRetractedFeedback(bValue := TRUE);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Retracted,
+    Actual   := fb.sts.state,
+    Message  := 'Undefined must latch to Retracted when only inFbkRetracted is TRUE');
+AssertTrue(
+    Condition := fb.sts.stsRetracted,
+    Message   := 'stsRetracted must follow the resolved state');
+AssertFalse(
+    Condition := fb.sts.stsAdvanced,
+    Message   := 'stsAdvanced must be FALSE when Retracted');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="UndefinedFaultsWhenBothFeedbacksAssertSimultaneously" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c04}">
+      <Declaration><![CDATA[METHOD UndefinedFaultsWhenBothFeedbacksAssertSimultaneously
+VAR
+    fb : FB_TwoPosActuator_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('UndefinedFaultsWhenBothFeedbacksAssertSimultaneously');
+
+// A physically impossible sensor state — both end-stops asserted. The FB
+// must trip to Fault with BothFeedbackOn instead of silently picking
+// one branch.
+fb.SetAdvancedFeedback(bValue := TRUE);
+fb.SetRetractedFeedback(bValue := TRUE);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Fault,
+    Actual   := fb.sts.state,
+    Message  := 'Both feedbacks simultaneously must drive state to Fault');
+AssertTrue(
+    Condition := fb.sts.header.stsFaulted,
+    Message   := 'header must report faulted when both feedbacks assert');
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_Fault.BothFeedbackOn,
+    Actual   := fb.sts.header.faultCode,
+    Message  := 'Active fault code must be BothFeedbackOn');
+AssertFalse(
+    Condition := fb.GetValveAdvance(),
+    Message   := 'Fault state must de-energize outValveAdvance');
+AssertFalse(
+    Condition := fb.GetValveRetract(),
+    Message   := 'Fault state must de-energize outValveRetract');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AdvanceCommandDrivesStateToAdvancing" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c05}">
+      <Declaration><![CDATA[METHOD AdvanceCommandDrivesStateToAdvancing
+VAR
+    fb   : FB_TwoPosActuator_Probe;
+    resp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AdvanceCommandDrivesStateToAdvancing');
+
+// Start from Retracted (single known end-stop) — the canonical starting
+// point before an Advance command.
+fb.SetRetractedFeedback(bValue := TRUE);
+fb();
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Retracted,
+    Actual   := fb.sts.state,
+    Message  := 'Precondition: feedback-only start must settle to Retracted');
+
+// Drop the retracted feedback first (simulates real physical travel) so
+// the Advancing branch isn't racing against a lost-feedback trip.
+fb.SetRetractedFeedback(bValue := FALSE);
+
+resp := fb.Advance(eRequester := TcForge.E_Requester.PROG);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := resp,
+    Message  := 'Advance from PROG in Retracted must be ACCEPTED');
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Advancing,
+    Actual   := fb.sts.state,
+    Message  := 'Accepted Advance must transition state to Advancing');
+AssertTrue(
+    Condition := fb.GetValveAdvance(),
+    Message   := 'Advancing state must energize outValveAdvance');
+AssertFalse(
+    Condition := fb.GetValveRetract(),
+    Message   := 'Advancing state must NOT energize outValveRetract');
+AssertTrue(
+    Condition := fb.sts.stsMoving,
+    Message   := 'stsMoving must flag the Advancing transit');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AdvanceRejectedWhenAlreadyAdvanced" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c06}">
+      <Declaration><![CDATA[METHOD AdvanceRejectedWhenAlreadyAdvanced
+VAR
+    fb   : FB_TwoPosActuator_Probe;
+    resp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AdvanceRejectedWhenAlreadyAdvanced');
+
+fb.SetAdvancedFeedback(bValue := TRUE);
+fb();
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Advanced,
+    Actual   := fb.sts.state,
+    Message  := 'Precondition: must be Advanced before asserting idempotency');
+
+resp := fb.Advance(eRequester := TcForge.E_Requester.PROG);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_ALREADY_AT_TARGET,
+    Actual   := resp,
+    Message  := 'Advance in Advanced must return REJECTED_ALREADY_AT_TARGET (idempotent)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AdvanceRejectedWhenPermissiveNotMet" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c07}">
+      <Declaration><![CDATA[METHOD AdvanceRejectedWhenPermissiveNotMet
+VAR
+    fb   : FB_TwoPosActuator_Probe;
+    resp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AdvanceRejectedWhenPermissiveNotMet');
+
+// Force the advance permissive to fail. One cycle is enough to let
+// advancePermissives refresh sts.bOK to FALSE before we call Advance.
+fb.MapAdvancePerm(nBit := 0, bValue := FALSE);
+fb();
+fb.SetRetractedFeedback(bValue := FALSE);
+
+resp := fb.Advance(eRequester := TcForge.E_Requester.PROG);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET,
+    Actual   := resp,
+    Message  := 'Advance must be rejected when advancePermissives.sts.bOK is FALSE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AdvanceRejectedFromOperatorWhileSourceLocked" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c08}">
+      <Declaration><![CDATA[METHOD AdvanceRejectedFromOperatorWhileSourceLocked
+VAR
+    fb   : FB_TwoPosActuator_Probe;
+    resp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AdvanceRejectedFromOperatorWhileSourceLocked');
+
+fb.LockSource(bLock := TRUE);
+resp := fb.Advance(eRequester := TcForge.E_Requester.OPERATOR);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED,
+    Actual   := resp,
+    Message  := 'OPERATOR must be rejected while source-locked');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AdvancingCompletesOnAdvancedFeedback" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c09}">
+      <Declaration><![CDATA[METHOD AdvancingCompletesOnAdvancedFeedback
+VAR
+    fb : FB_TwoPosActuator_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AdvancingCompletesOnAdvancedFeedback');
+
+// One warmup cycle so advancePermissives refreshes sts.bOK to TRUE
+// (unmapped bits default good). Without it the cached bOK is still
+// FALSE on a fresh instance and Advance() gets rejected with
+// REJECTED_PERMISSIVE_NOT_MET.
+fb();
+fb.Advance(eRequester := TcForge.E_Requester.PROG);
+fb();
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Advancing,
+    Actual   := fb.sts.state,
+    Message  := 'Precondition: must be in Advancing');
+
+fb.SetAdvancedFeedback(bValue := TRUE);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Advanced,
+    Actual   := fb.sts.state,
+    Message  := 'Advancing must complete to Advanced when inFbkAdvanced asserts');
+AssertFalse(
+    Condition := fb.sts.stsMoving,
+    Message   := 'stsMoving must clear once the motion completes');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AdvancingFaultsOnBothFeedback" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c0a}">
+      <Declaration><![CDATA[METHOD AdvancingFaultsOnBothFeedback
+VAR
+    fb : FB_TwoPosActuator_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AdvancingFaultsOnBothFeedback');
+
+// Warmup cycle so advancePermissives reports bOK before Advance().
+fb();
+fb.Advance(eRequester := TcForge.E_Requester.PROG);
+fb();
+
+// Simulate a stuck or failed retracted end-stop latching HIGH while the
+// actuator is already reporting Advanced — classic dual-sensor fault.
+fb.SetAdvancedFeedback(bValue := TRUE);
+fb.SetRetractedFeedback(bValue := TRUE);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Fault,
+    Actual   := fb.sts.state,
+    Message  := 'Both feedbacks while Advancing must trip to Fault');
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_Fault.BothFeedbackOn,
+    Actual   := fb.sts.header.faultCode,
+    Message  := 'Fault code must be BothFeedbackOn — the highest-priority feedback fault');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AdvancedFaultsOnLostFeedback" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c0b}">
+      <Declaration><![CDATA[METHOD AdvancedFaultsOnLostFeedback
+VAR
+    fb : FB_TwoPosActuator_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AdvancedFaultsOnLostFeedback');
+
+fb.SetAdvancedFeedback(bValue := TRUE);
+fb();
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Advanced,
+    Actual   := fb.sts.state,
+    Message  := 'Precondition: must be in Advanced');
+
+// Feedback drops while the actuator is supposed to be at the end-stop
+// (wire break, loose sensor, etc.). The FB must not silently revert to
+// Undefined — that would let downstream sequencing assume a known state
+// that isn't actually valid.
+fb.SetAdvancedFeedback(bValue := FALSE);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Fault,
+    Actual   := fb.sts.state,
+    Message  := 'Lost advanced feedback must trip to Fault, not silently revert');
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_Fault.UndefinedState,
+    Actual   := fb.sts.header.faultCode,
+    Message  := 'Fault code must be UndefinedState when Advanced feedback disappears');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RetractFromAdvancedDrivesRetracting" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c0c}">
+      <Declaration><![CDATA[METHOD RetractFromAdvancedDrivesRetracting
+VAR
+    fb   : FB_TwoPosActuator_Probe;
+    resp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RetractFromAdvancedDrivesRetracting');
+
+fb.SetAdvancedFeedback(bValue := TRUE);
+fb();
+fb.SetAdvancedFeedback(bValue := FALSE);
+
+resp := fb.Retract(eRequester := TcForge.E_Requester.PROG);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := resp,
+    Message  := 'Retract from Advanced must be ACCEPTED');
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Retracting,
+    Actual   := fb.sts.state,
+    Message  := 'Accepted Retract must transition to Retracting');
+AssertTrue(
+    Condition := fb.GetValveRetract(),
+    Message   := 'Retracting must energize outValveRetract');
+AssertFalse(
+    Condition := fb.GetValveAdvance(),
+    Message   := 'Retracting must NOT energize outValveAdvance');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AbortAlwaysAcceptedAndReturnsToUndefined" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c0d}">
+      <Declaration><![CDATA[METHOD AbortAlwaysAcceptedAndReturnsToUndefined
+VAR
+    fb   : FB_TwoPosActuator_Probe;
+    resp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AbortAlwaysAcceptedAndReturnsToUndefined');
+
+// Set up a worst-case: source-locked AND in motion AND commanded by
+// OPERATOR. Abort must still land. Warmup cycle first so
+// advancePermissives reports bOK before Advance().
+fb();
+fb.LockSource(bLock := TRUE);
+fb.Advance(eRequester := TcForge.E_Requester.PROG);
+fb();
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Advancing,
+    Actual   := fb.sts.state,
+    Message  := 'Precondition: must be Advancing before Abort');
+
+resp := fb.Abort(eRequester := TcForge.E_Requester.OPERATOR);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := resp,
+    Message  := 'Abort must be accepted from OPERATOR even when source-locked (safety invariant)');
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Undefined,
+    Actual   := fb.sts.state,
+    Message  := 'Abort must return state to Undefined for re-evaluation');
+AssertFalse(
+    Condition := fb.GetValveAdvance(),
+    Message   := 'Abort must de-energize outValveAdvance');
+AssertFalse(
+    Condition := fb.GetValveRetract(),
+    Message   := 'Abort must de-energize outValveRetract');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetClearsFaultAndReturnsToUndefined" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c0e}">
+      <Declaration><![CDATA[METHOD ResetClearsFaultAndReturnsToUndefined
+VAR
+    fb   : FB_TwoPosActuator_Probe;
+    resp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ResetClearsFaultAndReturnsToUndefined');
+
+// Trip to Fault via the both-feedbacks path.
+fb.SetAdvancedFeedback(bValue := TRUE);
+fb.SetRetractedFeedback(bValue := TRUE);
+fb();
+AssertTrue(
+    Condition := fb.sts.header.stsFaulted,
+    Message   := 'Precondition: must be faulted before Reset');
+
+// Drop the conflicting feedback so Reset can actually settle.
+fb.SetRetractedFeedback(bValue := FALSE);
+fb.SetAdvancedFeedback(bValue := FALSE);
+
+resp := fb.Reset(eRequester := TcForge.E_Requester.OPERATOR);
+fb();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := resp,
+    Message  := 'Reset must always be accepted (safety invariant inherited from FB_DeviceBase)');
+AssertFalse(
+    Condition := fb.sts.header.stsFaulted,
+    Message   := 'Reset must clear the active fault');
+AssertEquals_DINT(
+    Expected := TcForge.E_TwoPosActuator_State.Undefined,
+    Actual   := fb.sts.state,
+    Message  := 'Reset must drop the state machine back to Undefined');
+AssertTrue(
+    Condition := fb.sts.header.lastFaultCode = TcForge.E_TwoPosActuator_Fault.BothFeedbackOn,
+    Message   := 'Reset must preserve lastFaultCode for HMI post-mortem');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HeaderBusyMirrorsMovingState" Id="{b1c2d3e4-f5a6-7890-abcd-000000000c0f}">
+      <Declaration><![CDATA[METHOD HeaderBusyMirrorsMovingState
+VAR
+    fb : FB_TwoPosActuator_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HeaderBusyMirrorsMovingState');
+
+// Warmup cycle so advancePermissives reports bOK before Advance().
+fb();
+fb.Advance(eRequester := TcForge.E_Requester.PROG);
+fb();
+
+AssertTrue(
+    Condition := fb.sts.stsMoving,
+    Message   := 'Advancing must set stsMoving');
+AssertTrue(
+    Condition := fb.sts.header.stsBusy,
+    Message   := 'header.stsBusy must mirror stsMoving so generic HMIs can show motion');
+AssertFalse(
+    Condition := fb.sts.header.stsReady,
+    Message   := 'stsReady must be FALSE while the actuator is in motion');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

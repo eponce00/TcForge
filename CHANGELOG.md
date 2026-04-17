@@ -44,6 +44,38 @@ changes are called out explicitly under each release.
   ordering, and every SetBypass / ClearBypass / ClearFirstFailure path.
   Covering the base simultaneously hardens `FB_Permissives` and
   `FB_Interlock`.
+- **`FB_Permissives_Test`** (8 cases) and **`FB_Interlock_Test`** (9 cases)
+  — lock in the consumer-visible contracts on top of `FB_BitMatrix64`:
+  non-latching vs. latching behaviour, bypass semantics, and reset paths.
+- **`FB_AlarmSimple_Test`** (10 cases) and **`FB_AlarmLimit_Test`**
+  (8 cases) — cover debounce, latch, ack, and severity routing on the two
+  most-used alarm blocks, plus the four-band HiHi/Hi/Lo/LoLo arbitration
+  in `FB_AlarmLimit`.
+- **`FB_DeviceBase_Test`** (10 cases) via a test-only
+  `FB_DeviceBase_Probe` — validates protected `_Raise` / `_ClearFault`
+  semantics, `Reset()` safety, and how `_UpdateHeader()` mirrors fault
+  state into `ST_DeviceHeader_Sts`. Establishes the "probe subclass +
+  `SUPER^()` in cyclic body" pattern now reused across device tests.
+- **`FB_LPF_FirstOrder_IIR_Test`** (6 cases) — pure-math coverage of the
+  exponential smoothing recurrence, including passthrough on invalid
+  `fDt` / `fTau`, first-sample seeding, convergence, and error-flag
+  bookkeeping.
+- **`FB_DigitalOutput_Test`** (12 cases) — command routing through
+  `F_ValidateRequester` (source lock), debounce on/off, `cfgInvert` in
+  Regular mode, bad-quality last-known-good hold, one-scan edge pulses,
+  and SinglePulse arm/cancel.
+- **`FB_DigitalInput_Test`** (10 cases) via `FB_DigitalInput_Probe` —
+  raw → quality gate → invert → debounce → edge detect pipeline, plus
+  quality-tag propagation into `ST_DeviceHeader_Sts`.
+- **`FB_TwoPosActuator_Test`** (15 cases) via `FB_TwoPosActuator_Probe`
+  — state machine (Undefined / Advancing / Advanced / Retracting /
+  Retracted / Faulted), permissive gating, source-locked arbitration,
+  both-feedback and lost-feedback faults, `Abort` always accepted, and
+  `header.stsBusy` mirroring `stsMoving`. Time-dependent timeout paths
+  deferred to integration testing.
+
+Full suite: 106 tests across 11 suites, green on the remote runtime
+(`172.18.236.100.1.1`).
 
 ## [2026-04-16] — Alarms + architecture simplification
 

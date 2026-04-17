@@ -13,6 +13,7 @@ VAR
     fbLpfFirstOrder_Test     : FB_LPF_FirstOrder_IIR_Test;
     fbDigitalOutput_Test     : FB_DigitalOutput_Test;
     fbDigitalInput_Test      : FB_DigitalInput_Test;
+    fbTwoPosActuator_Test    : FB_TwoPosActuator_Test;
 END_VAR
 ]]>
     </Declaration>

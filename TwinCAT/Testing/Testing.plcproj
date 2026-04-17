@@ -27,6 +27,9 @@
     <Compile Include="POUs\FB_DigitalInput_Probe.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="POUs\FB_TwoPosActuator_Probe.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Testing.TcTTO">
       <SubType>Code</SubType>
     </Compile>
@@ -58,6 +61,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Tests\FB_DigitalInput_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Tests\FB_TwoPosActuator_Test.TcPOU">
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>
