@@ -1,12 +1,12 @@
-# 7 Architecture
+# 2 Architecture
 
 This document describes the OO pattern every TcForge device follows: the abstract base class, the built-in fault book-keeping it provides, and the unified fault-context model that ties fault codes, RPC responses, and HMI fault strings together. Follow this pattern for any new device block so aggregators, HMIs and the fault history all keep working with zero glue code.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [Sequencing](5-Sequencing.md) · [Persistent Variables](6-Persistent-Variables.md) · [I/O Binding →](8-IO-Binding.md) · [Alarms →](9-Alarms.md)
+> **Navigation:** [← Programming Standards](1-Programming-Standards.md) · [README / TOC](../README.md) · [Command Source Control →](3-Command-Source-Control.md)
 
 ---
 
-## 7.1 Class Layout
+## 2.1 Class Layout
 
 ```
 FB_DeviceBase (ABSTRACT)
@@ -36,11 +36,11 @@ FB_AnalogInput    EXTENDS FB_DeviceBase
 
 There is deliberately **no** device-interface hierarchy. Early versions of TcForge had `I_Resettable`, `I_SourceLockable`, `I_Diagnosable`, `I_Abortable`, `I_DigitalCommandable`, `I_AnalogCommandable` marker interfaces, but nothing ever held a polymorphic reference to any of them — every call site used the concrete FB type — so the interfaces were decorative. They were deleted to keep the base class the single source of truth for the safety/diagnostics contract.
 
-The only device-facing interface is `I_Alarm` (see [§9 Alarms](9-Alarms.md)), which **is** consumed polymorphically by the aggregator pattern.
+The only device-facing interface is `I_Alarm` (see [§8 Alarms](8-Alarms.md)), which **is** consumed polymorphically by the aggregator pattern.
 
 ---
 
-## 7.2 Safety-Command Invariant
+## 2.2 Safety-Command Invariant
 
 `Reset` and device-specific `Abort` methods are **always accepted** from any requester, regardless of source lock or fault state. They may reject only when execution would be a no-op (e.g. `Abort` when already `STOPPED`). Every other command goes through `F_ValidateRequester`.
 
@@ -56,7 +56,7 @@ The only device-facing interface is `I_Alarm` (see [§9 Alarms](9-Alarms.md)), w
 
 ---
 
-## 7.3 The Unified Fault Model
+## 2.3 The Unified Fault Model
 
 TcForge treats **fault code**, **fault source**, **fault reason**, and **RPC response** as four facets of one model. The goal is that every fault on the HMI answers three questions without developer guesswork:
 
@@ -73,11 +73,11 @@ These four facets keep different scopes:
 | `reason` string       | Human-readable description, optionally author-supplied  | `header.faultReason` / `ST_FaultEntry.reason`     |
 | `E_RpcMethodResponse` | One-round-trip RPC result; **never** persisted          | Method return value only                          |
 
-### 7.3.1 RPC responses vs. device faults
+### 2.3.1 RPC responses vs. device faults
 
-An RPC call that rejects (e.g. `REJECTED_PERMISSIVE_NOT_MET`) is **not** a fault. It's a synchronous "try again" to the caller. Persistent faults only come from the cyclic body — never from inside an RPC method — because faults outlive a single call and must show in the ring buffer. The two spaces share a **numbering convention** (§7.3.3) but never the same storage.
+An RPC call that rejects (e.g. `REJECTED_PERMISSIVE_NOT_MET`) is **not** a fault. It's a synchronous "try again" to the caller. Persistent faults only come from the cyclic body — never from inside an RPC method — because faults outlive a single call and must show in the ring buffer. The two spaces share a **numbering convention** (§2.3.3) but never the same storage.
 
-### 7.3.2 Idempotent raising
+### 2.3.2 Idempotent raising
 
 `_Raise(code, source, reason)` is idempotent on `code`:
 
@@ -88,7 +88,7 @@ An RPC call that rejects (e.g. `REJECTED_PERMISSIVE_NOT_MET`) is **not** a fault
 
 This means cyclic fault detection can fire every scan without flooding the ring. The requester recorded with the fault is `_lastRequester` (populated by `_AcceptCommand`), so the ring shows who issued the command that provoked the fault.
 
-### 7.3.3 Fault-code range convention
+### 2.3.3 Fault-code range convention
 
 Both `E_<Dev>_Fault` (persistent faults) and `E_RpcMethodResponse` (synchronous rejections) follow the same numbering scheme so HMI code and operators can read any number and immediately know the category:
 
@@ -109,9 +109,9 @@ Both `E_<Dev>_Fault` (persistent faults) and `E_RpcMethodResponse` (synchronous 
 
 Range **10–19 is reused**: authorization rejects are RPC-only; feedback faults are persistent-only. They never appear in the same namespace, so the overlap is harmless and keeps each enum's numbers small and memorable.
 
-Process-alarm limits (HH / HI / LO / LL) intentionally **do not** live in `E_<Dev>_Fault`. They belong on `FB_AlarmLimit` — composed with the device's process variable — where configuration, latching, severity and ack logic sit in one place. See [§9 Alarms](9-Alarms.md).
+Process-alarm limits (HH / HI / LO / LL) intentionally **do not** live in `E_<Dev>_Fault`. They belong on `FB_AlarmLimit` — composed with the device's process variable — where configuration, latching, severity and ack logic sit in one place. See [§8 Alarms](8-Alarms.md).
 
-### 7.3.4 How the facets reach the HMI
+### 2.3.4 How the facets reach the HMI
 
 `ST_DeviceHeader_Sts` (embedded as `header` in every device's `_Sts`) surfaces all four facets. `_UpdateHeader(...)` populates them every cycle from the base's internal state:
 
@@ -130,7 +130,7 @@ The HMI renders "`faultSource`: `faultString` — `faultReason`". That formula w
 
 ---
 
-## 7.4 Fault Book-Keeping
+## 2.4 Fault Book-Keeping
 
 `FB_DeviceBase` owns the fault history directly — there is no separate `FB_FaultHandler` to compose, and no `_fault.Xxx()` indirection. Previously these lived on a composed helper; that helper was folded into the base class so children call `_Raise` / `_ClearFault` / `IsFaulted` / `GetFaultCode` / `GetFaultString` directly.
 
@@ -152,13 +152,13 @@ Calling semantics (children-facing):
 
 Timestamps come from the shared utility `F_Now()` (`Tc2_System.F_GetSystemTime()` converted to `LTIME`). There is one timestamp function in the library and every FB uses it.
 
-### 7.4.1 When to set `source` / `reason`
+### 2.4.1 When to set `source` / `reason`
 
 - **Always set `source`** when raising from the cyclic body. A short constant string (`'FEEDBACK'`, `'MOTION'`, `'PERMISSIVES'`, `'STEP_3004'`) is enough — it answers "where in this FB?" without inspecting the code.
 - **Set `reason` when you know something the resolved fault string doesn't.** For a `NoFeedback` fault raised in the advanced state, a reason like `'No advanced feedback 1.5 s after advance command'` turns a one-word alarm into a diagnostic.
 - **Leave `reason` empty** when the resolved fault string already says everything (e.g. `AdvanceTimeout`). The HMI will simply render the string.
 
-### 7.4.2 Example call sites
+### 2.4.2 Example call sites
 
 ```iecst
 // Timeout-style fault: source tells where, reason omitted (string is enough).
@@ -185,7 +185,7 @@ _Raise(
 
 ---
 
-## 7.5 ST_DeviceHeader_Sts
+## 2.5 ST_DeviceHeader_Sts
 
 Every device sts struct embeds `header : ST_DeviceHeader_Sts` as its first field. The base class's `_UpdateHeader` method fills it each cycle:
 
@@ -218,12 +218,12 @@ _UpdateHeader(
 
 ---
 
-## 7.6 Writing a New Device
+## 2.6 Writing a New Device
 
-1. Define the three structs: `ST_<Dev>_Cfg`, `ST_<Dev>_Sts` (with `header : ST_DeviceHeader_Sts` first), `ST_<Dev>_IO` (flat, with `AT %I* / %Q*`). See [§8 I/O Binding](8-IO-Binding.md) for the I/O contract.
-2. Define `E_<Dev>_State` and `E_<Dev>_Fault` enums (use `{attribute 'qualified_only'}`). Number fault codes by category per [§7.3.3](#733-fault-code-range-convention). Keep the enum focused on ground truths about the device — leave process-limit alarms to `FB_AlarmLimit`.
+1. Define the three structs: `ST_<Dev>_Cfg`, `ST_<Dev>_Sts` (with `header : ST_DeviceHeader_Sts` first), `ST_<Dev>_IO` (flat, with `AT %I* / %Q*`). See [§5 I/O Binding](5-IO-Binding.md) for the I/O contract.
+2. Define `E_<Dev>_State` and `E_<Dev>_Fault` enums (use `{attribute 'qualified_only'}`). Number fault codes by category per [§2.3.3](#233-fault-code-range-convention). Keep the enum focused on ground truths about the device — leave process-limit alarms to `FB_AlarmLimit`.
 3. Declare the FB: `FUNCTION_BLOCK FB_<Dev> EXTENDS FB_DeviceBase`.
-4. Hold `io : ST_<Dev>_IO` as an internal `VAR` — **never** `VAR_IN_OUT`. I/O binds via `TcLinkTo` on the FB instance (§8).
+4. Hold `io : ST_<Dev>_IO` as an internal `VAR` — **never** `VAR_IN_OUT`. I/O binds via `TcLinkTo` on the FB instance (§5).
 5. Override `ResolveFaultString(code : DINT) : STRING(79)` to map your fault enum to text. Every enumerator gets a branch.
 6. Add a `PRIVATE _StateToString(state) : STRING(31)` helper for the state name.
 7. In every accepted command method: `_AcceptCommand(eRequester := eRequester);`
@@ -234,7 +234,7 @@ Enum-to-string is always a **dedicated method** (`ResolveFaultString`, `_StateTo
 
 ---
 
-## 7.7 Persistence Convention
+## 2.7 Persistence Convention
 
 Only two places in a TcForge device use `VAR PERSISTENT`:
 

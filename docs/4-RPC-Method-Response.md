@@ -1,12 +1,12 @@
-# 3 RPC Method Response
+# 4 RPC Method Response
 
-All RPC methods across the library return `E_RpcMethodResponse`, a standardized enumeration that tells the caller whether a command was accepted or rejected — and why. RPC responses share a **numbering convention** with the persistent fault codes in [§7.4 Architecture — Unified Fault Model](7-Architecture.md#74-the-unified-fault-model) but belong to a different storage scope.
+All RPC methods across the library return `E_RpcMethodResponse`, a standardized enumeration that tells the caller whether a command was accepted or rejected — and why. RPC responses share a **numbering convention** with the persistent fault codes in [§2.4 Architecture — Fault Book-Keeping](2-Architecture.md#24-fault-book-keeping) but belong to a different storage scope.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md) · [Architecture](7-Architecture.md) · [I/O Binding](8-IO-Binding.md)
+> **Navigation:** [← Command Source Control](3-Command-Source-Control.md) · [README / TOC](../README.md) · [I/O Binding →](5-IO-Binding.md)
 
 ---
 
-## 3.1 E_RpcMethodResponse
+## 4.1 E_RpcMethodResponse
 
 The enum uses `{attribute 'to_string'}` so `TO_STRING(response)` returns the symbolic name (e.g. `'REJECTED_FAULTED'`).
 
@@ -23,9 +23,9 @@ The enum uses `{attribute 'to_string'}` so `TO_STRING(response)` returns the sym
 | 100   | `REJECTED_UNKNOWN`            | Fallback when no other code applies              |
 
 
-### 3.1.1 Range Convention
+### 4.1.1 Range Convention
 
-The same numeric ranges used for persistent device faults ([§7.4.3](7-Architecture.md#743-fault-code-range-convention)) gate RPC rejections. Reading any code anywhere in the system immediately tells you the category:
+The same numeric ranges used for persistent device faults ([§2.3.3](2-Architecture.md#233-fault-code-range-convention)) gate RPC rejections. Reading any code anywhere in the system immediately tells you the category:
 
 
 | Range  | Category               | RPC usage                              | Persistent-fault usage                         |
@@ -48,7 +48,7 @@ Range **10–19** is reused: RPC uses it for authorization, persistent faults us
 
 ---
 
-## 3.2 RPC vs. Persistent Fault Decoupling
+## 4.2 RPC vs. Persistent Fault Decoupling
 
 An RPC rejection is **not** a fault. They are two different things that share a numbering scheme:
 
@@ -69,9 +69,9 @@ The numbering convention is what makes the split cheap: a central HMI helper can
 
 ---
 
-## 3.3 Method Inventory
+## 4.3 Method Inventory
 
-### 3.3.1 FB_TwoPosActuator
+### 4.3.1 FB_TwoPosActuator
 
 
 | Method         | Validation                                                            | Possible Responses                                                                          |
@@ -83,7 +83,7 @@ The numbering convention is what makes the split cheap: a central HMI helper can
 | `LockSource()` | Always accepted                                                       | `ACCEPTED`                                                                                  |
 
 
-### 3.3.2 FB_StateMachine
+### 4.3.2 FB_StateMachine
 
 
 | Method         | Validation                                           | Possible Responses                                                                        |
@@ -99,7 +99,7 @@ The numbering convention is what makes the split cheap: a central HMI helper can
 | `LockSource()` | Always accepted                                      | `ACCEPTED`                                                                                |
 
 
-`FB_StateMachine` also exposes two **non-RPC** reporter methods that do not return `E_RpcMethodResponse` — they simply record an OEE condition code (0 = clear, non-zero = active reason). See [§5.2.3 Sequencing](5-Sequencing.md#523-oee-conditions--reportblocked--reportstarved):
+`FB_StateMachine` also exposes two **non-RPC** reporter methods that do not return `E_RpcMethodResponse` — they simply record an OEE condition code (0 = clear, non-zero = active reason). See [§7.2.3 Sequencing](7-Sequencing.md#723-oee-conditions--reportblocked--reportstarved):
 
 - `ReportBlocked(code : DINT)` — downstream blocked reason
 - `ReportStarved(code : DINT)` — upstream starved reason
@@ -107,11 +107,11 @@ The numbering convention is what makes the split cheap: a central HMI helper can
 
 ---
 
-## 3.4 OPC UA Usage
+## 4.4 OPC UA Usage
 
 RPC methods are exposed via `{attribute 'TcRpcEnable' := '1'}`. An OPC UA client calls the method and receives the `E_RpcMethodResponse` return value in one round-trip.
 
-### 3.4.1 OPC UA Client Example (Pseudocode)
+### 4.4.1 OPC UA Client Example (Pseudocode)
 
 ```python
 result = call_method("PLC1.MAIN.fbCylinder01.Advance")
@@ -119,7 +119,7 @@ if result != 0:
     print(f"Command rejected: {result}")  # e.g. 50 = REJECTED_PERMISSIVE_NOT_MET
 ```
 
-### 3.4.2 PLC Caller Example
+### 4.4.2 PLC Caller Example
 
 ```iecst
 // From sequence code (eRequester defaults to PROG)
@@ -134,11 +134,11 @@ eResult := fbStateMachine.Start(eRequester := E_Requester.PROG);
 
 ---
 
-## 3.5 Design Decisions
+## 4.5 Design Decisions
 
 - **Stop and Abort always accept** — safety-critical commands must never be blocked.
 - **Retry always accepts** — the retry mechanism handles its own edge detection internally.
 - **Advance/Retract pre-check permissives** — gives immediate feedback rather than accepting and then faulting.
 - **Methods execute immediately** — no scan-cycle delay between request and action.
-- **RPC responses never write the fault handler** — rejections are feedback to the caller, not system state. See §3.2.
+- **RPC responses never write the fault handler** — rejections are feedback to the caller, not system state. See §4.2.
 - **Numbering matches `E_<Dev>_Fault`** — a single 10s-digit lookup categorizes any code the operator sees.

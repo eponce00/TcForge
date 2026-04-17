@@ -1,12 +1,12 @@
-# 8 I/O Binding
+# 5 I/O Binding
 
 How TcForge devices connect to physical Beckhoff hardware. The library stays portable because every hardware reference lives behind a single `_IO` struct that is **internal to the device FB**. The consuming application binds the FB's I/O to real terminals by dropping `TcLinkTo` pragmas on the FB instance declaration — typically in a centralized `GVL_HW`. There is no `VAR_IN_OUT` plumbing to thread through the application.
 
-> **Navigation:** [← Architecture](7-Architecture.md) · [README](../README.md) · [Alarms →](9-Alarms.md)
+> **Navigation:** [← RPC Method Response](4-RPC-Method-Response.md) · [README / TOC](../README.md) · [Persistent Variables →](6-Persistent-Variables.md)
 
 ---
 
-## 8.1 The `_IO` Struct Convention
+## 5.1 The `_IO` Struct Convention
 
 Every device ships with three structs: `_Cfg`, `_Sts`, `_IO`. The `_IO` struct is the **only** place hardware symbols appear. Each primitive I/O field carries an `AT %I* / %Q`* pragma so the compiler generates an unresolved PLC symbol that can be linked from the I/O tree.
 
@@ -28,7 +28,7 @@ Rules:
 
 - `in*` fields on `%I*`, `out*` fields on `%Q*`. Prefix must match direction.
 - No scaling, no filtering, no logic — raw hardware only.
-- Type is always primitive (`BOOL`, `INT`, `REAL`…) **or** the shared 32-bit UNION `U_IoRaw_In` / `U_IoRaw_Out` for analog terminals (see §8.2.1). Never a nested regular struct.
+- Type is always primitive (`BOOL`, `INT`, `REAL`…) **or** the shared 32-bit UNION `U_IoRaw_In` / `U_IoRaw_Out` for analog terminals (see §5.2.1). Never a nested regular struct.
 - Naming mirrors the field tag: `inFbkAdvanced`, `outValveAdvance`.
 
 The device FB holds the struct as an **internal variable**:
@@ -42,7 +42,7 @@ END_VAR
 
 The FB body reads `io.inFbkAdvanced` and writes `io.outValveAdvance` directly. The application never touches `io` — it is owned by the FB.
 
-### 8.1.1 Analog Terminals Use a 32-bit UNION
+### 5.1.1 Analog Terminals Use a 32-bit UNION
 
 Analog terminals come in many flavours: signed INT (16-bit DAC), REAL (some EL375x), UDINT (counter), WORD (bit-packed). Writing one `FB_AnalogInput` per primitive type would explode the library. TcForge ships a single 32-bit UNION instead:
 
@@ -93,7 +93,7 @@ If the user leaves `cfgInputType` at default (`TYPE_INT`), a standard 0-10 V or 
 
 ---
 
-## 8.2 `AT %I* / %Q*` + `TcLinkTo`: How Binding Works
+## 5.2 `AT %I* / %Q*` + `TcLinkTo`: How Binding Works
 
 Two pieces collaborate:
 
@@ -111,7 +111,7 @@ What `%I* / %Q`* does **not** do: it does not auto-allocate. The build fails the
 
 ---
 
-## 8.3 Instance-Level Binding with `TcLinkTo`
+## 5.3 Instance-Level Binding with `TcLinkTo`
 
 Drop `TcLinkTo` attributes on the FB **instance** declaration, one per bit in the `_IO` struct. The attribute syntax is a pipe-separated list of field-to-path pairs (one pair per line is the conventional layout):
 
@@ -133,9 +133,9 @@ Notes:
 
 ---
 
-## 8.4 Where FB Instances Live
+## 5.4 Where FB Instances Live
 
-### 8.4.1 Inline (tiny projects)
+### 5.4.1 Inline (tiny projects)
 
 For a one-off test bench with a handful of devices, declare the instance and its link pragma directly in the program that uses it:
 
@@ -150,7 +150,7 @@ END_VAR
 
 This is fine for 5–10 devices. Past that, the program file becomes a wiring manifest and the logic gets buried.
 
-### 8.4.2 Centralized `GVL_HW` (recommended for anything larger)
+### 5.4.2 Centralized `GVL_HW` (recommended for anything larger)
 
 Put every hardware-backed FB instance in a single `GVL_HW` so wiring is one searchable file, separate from the logic that uses it. This is the pattern the `TcForgeExample` project demonstrates.
 
@@ -178,7 +178,7 @@ VAR_GLOBAL
 END_VAR
 ```
 
-Note the `.dw` suffix on the analog terminal path — that's the UNION member actually mapped to `%I*`. See [§8.1.1](#811-analog-terminals-use-a-32-bit-union) for the rationale and type-selection table.
+Note the `.dw` suffix on the analog terminal path — that's the UNION member actually mapped to `%I*`. See [§5.1.1](#511-analog-terminals-use-a-32-bit-union) for the rationale and type-selection table.
 
 Call the instances from station programs:
 
@@ -196,7 +196,7 @@ Advantages at scale:
 
 ---
 
-## 8.5 When to Add a HAL / Conditioning Layer
+## 5.5 When to Add a HAL / Conditioning Layer
 
 The `_IO` struct **is** the HAL for most projects. Add a thin pre-processing layer only when one of these applies:
 
@@ -214,32 +214,32 @@ Do **not** bypass the `io` struct by mapping the terminal to two places (raw + c
 
 ---
 
-## 8.6 Anti-Patterns
+## 5.6 Anti-Patterns
 
 - **Hardware symbols in application code.** Never put `AT %I`* on a variable outside an `_IO` struct. It hides wiring from `GVL_HW`.
 - **Passing `io` as `VAR_IN_OUT`.** This is the old pattern. It forces the application to own a copy of the struct, breaks the `TcLinkTo` convention, and couples every program to every device's I/O layout.
 - **Nested `_IO` structs.** One `_IO` referencing another. TwinCAT's Symbol Mapping can't drill through nested structs cleanly — keep them flat.
 - *Mixed `in` / `out`* in the same struct field word.** One direction per field.
-- **Computing in the FB body before using the `io` value.** Conditioning belongs in the HAL layer (§8.5), not in the device FB. Keep the device "dumb" about wiring.
+- **Computing in the FB body before using the `io` value.** Conditioning belongs in the HAL layer (§5.5), not in the device FB. Keep the device "dumb" about wiring.
 
 ---
 
-## 8.7 Checklist for a New Hardware-Connected Device
+## 5.7 Checklist for a New Hardware-Connected Device
 
 1. Define `ST_<Dev>_IO` with flat `in`* / `out`* fields, each carrying `AT %I`* or `AT %Q*`.
 2. Device FB holds `io : ST_<Dev>_IO` as a private `VAR` — **never** `VAR_IN_OUT` / `VAR_INPUT` / `VAR_OUTPUT`.
 3. Consuming application declares the FB instance in `GVL_HW` (preferred) or inline in its owning program.
 4. Above the instance declaration, attach a `TcLinkTo` pragma listing every `.io.<field>` and its `TIID^…` path.
-5. If conditioning is needed, add a pre-processing program that writes a conditioned mirror the FB reads via `VAR_INPUT` (see §8.5). Keep raw paths reviewable in `GVL_HW`.
+5. If conditioning is needed, add a pre-processing program that writes a conditioned mirror the FB reads via `VAR_INPUT` (see §5.5). Keep raw paths reviewable in `GVL_HW`.
 6. Device's `_Sts` reports the **conditioned, logical** state. Raw bits stay behind the `_IO` boundary, invisible to the application.
 
 ---
 
-## 8.8 Built-in I/O Devices
+## 5.8 Built-in I/O Devices
 
-The four generic I/O blocks that ship with the library. Each one extends `FB_DeviceBase`, owns an internal `io` struct (§8.1), and participates in the shared fault-header model (§7).
+The four generic I/O blocks that ship with the library. Each one extends `FB_DeviceBase`, owns an internal `io` struct (§5.1), and participates in the shared fault-header model (§2).
 
-### 8.8.1 `FB_DigitalInput`
+### 5.8.1 `FB_DigitalInput`
 
 Signal conditioning for a single `BOOL` field input.
 
@@ -249,7 +249,7 @@ Signal conditioning for a single `BOOL` field input.
 - **Behaviour:** quality-gated read → optional inversion → asymmetric debounce (`TON` on-delay, `TOF` off-delay) → edge detection on the debounced value
 - **Fault codes (`E_DigitalInput_Fault`):** `BadQuality` (quality watchdog)
 
-### 8.8.2 `FB_DigitalOutput`
+### 5.8.2 `FB_DigitalOutput`
 
 Driver for a single `BOOL` field output with pulse-train options.
 
@@ -260,17 +260,17 @@ Driver for a single `BOOL` field output with pulse-train options.
 - **Behaviour:** `VAR PERSISTENT _requestSync` → asymmetric debounce on the commanded value → mode shaping (pulse timers or passthrough) → quality-gated hardware write. Inversion applies only in `Regular` mode (pulse trains shouldn't be inverted).
 - **Fault codes (`E_DigitalOutput_Fault`):** `BadQuality`
 
-### 8.8.3 `FB_AnalogInput`
+### 5.8.3 `FB_AnalogInput`
 
-Signal-conditioning pipeline for any 32-bit analog terminal. Conditioning-only — process-limit alarms (HH / HI / LO / LL) live on `FB_AlarmLimit` composed with the published `stsValue` (see [§9 Alarms](9-Alarms.md)).
+Signal-conditioning pipeline for any 32-bit analog terminal. Conditioning-only — process-limit alarms (HH / HI / LO / LL) live on `FB_AlarmLimit` composed with the published `stsValue` (see [§8 Alarms](8-Alarms.md)).
 
-- **Link:** `.io.inRaw.dw` → `EL3xxx` channel (see §8.1.1 for the UNION and type selection)
+- **Link:** `.io.inRaw.dw` → `EL3xxx` channel (see §5.1.1 for the UNION and type selection)
 - **Cfg:** `cfgInputType` (UNION member select), `cfgUseRawValue` (bypass scaling), `cfgRawMin/Max`, `cfgEuMin/Max`, `cfgUnit`, `cfgClampAsFault`, `cfgFilterTau` (IIR), `cfgQualityFaultAfter`
 - **Sts:** `stsValue` (final EU), `stsScaled` (pre-filter EU), `stsRawReal`, `stsUnit`, `stsQuality` (promotes to `CLAMPED` automatically), `stsClampedLow/High/Active`
 - **Behaviour:** first-scan config validation + task-dt cache → type-selected UNION read → quality-gated hold → clamp → optional clamp-as-fault → linear scale → optional first-order IIR low-pass
 - **Fault codes (`E_AnalogInput_Fault`):** `BadQuality`, `ClampLow`, `ClampHigh`, `BadConfig`
 
-### 8.8.4 `FB_AnalogOutput`
+### 5.8.4 `FB_AnalogOutput`
 
 Driver for any 32-bit analog terminal with persistent setpoint.
 
@@ -281,13 +281,12 @@ Driver for any 32-bit analog terminal with persistent setpoint.
 - **Behaviour:** `VAR PERSISTENT _requestSync` → first-scan config validation → clamp to `MinCv/MaxCv` → EU-to-raw linear scale → UNION write of the selected primitive → `BAD` quality holds last good value
 - **Fault codes (`E_AnalogOutput_Fault`):** `BadQuality`, `ClampLow`, `ClampHigh`, `BadConfig`
 
-### 8.8.5 Shared Helpers
+### 5.8.5 Shared Helpers
 
 All four I/O FBs rely on:
 
 - `E_IO_Quality` — `UNKNOWN / BAD / GOOD / CLAMPED`; `stsQuality` carries this tag so downstream aggregators can filter bad data.
 - `E_Unit` — engineering-unit tag for the HMI (`BAR`, `DEGREE_CELSIUS`, `PERCENT`, …). Copied into `stsUnit` every cycle.
-- `U_IoRaw_In` / `U_IoRaw_Out` — 32-bit UNION exposed only on analog blocks, described in §8.1.1.
+- `U_IoRaw_In` / `U_IoRaw_Out` — 32-bit UNION exposed only on analog blocks, described in §5.1.1.
 - `F_GetTaskCycleTime` — returns the task dt; used by `FB_AnalogInput` to initialise its filter on first scan.
 - `FB_LPF_FirstOrder_IIR` — exponential low-pass filter; tunable by `cfgFilterTau`.
-

@@ -2,7 +2,7 @@
 
 These standards govern the `TcForge` library and any projects built on it. They ensure consistency across all function blocks, from device-level actuators to the state machine.
 
-> **Navigation:** [← README](../README.md) · [Command Source Control →](2-Command-Source-Control.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md) · [Persistent Variables →](6-Persistent-Variables.md) · [Architecture →](7-Architecture.md) · [I/O Binding →](8-IO-Binding.md) · [Alarms →](9-Alarms.md)
+> **Navigation:** [← README / TOC](../README.md) · [Architecture →](2-Architecture.md)
 
 ---
 
@@ -97,7 +97,7 @@ Use descriptive suffixes:
 
 ## 1.4 Method-Centric Pattern
 
-All command logic lives inside **methods**. The FB body handles only cyclic monitoring. See [§2 Command Source Control](2-Command-Source-Control.md) for the full command pattern.
+All command logic lives inside **methods**. The FB body handles only cyclic monitoring. See [§3 Command Source Control](3-Command-Source-Control.md) for the full command pattern.
 
 ### 1.4.1 Method Responsibilities
 
@@ -177,7 +177,7 @@ These two concepts are often confused but have distinct roles:
 - Status: `ST_Permissive_Status` (bOK, nPermissives, nBypassMask, aFaceplates).
 - Per-bit HMI data: `ST_Permissive_Faceplate` (name, stsOK, stsMapped, stsBypassed, cfgBypassable).
 - Bypass control via `SetBypass(bitIndex, bEnable)` — only bits marked in `cfg.nBypassable` can be bypassed.
-- Permissive instances live on the FB that owns the condition. See [§5 Sequencing](5-Sequencing.md#54-permissives) for the state-machine wiring pattern.
+- Permissive instances live on the FB that owns the condition. See [§7 Sequencing](7-Sequencing.md#75-permissives) for the state-machine wiring pattern.
 
 ### 1.5.2 Using FB_Interlock
 
@@ -234,15 +234,15 @@ END_VAR
 ## 1.8 Status and Faults
 
 - Group public statuses in a `_Sts` struct with `header : ST_DeviceHeader_Sts` as the first field; device-specific fields follow.
-- Fault codes use an enum (`E_*_Fault`) with specific reasons. Number codes per the range convention in [§7.3.3](7-Architecture.md#733-fault-code-range-convention).
-- Raise faults via the inherited `_Raise(code, source, reason)` helper (see [§7.4](7-Architecture.md#74-fault-book-keeping)). Faults latch until explicitly cleared via `Reset` (which calls `_ClearFault()`).
+- Fault codes use an enum (`E_*_Fault`) with specific reasons. Number codes per the range convention in [§2.3.3](2-Architecture.md#233-fault-code-range-convention).
+- Raise faults via the inherited `_Raise(code, source, reason)` helper (see [§2.4](2-Architecture.md#24-fault-book-keeping)). Faults latch until explicitly cleared via `Reset` (which calls `_ClearFault()`).
 - `Reset` is always accepted — it does **not** call `F_ValidateRequester`. `F_ValidateRequester(eRequester, bSourceLocked, bFaulted)` takes exactly three inputs; there is no "allow when faulted" or "skip source check" flag.
 
 ---
 
 ## 1.9 IO Mapping
 
-- Each device holds its I/O as an internal `VAR io : ST_<Dev>_IO` — **never** `VAR_IN_OUT`. Hardware symbols appear only inside `_IO`, linked via `TcLinkTo` on the FB instance. See [§8 I/O Binding](8-IO-Binding.md) for the full contract.
+- Each device holds its I/O as an internal `VAR io : ST_<Dev>_IO` — **never** `VAR_IN_OUT`. Hardware symbols appear only inside `_IO`, linked via `TcLinkTo` on the FB instance. See [§5 I/O Binding](5-IO-Binding.md) for the full contract.
 - FB logic only drives `out*` fields; it never writes `in*` fields.
 
 ---

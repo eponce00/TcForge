@@ -1,12 +1,12 @@
-# 2 Command Source Control
+# 3 Command Source Control
 
 All commands in this library are issued through **RPC methods** on function blocks — there are no `pcmd` or `ocmd` input pins. Each method validates the request, checks permissions, and executes internally. The FB body handles only cyclic evaluation.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md) · [Architecture →](7-Architecture.md) · [I/O Binding →](8-IO-Binding.md)
+> **Navigation:** [← Architecture](2-Architecture.md) · [README / TOC](../README.md) · [RPC Method Response →](4-RPC-Method-Response.md)
 
 ---
 
-## 2.1 E_Requester
+## 3.1 E_Requester
 
 Two control sources exist in the library:
 
@@ -19,7 +19,7 @@ Two control sources exist in the library:
 
 ---
 
-## 2.2 Source Locking
+## 3.2 Source Locking
 
 Each FB tracks whether operator requests are allowed via an internal `bSourceLockedToProg : BOOL` flag, controlled by the `LockSource` method:
 
@@ -30,7 +30,7 @@ fbActuator.LockSource(bLock := FALSE);  // Unlock for OPERATOR
 
 When locked, any method call with `eRequester := E_Requester.OPERATOR` is rejected with `REJECTED_SOURCE_NOT_ALLOWED`.
 
-### 2.2.1 Decision Matrix
+### 3.2.1 Decision Matrix
 
 | Source Locked? | Requester | Faulted? | Result |
 |----------------|-----------|----------|--------|
@@ -43,7 +43,7 @@ When locked, any method call with `eRequester := E_Requester.OPERATOR` is reject
 
 ---
 
-## 2.3 F_ValidateRequester
+## 3.3 F_ValidateRequester
 
 All non-safety methods use `F_ValidateRequester` as the first validation step. Its signature is deliberately minimal — three inputs, no flags:
 
@@ -74,7 +74,7 @@ Safety commands (`Reset`, `Abort`, `Stop`) do **not** call `F_ValidateRequester`
 
 ---
 
-## 2.4 Method Validation Chain
+## 3.4 Method Validation Chain
 
 When a non-safety method is called, validation proceeds in this order:
 
@@ -84,7 +84,7 @@ When a non-safety method is called, validation proceeds in this order:
 4. **Permissive check** — permissives not met → `REJECTED_PERMISSIVE_NOT_MET`
 5. **Execute** — perform command logic, call `_AcceptCommand(eRequester)` for book-keeping → `ACCEPTED`
 
-### 2.4.1 Method Pattern
+### 3.4.1 Method Pattern
 
 ```iecst
 {attribute 'TcRpcEnable' := '1'}
@@ -121,7 +121,7 @@ _AcceptCommand(eRequester := eRequester);
 Advance := E_RpcMethodResponse.ACCEPTED;
 ```
 
-### 2.4.2 Default Requester
+### 3.4.2 Default Requester
 
 `eRequester` defaults to `E_Requester.PROG`, so PLC sequence code can call methods without specifying it:
 
@@ -132,7 +132,7 @@ response := fbActuator.Advance(E_Requester.OPERATOR);   // OPERATOR (from HMI/OP
 
 ---
 
-## 2.5 FB_TwoPosActuator Methods
+## 3.5 FB_TwoPosActuator Methods
 
 | Method | Validated | Description |
 |--------|-----------|-------------|
@@ -144,7 +144,7 @@ response := fbActuator.Advance(E_Requester.OPERATOR);   // OPERATOR (from HMI/OP
 
 ---
 
-## 2.6 FB_StateMachine Methods
+## 3.6 FB_StateMachine Methods
 
 | Method | Validated | Description |
 |--------|-----------|-------------|
@@ -162,7 +162,7 @@ response := fbActuator.Advance(E_Requester.OPERATOR);   // OPERATOR (from HMI/OP
 
 ---
 
-## 2.7 Migration from pcmd/ocmd Pattern
+## 3.7 Migration from pcmd/ocmd Pattern
 
 | Old Pattern | New Pattern |
 |-------------|-------------|
@@ -174,7 +174,7 @@ response := fbActuator.Advance(E_Requester.OPERATOR);   // OPERATOR (from HMI/OP
 
 ---
 
-## 2.8 Design Decisions
+## 3.8 Design Decisions
 
 - **No ADVANCED source** — two sources (`PROG` / `OPERATOR`) are sufficient. The enum can be extended.
 - **No manual override distinction** — the operator either has authority or doesn't.

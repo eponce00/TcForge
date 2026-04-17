@@ -1,12 +1,12 @@
-# 4 HMI Integration
+# 9 HMI Integration
 
 This document describes the OPC UA / HMI integration strategy for function blocks. The PLC exposes `cfg`, `sts`, and RPC methods directly — no parallel HMI structures.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [RPC Method Response](3-RPC-Method-Response.md) · [Sequencing →](5-Sequencing.md) · [Architecture](7-Architecture.md) · [I/O Binding](8-IO-Binding.md)
+> **Navigation:** [← Alarms](8-Alarms.md) · [README / TOC](../README.md)
 
 ---
 
-## 4.1 Design Philosophy
+## 9.1 Design Philosophy
 
 | Principle | Description |
 |-----------|-------------|
@@ -15,7 +15,7 @@ This document describes the OPC UA / HMI integration strategy for function block
 | Read-only data plane | Structures use read-only OPC access (`Access := '1'`) |
 | Commands via RPC | Writes use OPC UA method calls, not writable tags |
 
-### 4.1.1 Benefits
+### 9.1.1 Benefits
 
 - **Less duplication** — no second copy of status for the HMI.
 - **Single source of truth** — `cfg` and `sts` are authoritative.
@@ -24,9 +24,9 @@ This document describes the OPC UA / HMI integration strategy for function block
 
 ---
 
-## 4.2 OPC UA Pragma Reference
+## 9.2 OPC UA Pragma Reference
 
-### 4.2.1 Pragma Summary
+### 9.2.1 Pragma Summary
 
 | Pragma | Purpose | Notes |
 |--------|---------|--------|
@@ -37,7 +37,7 @@ This document describes the OPC UA / HMI integration strategy for function block
 | `{attribute 'TcRpcEnable' := '1'}` | Enable RPC method call | Required on callable methods |
 | `{attribute 'TcEncoding' := 'UTF-8'}` | String encoding | For `STRING` types |
 
-### 4.2.2 Function Block Declaration Pattern
+### 9.2.2 Function Block Declaration Pattern
 
 ```iecst
 {attribute 'OPC.UA.DA' := '1'}
@@ -74,9 +74,9 @@ Design rules:
 
 ---
 
-## 4.3 Structure Patterns
+## 9.3 Structure Patterns
 
-### 4.3.1 Config and Status Structures
+### 9.3.1 Config and Status Structures
 
 Mark at the **type** level with `StructuredType`:
 
@@ -95,7 +95,7 @@ END_STRUCT
 END_TYPE
 ```
 
-### 4.3.2 Properties for Derived Values
+### 9.3.2 Properties for Derived Values
 
 Use properties with OPC attributes when values are computed:
 
@@ -109,7 +109,7 @@ PROPERTY bIsFaulted : BOOL
 
 ---
 
-## 4.4 RPC Method Pattern
+## 9.4 RPC Method Pattern
 
 ```iecst
 {attribute 'TcRpcEnable' := '1'}
@@ -126,11 +126,11 @@ Requirements:
 2. Method has RPC enabled: `{attribute 'TcRpcEnable' := '1'}`
 3. Method is `PUBLIC`
 
-See [§3 RPC Method Response](3-RPC-Method-Response.md) for return codes.
+See [§4 RPC Method Response](4-RPC-Method-Response.md) for return codes.
 
 ---
 
-## 4.5 New Function Block Checklist
+## 9.5 New Function Block Checklist
 
 When adding a new FB with HMI/OPC support:
 
@@ -145,7 +145,7 @@ When adding a new FB with HMI/OPC support:
 
 ---
 
-## 4.6 What to Avoid
+## 9.6 What to Avoid
 
 - **No `ST_*_HMI` structures** — use `cfg` / `sts` directly.
 - **No `_UpdateHMI()` methods** — derive values in the main body.
@@ -154,7 +154,7 @@ When adding a new FB with HMI/OPC support:
 
 ---
 
-## 4.7 Sequencing HMI Pattern
+## 9.7 Sequencing HMI Pattern
 
 For the sequencing module, the HMI reads the active step directly from the state machine:
 

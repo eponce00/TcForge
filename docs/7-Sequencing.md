@@ -1,12 +1,12 @@
-# 5 Sequencing
+# 7 Sequencing
 
-The sequencing module provides `FB_StateMachine` and `FB_Step` — the two blocks you need to drive any multi-step automatic process. This document covers the state model, how sequences are structured, how to wire permissives, and how steps participate in the unified fault model from [§7 Architecture](7-Architecture.md).
+The sequencing module provides `FB_StateMachine` and `FB_Step` — the two blocks you need to drive any multi-step automatic process. This document covers the state model, how sequences are structured, how to wire permissives, and how steps participate in the unified fault model from [§2 Architecture](2-Architecture.md).
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [RPC Method Response](3-RPC-Method-Response.md) · [HMI Integration](4-HMI-Integration.md) · [Persistent Variables →](6-Persistent-Variables.md) · [Architecture](7-Architecture.md) · [I/O Binding](8-IO-Binding.md)
+> **Navigation:** [← Persistent Variables](6-Persistent-Variables.md) · [README / TOC](../README.md) · [Alarms →](8-Alarms.md)
 
 ---
 
-## 5.1 State Model (E_SM_State)
+## 7.1 State Model (E_SM_State)
 
 The machine is always in one of nine states:
 
@@ -25,7 +25,7 @@ The machine is always in one of nine states:
 **Waiting** states: no step sequence is running; the machine is quiescent.  
 **Active** states: a step sequence is driving outputs; `FB_Step` blocks execute.
 
-### 5.1.1 Transition Graph
+### 7.1.1 Transition Graph
 
 ```
 STOPPED  --Home-->    HOMING     --done-->  READY
@@ -39,7 +39,7 @@ ANY*     --Abort-->   ABORTING   --done-->  STOPPED (Status.Faulted = TRUE)
 
 `ANY*` = any state except `STOPPED` and `ABORTING`.
 
-### 5.1.2 Distinguishing READY sub-states
+### 7.1.2 Distinguishing READY sub-states
 
 `READY` is entered from both `HOMING` (first home) and `RUNNING` (cycle complete). Use `Status.LastState` when you need to tell them apart:
 
@@ -51,15 +51,15 @@ END_IF;
 
 `AutoCycleRequest` and the auto-run logic already use this internally to only auto-restart after a completed cycle, not after homing.
 
-### 5.1.3 Fault indication
+### 7.1.3 Fault indication
 
 `Status.Faulted` is `TRUE` whenever the current step number is odd (`CurrentStep MOD 2 <> 0`). An abort lands in `STOPPED` with `Status.LastState = E_SM_State.ABORTING`, giving the HMI enough context to show "stopped after abort" without needing a separate state.
 
 ---
 
-## 5.2 FB_StateMachine
+## 7.2 FB_StateMachine
 
-### 5.2.1 Instantiation
+### 7.2.1 Instantiation
 
 ```iecst
 fbStateMachine : FB_StateMachine;
@@ -77,7 +77,7 @@ fbStateMachine(
 |-------|---------|
 | `cfgAutoRun` | Automatically re-starts a new cycle when `READY` after a completed run and start permissives are met. |
 
-### 5.2.2 Key outputs
+### 7.2.2 Key outputs
 
 | Output | Type | Description |
 |--------|------|-------------|
@@ -87,7 +87,7 @@ fbStateMachine(
 | `StepPermCfg` | `ST_Permissive_Config` | Active step's permissive config (mirrored from FB_Step) |
 | `StepPermStatus` | `ST_Permissive_Status` | Active step's permissive status (mirrored from FB_Step) |
 
-### 5.2.3 OEE conditions — `ReportBlocked` / `ReportStarved`
+### 7.2.3 OEE conditions — `ReportBlocked` / `ReportStarved`
 
 OEE condition codes (`BlockedCondition`, `StarvedCondition`) are written by external reporter methods, not by mutating inputs. The caller — typically the same program that ran the sequence programs — pushes the active reason code each scan:
 
@@ -108,9 +108,9 @@ END_IF;
 
 The state machine copies the latest reported value into `Status.BlockedCondition` / `Status.StarvedCondition` each cycle. A non-zero value means the condition is active; zero means clear. Use any code space you like as long as zero is reserved for "no condition".
 
-### 5.2.4 Faults — `E_SM_Fault`
+### 7.2.4 Faults — `E_SM_Fault`
 
-`FB_StateMachine` raises its own faults through `_Raise(code, source, reason)` inherited from `FB_DeviceBase` (see [§7.4 Fault Book-Keeping](7-Architecture.md#74-fault-book-keeping)). Fault codes follow the range convention from [§7.3.3](7-Architecture.md#733-fault-code-range-convention):
+`FB_StateMachine` raises its own faults through `_Raise(code, source, reason)` inherited from `FB_DeviceBase` (see [§2.4 Fault Book-Keeping](2-Architecture.md#24-fault-book-keeping)). Fault codes follow the range convention from [§2.3.3](2-Architecture.md#233-fault-code-range-convention):
 
 | Code | Name                       | Range        | Trigger                                                                                   |
 |------|----------------------------|--------------|-------------------------------------------------------------------------------------------|
@@ -125,11 +125,11 @@ All five raise with **source** and (when useful) **reason** so the HMI shows whe
 - `StepTimeout` / `StepUserFault` / `OddStepReached`: raised by `FB_StateMachine._RaiseStepFault(stepNum, stepName, code, reason)`. `source` is auto-built as `'STEP_<nnnn>'`; `reason` defaults to `'Step <N> [<name>]: <resolved fault string>'` when the caller doesn't supply one. This guarantees the HMI never sees an empty reason.
 - `RunningInterlockTripped` / `SubmoduleFaulted`: raised by the state machine body with a constant `source` tag and a fixed `reason` sentence.
 
-The fault code, text, source, reason, timestamp and ring buffer all surface through `Status.header` — see [§7 Architecture](7-Architecture.md) for the shared header contract.
+The fault code, text, source, reason, timestamp and ring buffer all surface through `Status.header` — see [§2 Architecture](2-Architecture.md) for the shared header contract.
 
 ---
 
-## 5.3 Writing a Sequence
+## 7.3 Writing a Sequence
 
 Each active state has its own sequence program. Sequence programs receive the state machine as a `VAR_IN_OUT` parameter so FB_Step can call internal methods without exposing them publicly.
 
@@ -150,7 +150,7 @@ Call it from MAIN:
 _3000_PRG_Running(sm := fbStateMachine);
 ```
 
-### 5.3.1 Step Lifecycle
+### 7.3.1 Step Lifecycle
 
 `FB_Step` provides three one-scan phases:
 
@@ -162,7 +162,7 @@ _3000_PRG_Running(sm := fbStateMachine);
 
 After `Exiting`, `FB_Step` hands `nNextStep` to the state machine and the sequence advances.
 
-### 5.3.2 Minimal step example
+### 7.3.2 Minimal step example
 
 ```iecst
 step3000(
@@ -176,7 +176,7 @@ IF step3000.Entry  THEN outDriveEnable := TRUE; END_IF;
 IF step3000.Execute THEN step3000.MapPerm(0, 'Drives ready', inpDriveReady); END_IF;
 ```
 
-### 5.3.3 Dynamic branching
+### 7.3.3 Dynamic branching
 
 Compute `nNextStep` conditionally in the FB call — it is re-evaluated every scan:
 
@@ -191,7 +191,7 @@ step3004(
 
 Branches based on timers, sensor states, or counters work identically — just compute the value inline.
 
-### 5.3.4 Completing a sequence
+### 7.3.4 Completing a sequence
 
 Set `nNextStep := 0` on the last step. The state machine detects step `0` at the end of an active sequence and transitions to the next waiting state automatically:
 
@@ -204,7 +204,7 @@ step3008(
 );
 ```
 
-### 5.3.5 Fault steps (odd step numbers)
+### 7.3.5 Fault steps (odd step numbers)
 
 Fault steps use the odd-step convention. The step directly above the normal step serves as its fault landing. `Status.Faulted` derives from `CurrentStep MOD 2 <> 0`:
 
@@ -218,11 +218,11 @@ Fault steps use the odd-step convention. The step directly above the normal step
 
 ---
 
-## 5.4 Raising Faults From a Step
+## 7.4 Raising Faults From a Step
 
-Two kinds of fault enter the state machine from a step body, both routed through the unified fault model (§7.4):
+Two kinds of fault enter the state machine from a step body, both routed through the unified fault model (§2.4):
 
-### 5.4.1 Automatic `StepTimeout`
+### 7.4.1 Automatic `StepTimeout`
 
 Fires when `Status.Step.TimerSeconds > nTimeout` and `nTimeout > 0`. The step:
 
@@ -237,7 +237,7 @@ On the HMI, the header ends up with:
 - `faultSource   = 'STEP_3004'`
 - `faultReason   = 'Step 3004 [Inspect part]: Step Timeout'` (auto-built when `reason` is empty)
 
-### 5.4.2 Author-supplied `step.RaiseFault(code, reason)`
+### 7.4.2 Author-supplied `step.RaiseFault(code, reason)`
 
 When a step detects a condition that needs a specific fault code or a human-readable reason the library can't infer, call `RaiseFault` directly on the step instance:
 
@@ -271,9 +271,9 @@ Guidelines:
 - **Use a specific code when you have one.** If the condition is a wiring fault, raise `MyDev_Fault.BadWiring`, not `StepUserFault`. This keeps fault codes meaningful across runs and machines.
 - **Use `StepUserFault` (`E_SM_Fault.StepUserFault`, code `3`) as the catch-all** when the sequence needs a fault but no device-specific enum applies.
 - **Always pass a reason** when the code's resolved string isn't self-explanatory. The operator never sees the enum name; they see `faultString` and `faultReason`.
-- **Multiple `RaiseFault` calls in one scan are safe.** `_Raise` is idempotent on `code` ([§7.3.2](7-Architecture.md#732-idempotent-raising)); only the first call pushes to the ring, later calls with the same code no-op.
+- **Multiple `RaiseFault` calls in one scan are safe.** `_Raise` is idempotent on `code` ([§2.3.2](2-Architecture.md#232-idempotent-raising)); only the first call pushes to the ring, later calls with the same code no-op.
 
-### 5.4.3 Falling back to `OddStepReached`
+### 7.4.3 Falling back to `OddStepReached`
 
 If the sequence lands on an odd step *without* anyone raising a more specific fault (for example, a branch that explicitly targeted `3005`), `FB_StateMachine` auto-raises `OddStepReached` with `source = 'STEP_<odd>'` and a default reason. This keeps `Status.Faulted = TRUE` consistent with the odd-step convention even when no timeout or user fault triggered.
 
@@ -281,9 +281,9 @@ Because it only fires when no other fault is already active, a proper `StepTimeo
 
 ---
 
-## 5.5 Permissives
+## 7.5 Permissives
 
-### 5.5.1 State-level permissives (on FB_StateMachine)
+### 7.5.1 State-level permissives (on FB_StateMachine)
 
 Four permissive groups gate the main commands. Wire them in MAIN or in a dedicated permissive program:
 
@@ -302,7 +302,7 @@ fbStateMachine.internalStartPerm.MapInput(bitIndex := 1, inputValue := bRobotRea
 fbStateMachine.internalAutoPerm.MapInput(bitIndex := 0, inputValue := bEstopOK);
 ```
 
-### 5.5.2 Step-level permissives (on FB_Step)
+### 7.5.2 Step-level permissives (on FB_Step)
 
 Map per-step conditions inside the `Execute` phase each scan. The active step automatically republishes its permissive data to `FB_StateMachine.StepPermCfg` and `FB_StateMachine.StepPermStatus` for HMI / OPC:
 
@@ -317,7 +317,7 @@ The step will not exit (will not enter `Exiting`) until all mapped permissives a
 
 ---
 
-## 5.6 Step Number Convention
+## 7.6 Step Number Convention
 
 | Range | State |
 |-------|-------|

@@ -42,14 +42,14 @@ Open `TwinCAT/TcForge.sln` in TwinCAT XAE, build it, and browse `TcForgeExample`
 | #   | Document                                                   | Covers                                                          |
 | --- | ---------------------------------------------------------- | --------------------------------------------------------------- |
 | 1   | [Programming Standards](docs/1-Programming-Standards.md)   | Naming, organization, FB structure patterns.                    |
-| 2   | [Command Source Control](docs/2-Command-Source-Control.md) | Requester validation and source locking.                        |
-| 3   | [RPC Method Response](docs/3-RPC-Method-Response.md)       | Response codes and method inventory.                            |
-| 4   | [HMI Integration](docs/4-HMI-Integration.md)               | OPC UA pragmas, cfg/sts exposure, RPC over OPC UA.              |
-| 5   | [Sequencing](docs/5-Sequencing.md)                         | `FB_StateMachine`, `FB_Step`, authoring sequences, permissives. |
+| 2   | [Architecture](docs/2-Architecture.md)                     | `FB_DeviceBase`, unified fault model, device header pattern.    |
+| 3   | [Command Source Control](docs/3-Command-Source-Control.md) | Requester validation and source locking.                        |
+| 4   | [RPC Method Response](docs/4-RPC-Method-Response.md)       | Response codes and method inventory.                            |
+| 5   | [I/O Binding](docs/5-IO-Binding.md)                        | `ST_*_IO` pattern, `@AT %I*/%Q*`, scaling to plant-sized I/O.   |
 | 6   | [Persistent Variables](docs/6-Persistent-Variables.md)     | PERSISTENT vs RETAIN and UPS configuration.                     |
-| 7   | [Architecture](docs/7-Architecture.md)                     | `FB_DeviceBase`, unified fault model, device header pattern.    |
-| 8   | [I/O Binding](docs/8-IO-Binding.md)                        | `ST_*_IO` pattern, `@AT %I*/%Q*`, scaling to plant-sized I/O.   |
-| 9   | [Alarms](docs/9-Alarms.md)                                 | `FB_AlarmBase`, severity model, ack semantics, alarm catalog.   |
+| 7   | [Sequencing](docs/7-Sequencing.md)                         | `FB_StateMachine`, `FB_Step`, authoring sequences, permissives. |
+| 8   | [Alarms](docs/8-Alarms.md)                                 | `FB_AlarmBase`, severity model, ack semantics, alarm catalog.   |
+| 9   | [HMI Integration](docs/9-HMI-Integration.md)               | OPC UA pragmas, cfg/sts exposure, RPC over OPC UA.              |
 
 
 ## License
