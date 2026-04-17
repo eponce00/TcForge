@@ -9,6 +9,7 @@ VAR
     fbInterlock_Test         : FB_Interlock_Test;
     fbAlarmSimple_Test       : FB_AlarmSimple_Test;
     fbAlarmLimit_Test        : FB_AlarmLimit_Test;
+    fbDeviceBase_Test        : FB_DeviceBase_Test;
 END_VAR
 ]]>
     </Declaration>

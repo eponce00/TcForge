@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DeviceBase_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000600}" SpecialFunc="None">
+    <Declaration><![CDATA[// Tests for FB_DeviceBase — the shared base for every TcForge device FB.
+// Driven through FB_DeviceBase_Probe (a test-only concrete child) because
+// the base is ABSTRACT and the fault book-keeping API is PROTECTED.
+//
+// Coverage focuses on the contract every device inherits:
+//   - diagnostics (IsFaulted / GetFaultCode / GetFaultString with virtual
+//     dispatch through the child's ResolveFaultString)
+//   - _Raise semantics: zero-code no-op, idempotent on code within an
+//     episode, different code replaces the active fault
+//   - _ClearFault wipes the active fault but preserves lastFault* for
+//     the header so HMIs can still render what happened
+//   - Reset() is always accepted from any requester — safety invariant
+//   - _UpdateHeader() mirrors the active/last fault, source-lock, busy,
+//     and ready state into ST_DeviceHeader_Sts
+//   - LockSource() makes stsSourceLocked and forces stsReady FALSE
+FUNCTION_BLOCK FB_DeviceBase_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[FreshInstanceNotFaulted();
+RaiseZeroCodeIsNoOp();
+RaiseSetsActiveFaultAndResolvesString();
+RaiseSameCodeIsIdempotent();
+DifferentCodeReplacesActiveFault();
+ClearFaultWipesActiveButKeepsLastFault();
+ResetAlwaysAcceptedEvenFromOperatorWhileLocked();
+HeaderMirrorsActiveFault();
+HeaderReadyGoesFalseOnSourceLock();
+HeaderReadyGoesFalseOnBusy();]]></ST>
+    </Implementation>
+    <Method Name="FreshInstanceNotFaulted" Id="{b1c2d3e4-f5a6-7890-abcd-000000000601}">
+      <Declaration><![CDATA[METHOD FreshInstanceNotFaulted
+VAR
+    fb : FB_DeviceBase_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FreshInstanceNotFaulted');
+
+AssertFalse(
+    Condition := fb.IsFaulted(),
+    Message   := 'Fresh device must not be faulted');
+AssertEquals_DINT(
+    Expected := 0,
+    Actual   := fb.GetFaultCode(),
+    Message  := 'Fresh device fault code should be 0');
+AssertEquals_STRING(
+    Expected := '',
+    Actual   := fb.GetFaultString(),
+    Message  := 'Fresh device fault string should be empty');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RaiseZeroCodeIsNoOp" Id="{b1c2d3e4-f5a6-7890-abcd-000000000602}">
+      <Declaration><![CDATA[METHOD RaiseZeroCodeIsNoOp
+VAR
+    fb     : FB_DeviceBase_Probe;
+    result : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RaiseZeroCodeIsNoOp');
+
+// code = 0 is the "no fault" sentinel; calling _Raise(0, ...) must never
+// register a fault nor push a ring entry.
+result := fb.ProbeRaise(code := 0, source := 'test', reason := 'should not register');
+
+AssertFalse(
+    Condition := result,
+    Message   := '_Raise(0) must return FALSE (nothing was pushed)');
+AssertFalse(
+    Condition := fb.IsFaulted(),
+    Message   := '_Raise(0) must not put the device into a faulted state');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RaiseSetsActiveFaultAndResolvesString" Id="{b1c2d3e4-f5a6-7890-abcd-000000000603}">
+      <Declaration><![CDATA[METHOD RaiseSetsActiveFaultAndResolvesString
+VAR
+    fb     : FB_DeviceBase_Probe;
+    result : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RaiseSetsActiveFaultAndResolvesString');
+
+result := fb.ProbeRaise(code := 42, source := 'step5', reason := 'motion timeout');
+
+AssertTrue(
+    Condition := result,
+    Message   := '_Raise of a new non-zero code must return TRUE (ring entry pushed)');
+AssertTrue(
+    Condition := fb.IsFaulted(),
+    Message   := 'IsFaulted should be TRUE after a raise');
+AssertEquals_DINT(
+    Expected := 42,
+    Actual   := fb.GetFaultCode(),
+    Message  := 'GetFaultCode should report the raised code');
+AssertEquals_STRING(
+    Expected := 'Motion timeout',
+    Actual   := fb.GetFaultString(),
+    Message  := 'GetFaultString should resolve via the child ResolveFaultString override');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RaiseSameCodeIsIdempotent" Id="{b1c2d3e4-f5a6-7890-abcd-000000000604}">
+      <Declaration><![CDATA[METHOD RaiseSameCodeIsIdempotent
+VAR
+    fb         : FB_DeviceBase_Probe;
+    firstCall  : BOOL;
+    secondCall : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RaiseSameCodeIsIdempotent');
+
+// Cyclic callers often raise the same fault every scan until cleared.
+// A second raise of the same non-zero code within one episode must be a
+// no-op so the ring buffer doesn't flood.
+firstCall  := fb.ProbeRaise(code := 42, source := 'step5', reason := 'first call');
+secondCall := fb.ProbeRaise(code := 42, source := 'step5', reason := 'second call — ignored');
+
+AssertTrue(
+    Condition := firstCall,
+    Message   := 'First _Raise of a code must return TRUE');
+AssertFalse(
+    Condition := secondCall,
+    Message   := 'Repeat _Raise of the same code within an episode must return FALSE (no new ring entry)');
+AssertEquals_DINT(
+    Expected := 42,
+    Actual   := fb.GetFaultCode(),
+    Message  := 'Active fault must still be the first code after a repeated raise');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DifferentCodeReplacesActiveFault" Id="{b1c2d3e4-f5a6-7890-abcd-000000000605}">
+      <Declaration><![CDATA[METHOD DifferentCodeReplacesActiveFault
+VAR
+    fb      : FB_DeviceBase_Probe;
+    first   : BOOL;
+    second  : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('DifferentCodeReplacesActiveFault');
+
+// A progression like 'Timeout' -> 'LimitTripped' should preserve both in
+// the ring; the second raise returns TRUE and becomes the active fault.
+first  := fb.ProbeRaise(code := 42, source := 'step5', reason := 'motion timeout');
+second := fb.ProbeRaise(code := 99, source := 'step5', reason := 'limit tripped');
+
+AssertTrue(
+    Condition := first AND second,
+    Message   := 'Both raises of different codes must return TRUE');
+AssertEquals_DINT(
+    Expected := 99,
+    Actual   := fb.GetFaultCode(),
+    Message  := 'Active fault must be the most recent code');
+AssertEquals_STRING(
+    Expected := 'Limit tripped',
+    Actual   := fb.GetFaultString(),
+    Message  := 'GetFaultString must reflect the new active code');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ClearFaultWipesActiveButKeepsLastFault" Id="{b1c2d3e4-f5a6-7890-abcd-000000000606}">
+      <Declaration><![CDATA[METHOD ClearFaultWipesActiveButKeepsLastFault
+VAR
+    fb : FB_DeviceBase_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ClearFaultWipesActiveButKeepsLastFault');
+
+fb.ProbeRaise(code := 42, source := 'step5', reason := 'motion timeout');
+fb.ProbeClearFault();
+
+AssertFalse(
+    Condition := fb.IsFaulted(),
+    Message   := '_ClearFault must drop IsFaulted to FALSE');
+AssertEquals_DINT(
+    Expected := 0,
+    Actual   := fb.GetFaultCode(),
+    Message  := 'Active fault code must be 0 after _ClearFault');
+
+// Header must still preserve last-fault fields so the HMI can render
+// "last fault: motion timeout".
+fb.Refresh(stateString := 'IDLE', stsBusy := FALSE);
+
+AssertEquals_DINT(
+    Expected := 42,
+    Actual   := fb.header.lastFaultCode,
+    Message  := 'header.lastFaultCode must preserve history after _ClearFault');
+AssertEquals_STRING(
+    Expected := 'Motion timeout',
+    Actual   := fb.header.lastFaultString,
+    Message  := 'header.lastFaultString must preserve the resolved text after _ClearFault');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetAlwaysAcceptedEvenFromOperatorWhileLocked" Id="{b1c2d3e4-f5a6-7890-abcd-000000000607}">
+      <Declaration><![CDATA[METHOD ResetAlwaysAcceptedEvenFromOperatorWhileLocked
+VAR
+    fb       : FB_DeviceBase_Probe;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ResetAlwaysAcceptedEvenFromOperatorWhileLocked');
+
+// Safety invariant: Reset() is always accepted, regardless of source lock
+// or active fault. No one should be locked out of clearing a fault.
+fb.LockSource(bLock := TRUE);
+fb.ProbeRaise(code := 42, source := 'step5', reason := 'motion timeout');
+
+response := fb.Reset(eRequester := TcForge.E_Requester.OPERATOR);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := response,
+    Message  := 'Reset() must be accepted from OPERATOR even while source-locked');
+AssertFalse(
+    Condition := fb.IsFaulted(),
+    Message   := 'Reset() must clear the active fault');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HeaderMirrorsActiveFault" Id="{b1c2d3e4-f5a6-7890-abcd-000000000608}">
+      <Declaration><![CDATA[METHOD HeaderMirrorsActiveFault
+VAR
+    fb : FB_DeviceBase_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HeaderMirrorsActiveFault');
+
+fb.ProbeRaise(code := 99, source := 'limit_sw', reason := 'upper limit hit');
+fb.Refresh(stateString := 'FAULTED', stsBusy := FALSE);
+
+AssertTrue(
+    Condition := fb.header.stsFaulted,
+    Message   := 'header.stsFaulted must be TRUE while a fault is active');
+AssertFalse(
+    Condition := fb.header.stsReady,
+    Message   := 'header.stsReady must be FALSE while faulted');
+AssertEquals_DINT(
+    Expected := 99,
+    Actual   := fb.header.faultCode,
+    Message  := 'header.faultCode must mirror the active fault');
+AssertEquals_STRING(
+    Expected := 'Limit tripped',
+    Actual   := fb.header.faultString,
+    Message  := 'header.faultString must resolve via the child override');
+AssertEquals_STRING(
+    Expected := 'limit_sw',
+    Actual   := fb.header.faultSource,
+    Message  := 'header.faultSource must carry the raise() source');
+AssertEquals_STRING(
+    Expected := 'upper limit hit',
+    Actual   := fb.header.faultReason,
+    Message  := 'header.faultReason must carry the raise() reason');
+AssertEquals_STRING(
+    Expected := 'FAULTED',
+    Actual   := fb.header.stateString,
+    Message  := 'header.stateString must mirror the state string passed to _UpdateHeader');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HeaderReadyGoesFalseOnSourceLock" Id="{b1c2d3e4-f5a6-7890-abcd-000000000609}">
+      <Declaration><![CDATA[METHOD HeaderReadyGoesFalseOnSourceLock
+VAR
+    fb : FB_DeviceBase_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HeaderReadyGoesFalseOnSourceLock');
+
+fb.Refresh(stateString := 'IDLE', stsBusy := FALSE);
+AssertTrue(
+    Condition := fb.header.stsReady,
+    Message   := 'Precondition: an idle / unlocked / unfaulted device must be ready');
+
+fb.LockSource(bLock := TRUE);
+fb.Refresh(stateString := 'IDLE', stsBusy := FALSE);
+
+AssertTrue(
+    Condition := fb.header.stsSourceLocked,
+    Message   := 'header.stsSourceLocked must mirror LockSource(TRUE)');
+AssertFalse(
+    Condition := fb.header.stsReady,
+    Message   := 'header.stsReady must be FALSE while source is locked');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HeaderReadyGoesFalseOnBusy" Id="{b1c2d3e4-f5a6-7890-abcd-00000000060a}">
+      <Declaration><![CDATA[METHOD HeaderReadyGoesFalseOnBusy
+VAR
+    fb : FB_DeviceBase_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HeaderReadyGoesFalseOnBusy');
+
+fb.Refresh(stateString := 'MOVING', stsBusy := TRUE);
+
+AssertTrue(
+    Condition := fb.header.stsBusy,
+    Message   := 'header.stsBusy must mirror the busy flag passed to _UpdateHeader');
+AssertFalse(
+    Condition := fb.header.stsReady,
+    Message   := 'header.stsReady must be FALSE while busy');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

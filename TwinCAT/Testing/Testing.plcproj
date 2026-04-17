@@ -21,6 +21,9 @@
     <Compile Include="POUs\MAIN.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="POUs\FB_DeviceBase_Probe.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Testing.TcTTO">
       <SubType>Code</SubType>
     </Compile>
@@ -40,6 +43,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Tests\FB_AlarmLimit_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Tests\FB_DeviceBase_Test.TcPOU">
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>
