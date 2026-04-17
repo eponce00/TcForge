@@ -27,6 +27,9 @@
     <Compile Include="Tests\FB_F_ValidateRequester_Test.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Tests\FB_BitMatrix64_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="DUTs" />

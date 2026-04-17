@@ -4,6 +4,7 @@
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
     fbValidateRequester_Test : FB_F_ValidateRequester_Test;
+    fbBitMatrix64_Test       : FB_BitMatrix64_Test;
 END_VAR
 ]]>
     </Declaration>

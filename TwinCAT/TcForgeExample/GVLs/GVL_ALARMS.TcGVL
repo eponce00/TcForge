@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <GVL Name="GVL_ALARMS" Id="{e0000002-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// ============================================================================
+// GVL_ALARMS — Process-condition alarm catalog (composition examples)
+// ============================================================================
+// Alarms are *separate* from device faults: devices raise faults (they're
+// broken), alarms watch signals (the process is out of range). See
+// docs/8-Alarms.md for the full contract and the alarms vs. faults split.
+//
+// Two common compositions are demonstrated here:
+//
+//   1. almTankPressure — FB_AlarmLimit watching a REAL process value. This is
+//      the pattern that replaces the old inline HH / HI / LO / LL logic that
+//      used to live inside FB_AnalogInput; the analog block is now a pure
+//      signal-conditioning pipeline and limit alarms compose on top.
+//
+//   2. almSequenceFaulted — FB_AlarmSimple promoting the state machine's
+//      stsFaulted header bit into the alarm display without writing any logic.
+//
+// Instances live here so anything in the program (MAIN, step PRGs, HMI) can
+// read / Ack() them by a stable qualified name. Config and cyclic invocation
+// live in PRG_Alarms so the cfg-heavy wiring stays next to the logic.
+// ============================================================================
+{attribute 'qualified_only'}
+VAR_GLOBAL
+    // Four-level limit alarm on a process value (simulated in PRG_Alarms
+    // until a real PRESSURE_TRANSDUCER exists on GVL_HW).
+    almTankPressure    : FB_AlarmLimit;
+
+    // Promotes fbStateMachine.Status.header.stsFaulted into the alarm list.
+    almSequenceFaulted : FB_AlarmSimple;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

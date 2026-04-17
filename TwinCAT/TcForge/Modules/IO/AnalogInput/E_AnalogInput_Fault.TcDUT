@@ -4,7 +4,7 @@
     <Declaration><![CDATA[{attribute 'qualified_only'}
 {attribute 'to_string'}
 // Fault codes for FB_AnalogInput. Range convention matches the shared
-// device-fault convention (see docs/7-Architecture.md):
+// device-fault convention (see docs/2-Architecture.md):
 //   0        No fault
 //   10-19    Feedback / hardware / signal
 //   40-49    Configuration

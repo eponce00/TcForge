@@ -9,5 +9,8 @@ FUNCTION F_Now : LTIME
     <Implementation>
       <ST><![CDATA[F_Now := ULINT_TO_LTIME(Tc2_System.F_GetSystemTime() * 100);]]></ST>
     </Implementation>
+    <LineIds Name="F_Now">
+      <LineId Id="2" Count="0" />
+    </LineIds>
   </POU>
 </TcPlcObject>

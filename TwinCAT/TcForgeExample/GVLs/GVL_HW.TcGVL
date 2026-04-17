@@ -8,7 +8,7 @@
 // struct (AT %I* / %Q*) is linked to terminals via {attribute 'TcLinkTo' := ...}
 // on the instance declaration. No IO wiring ever appears inside logic code.
 //
-// See docs/8-IO-Binding.md for the full pattern, TIID/TIIB shortcut reference,
+// See docs/5-IO-Binding.md for the full pattern, TIID/TIIB shortcut reference,
 // and scaling guidance (when to keep it flat vs. group by station).
 //
 // The examples below use placeholder paths; once real hardware is in the I/O

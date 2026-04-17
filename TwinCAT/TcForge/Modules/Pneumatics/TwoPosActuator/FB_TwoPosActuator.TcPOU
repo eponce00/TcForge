@@ -18,7 +18,7 @@ END_VAR
 VAR
     // Allocated I/O struct. The AT %I* / %Q* primitives inside ST_TwoPosActuator_IO
     // are linked at the FB instance declaration using {attribute 'TcLinkTo' := ...}
-    // — see docs/8-IO-Binding.md. The struct is VAR (not VAR_IN_OUT) so the FB
+    // — see docs/5-IO-Binding.md. The struct is VAR (not VAR_IN_OUT) so the FB
     // owns its wiring and callers don't need to pass an external struct.
     {attribute 'OPC.UA.DA' := '0'}
     io : ST_TwoPosActuator_IO;

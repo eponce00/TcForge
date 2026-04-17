@@ -52,6 +52,8 @@ Open `TwinCAT/TcForge.sln` in TwinCAT XAE, build it, and browse `TcForgeExample`
 | 9   | [HMI Integration](docs/9-HMI-Integration.md)               | OPC UA pragmas, cfg/sts exposure, RPC over OPC UA.              |
 
 
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

@@ -4,231 +4,109 @@
     <Declaration><![CDATA[(*
 PERMISSIVE - Operational Enabling Function Block
 ================================================
-Philosophy: 	Allows a change in state when all conditions are met
-Behavior: 		Follows real-time conditions, no latching, can be bypassed for maintenance
-Logic: 			Mapped bits: 1 = good, 0 = bad. Unmapped bits are automatically good (1)
-				sts.bOK = TRUE when ALL active permissive bits are good (or bypassed)
-				Non-latching - immediate response to condition changes
-Mapping:		Use MapInput method to assign boolean signals to specific bits (0..63)
-				Unmapped bits automatically return to good state after timeout
+Philosophy: Allows a change in state only when all conditions are met.
+Behavior:   Follows real-time conditions, no latching, can be bypassed for
+            maintenance.
+Logic:      Mapped bits 1 = good, 0 = bad. Unmapped bits default good (1).
+            sts.bOK = TRUE when every active permissive bit is good (or
+            bypassed). Non-latching: status tracks real-time inputs.
+Mapping:    Call MapInput(bitIndex, value) every cycle for each active
+            permissive. Unmapped bits automatically reset to good after
+            FB_BitMatrix64's MAPPING_TIMEOUT cycles.
+
+The 64-bit condition-matrix machinery is shared with FB_Interlock via
+FB_BitMatrix64 — the difference between the two FBs is latching semantics,
+which lives here (or in FB_Interlock) on top of the shared core.
 *)
 {attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK PUBLIC FB_Permissives
 VAR_INPUT
-	{attribute 'OPC.UA.DA' := '1'}
-	{attribute 'OPC.UA.DA.Access' := '1'}
-	cfg : ST_Permissive_Config;
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg : ST_Permissive_Config;
 END_VAR
 VAR_OUTPUT
-	{attribute 'OPC.UA.DA' := '1'}
-	{attribute 'OPC.UA.DA.Access' := '1'}
-	sts : ST_Permissive_Status;
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_Permissive_Status;
 END_VAR
 VAR
-	{attribute 'OPC.UA.DA' := '0'}
-	_permissiveBits : ULINT := 16#FFFFFFFFFFFFFFFF;	// Working bits (1=good, 0=bad), default all good
-	{attribute 'OPC.UA.DA' := '0'}
-	_activeMask : ULINT := 0;							// Tracks which bits are actively mapped
-	{attribute 'OPC.UA.DA' := '0'}
-	_bypassMask : ULINT := 0;							// Dynamic bypass mask (1=bypassed)
-	{attribute 'OPC.UA.DA' := '0'}
-	_previousBits : ULINT := 16#FFFFFFFFFFFFFFFF;		// Previous cycle bits for transition detection
-	{attribute 'OPC.UA.DA' := '0'}
-	_cycleCounter : UDINT := 0;
-	{attribute 'OPC.UA.DA' := '0'}
-	_lastMappedCycle : ARRAY[0..63] OF UDINT;
-	{attribute 'OPC.UA.DA' := '0'}
-	_sequenceCounter : UDINT := 0;
-	{attribute 'OPC.UA.DA' := '0'}
-	MAPPING_TIMEOUT : UDINT := 10;						// Cycles before considering a bit unmapped
+    {attribute 'OPC.UA.DA' := '0'}
+    _core : FB_BitMatrix64;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[// Increment cycle counter
-_cycleCounter := _cycleCounter + 1;
-IF _cycleCounter = 0 THEN _cycleCounter := 1; END_IF
+      <ST><![CDATA[// Drive the shared bit-matrix machinery (cycle counter, cleanup, transitions).
+_core();
 
-// Cleanup unmapped bits
-CleanupUnmappedBits();
+// Non-latching rollup: unmapped bits default good, bypassed bits forced good.
+sts.nPermissives          := (_core.nLiveBits OR NOT _core.nActiveMask) OR _core.nBypassMask;
+sts.nBypassMask           := _core.nBypassMask;
+sts.nFirstFailureBitIndex := _core.nFirstFailureBitIndex;
+sts.bOK                   := sts.nPermissives = 16#FFFFFFFFFFFFFFFF;
 
-// Detect transitions for first-failure tracking
-DetectTransitions();
-
-// Compute permissive status: unmapped bits default good, then apply bypass
-sts.nPermissives := (_permissiveBits OR NOT _activeMask) OR _bypassMask;
-sts.nBypassMask := _bypassMask;
-
-// Overall OK: all 64 bits good
-sts.bOK := sts.nPermissives = 16#FFFFFFFFFFFFFFFF;
-
-// Update faceplates for HMI
-UpdateFaceplates();
-
-// Store for next cycle transition detection
-_previousBits := _permissiveBits;]]></ST>
+UpdateFaceplates();]]></ST>
     </Implementation>
     <Folder Name="Private" Id="{d08b71e4-603c-4ba4-b11f-19d286c8a91f}" />
     <Folder Name="Public" Id="{d0d72902-ec14-4a62-8f56-22c21b7f9a30}" />
-    <Method Name="CleanupUnmappedBits" Id="{8d1050ba-4e96-46bf-9da9-00edbf872092}" FolderPath="Private\">
-      <Declaration><![CDATA[METHOD PRIVATE CleanupUnmappedBits
-VAR
-	i : UDINT;
-	bitMask : ULINT;
-END_VAR]]></Declaration>
-      <Implementation>
-        <ST><![CDATA[FOR i := 0 TO 63 DO
-	bitMask := SHL(ULINT#1, i);
-	IF (_activeMask AND bitMask) <> 0 THEN
-		IF (_cycleCounter - _lastMappedCycle[i]) > MAPPING_TIMEOUT THEN
-			_activeMask := _activeMask AND NOT bitMask;
-			_permissiveBits := _permissiveBits OR bitMask;	// Reset to good
-		END_IF
-	END_IF
-END_FOR;]]></ST>
-      </Implementation>
-    </Method>
-    <Method Name="DetectTransitions" Id="{04e164b4-2bb4-4c24-9980-bf56277a941d}" FolderPath="Private\">
-      <Declaration><![CDATA[METHOD PRIVATE DetectTransitions
-VAR
-	i : UDINT;
-	bitMask : ULINT;
-END_VAR]]></Declaration>
-      <Implementation>
-        <ST><![CDATA[// New failure sequence: transition from all-good to first failure
-IF _previousBits = 16#FFFFFFFFFFFFFFFF AND _permissiveBits <> 16#FFFFFFFFFFFFFFFF THEN
-	_sequenceCounter := 0;
-	sts.nFirstFailureBitIndex := 999;
-END_IF
-
-// Detect good-to-bad transitions on active bits
-FOR i := 0 TO 63 DO
-	bitMask := SHL(ULINT#1, i);
-	IF (_activeMask AND bitMask) <> 0 THEN
-		// Previous good (1) AND current bad (0) = transition
-		IF ((_previousBits AND bitMask) <> 0) AND ((_permissiveBits AND bitMask) = 0) THEN
-			_sequenceCounter := _sequenceCounter + 1;
-			IF _sequenceCounter = 1 THEN
-				sts.nFirstFailureBitIndex := i;
-			END_IF
-		END_IF
-	END_IF
-END_FOR;]]></ST>
-      </Implementation>
-    </Method>
     <Method Name="MapInput" Id="{1396195e-9e92-48f3-8821-a07e7aa395af}" FolderPath="Public\">
       <Declaration><![CDATA[(*
-Map a boolean input signal to a specific permissive bit (0..63)
-Call every cycle for each active permissive condition
+Map a boolean signal to one permissive bit (0..63). TRUE = good, FALSE = bad.
+Call every cycle for each active permissive condition.
 *)
 METHOD PUBLIC MapInput
 VAR_INPUT
-	bitIndex : UDINT;
-	inputValue : BOOL;
-END_VAR
-VAR
-	bitMask : ULINT;
+    bitIndex   : UDINT;
+    inputValue : BOOL;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IF bitIndex > 63 THEN RETURN; END_IF
-
-bitMask := SHL(ULINT#1, bitIndex);
-_activeMask := _activeMask OR bitMask;
-_lastMappedCycle[bitIndex] := _cycleCounter;
-
-IF inputValue THEN
-	_permissiveBits := _permissiveBits OR bitMask;
-ELSE
-	_permissiveBits := _permissiveBits AND NOT bitMask;
-END_IF;]]></ST>
+        <ST><![CDATA[_core.MapInput(bitIndex := bitIndex, inputValue := inputValue);]]></ST>
       </Implementation>
     </Method>
     <Method Name="Reset" Id="{7a291227-8f05-487e-993b-111f9f997a1f}" FolderPath="Public\">
       <Declaration><![CDATA[(*
-Reset - Clear all bypass states
-Permissives continue to follow real-time conditions (non-latching)
+Reset - Clear all bypass states. Permissives follow real-time conditions
+(non-latching) so there is nothing else to clear.
 *)
 {attribute 'TcRpcEnable':='1'}
 METHOD Reset]]></Declaration>
       <Implementation>
-        <ST><![CDATA[_bypassMask := 0;]]></ST>
+        <ST><![CDATA[_core.ClearBypass();]]></ST>
       </Implementation>
     </Method>
     <Method Name="SetBypass" Id="{d8a7e3f2-1234-5678-9abc-def012345678}" FolderPath="Public\">
       <Declaration><![CDATA[(*
-Set or clear bypass for a specific permissive bit
-Only bits configured as bypassable in cfg.nBypassable can be bypassed
-Clearing bypass (bEnable := FALSE) is always allowed
+Set or clear bypass for a specific permissive bit. Only bits configured
+as bypassable in cfg.nBypassable can be enabled; clearing is always allowed.
 *)
 {attribute 'TcRpcEnable':='1'}
 METHOD PUBLIC SetBypass : E_RpcMethodResponse
 VAR_INPUT
-	bitIndex : UDINT;
-	bEnable : BOOL;
-END_VAR
-VAR
-	bitMask : ULINT;
+    bitIndex : UDINT;
+    bEnable  : BOOL;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IF bitIndex > 63 THEN
-	SetBypass := E_RpcMethodResponse.REJECTED_INVALID_PARAMETER;
-	RETURN;
-END_IF
-
-bitMask := SHL(ULINT#1, bitIndex);
-
-// Only check bypassable config when enabling
-IF bEnable AND (cfg.nBypassable AND bitMask) = 0 THEN
-	SetBypass := E_RpcMethodResponse.REJECTED_BYPASS_NOT_ALLOWED;
-	RETURN;
-END_IF
-
-IF bEnable THEN
-	_bypassMask := _bypassMask OR bitMask;
-ELSE
-	_bypassMask := _bypassMask AND NOT bitMask;
-END_IF
-
-SetBypass := E_RpcMethodResponse.ACCEPTED;]]></ST>
+        <ST><![CDATA[SetBypass := _core.SetBypass(
+    bitIndex        := bitIndex,
+    bEnable         := bEnable,
+    nBypassableMask := cfg.nBypassable);]]></ST>
       </Implementation>
     </Method>
     <Method Name="UpdateFaceplates" Id="{b9ece0da-daef-4441-bc35-0a5dfeac90e9}" FolderPath="Private\">
       <Declaration><![CDATA[METHOD PRIVATE UpdateFaceplates
 VAR
-	i : UDINT;
-	bitMask : ULINT;
+    i       : UDINT;
+    bitMask : ULINT;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[FOR i := 0 TO 63 DO
-	bitMask := SHL(ULINT#1, i);
-	sts.aFaceplates[i].name := cfg.aNames[i];
-	sts.aFaceplates[i].stsOK := (sts.nPermissives AND bitMask) <> 0;
-	sts.aFaceplates[i].stsMapped := (_activeMask AND bitMask) <> 0;
-	sts.aFaceplates[i].stsBypassed := (_bypassMask AND bitMask) <> 0;
-	sts.aFaceplates[i].cfgBypassable := (cfg.nBypassable AND bitMask) <> 0;
+    bitMask := SHL(ULINT#1, i);
+    sts.aFaceplates[i].name          := cfg.aNames[i];
+    sts.aFaceplates[i].stsOK         := (sts.nPermissives AND bitMask) <> 0;
+    sts.aFaceplates[i].stsMapped     := (_core.nActiveMask AND bitMask) <> 0;
+    sts.aFaceplates[i].stsBypassed   := (_core.nBypassMask AND bitMask) <> 0;
+    sts.aFaceplates[i].cfgBypassable := (cfg.nBypassable  AND bitMask) <> 0;
 END_FOR;]]></ST>
       </Implementation>
     </Method>
-    <LineIds Name="FB_Permissives">
-      <LineId Id="1" Count="0" />
-      <LineId Id="4" Count="19" />
-      <LineId Id="2" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_Permissives.CleanupUnmappedBits">
-      <LineId Id="1" Count="8" />
-    </LineIds>
-    <LineIds Name="FB_Permissives.DetectTransitions">
-      <LineId Id="1" Count="18" />
-    </LineIds>
-    <LineIds Name="FB_Permissives.MapInput">
-      <LineId Id="1" Count="10" />
-    </LineIds>
-    <LineIds Name="FB_Permissives.Reset">
-      <LineId Id="1" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_Permissives.SetBypass">
-      <LineId Id="1" Count="19" />
-    </LineIds>
-    <LineIds Name="FB_Permissives.UpdateFaceplates">
-      <LineId Id="1" Count="7" />
-    </LineIds>
   </POU>
 </TcPlcObject>

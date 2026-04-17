@@ -36,6 +36,9 @@ _2000_PRG_Stopping(sm := fbStateMachine);
 _5000_PRG_Aborting(sm := fbStateMachine);
 _4000_PRG_Pausing(sm := fbStateMachine);
 _6000_PRG_Proceeding(sm := fbStateMachine);
+
+// Process-condition alarms (separate from device faults — see docs/8-Alarms.md)
+PRG_Alarms(sm := fbStateMachine);
 ]]></ST>
     </Implementation>
     <LineIds Name="MAIN">

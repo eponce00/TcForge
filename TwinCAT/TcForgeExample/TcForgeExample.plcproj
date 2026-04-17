@@ -25,6 +25,9 @@
     <Compile Include="GVLs\GVL_HW.TcGVL">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="GVLs\GVL_ALARMS.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="POUs\MAIN.TcPOU">
       <SubType>Code</SubType>
     </Compile>
@@ -44,6 +47,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\_6000_PRG_Proceeding.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\PRG_Alarms.TcPOU">
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>

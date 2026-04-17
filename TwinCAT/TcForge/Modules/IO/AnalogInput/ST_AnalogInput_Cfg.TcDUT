@@ -9,7 +9,7 @@
 // gate, clamp-to-scaling-range, linear scale, optional LPF. If you need HH /
 // HI / LO / LL process alarms, compose FB_AlarmLimit with the published
 // stsValue — that keeps alarm config, latching, severity, and ack logic in
-// one place (see docs/9-Alarms.md).
+// one place (see docs/8-Alarms.md).
 {attribute 'OPC.UA.DA' := '1'}
 {attribute 'OPC.UA.DA.Access' := '1'}
 {attribute 'OPC.UA.DA.StructuredType' := '1'}

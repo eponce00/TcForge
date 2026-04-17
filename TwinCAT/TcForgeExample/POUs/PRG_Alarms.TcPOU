@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="PRG_Alarms" Id="{12345678-1234-1234-1234-1234567890a1}" SpecialFunc="None">
+    <Declaration><![CDATA[// ============================================================================
+// PRG_Alarms — Alarm configuration + cyclic invocation
+// ============================================================================
+// Configures and runs the alarm instances declared in GVL_ALARMS. This is the
+// recommended split: instances live in a GVL (stable names for HMI / RPC),
+// cfg wiring + cyclic calls live in a dedicated program (keeps MAIN clean
+// and collocates the chatty cfg with the logic).
+//
+// See docs/8-Alarms.md §8.5 for the composition pattern and §8.6 for wiring
+// alarms to the HMI.
+// ============================================================================
+PROGRAM PRG_Alarms
+VAR_IN_OUT
+    sm : FB_StateMachine;
+END_VAR
+VAR
+    bInit : BOOL := TRUE;
+
+    // Simulated process value for the tank-pressure demo. In real deployments
+    // replace this with GVL_HW.PRESSURE_TRANSDUCER.sts.stsValue once the
+    // analog input is wired in GVL_HW. The test signal ramps between 0 and
+    // 120 so the Lo / Hi / HiHi thresholds all trip in turn.
+    fSimPressure : REAL;
+    tonSim       : TON;
+    bSimRising   : BOOL := TRUE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// ---------------------------------------------------------------------------
+// One-shot commissioning: default cfg for both alarm examples. In production
+// these would come from a recipe / HMI / JSON file. Alarms default disabled,
+// so we must explicitly enable every level we want to trip.
+// ---------------------------------------------------------------------------
+IF bInit THEN
+    bInit := FALSE;
+
+    // --- almTankPressure : four-level limit ladder -------------------------
+    GVL_ALARMS.almTankPressure.cfg.HiHi.common.bEnable     := TRUE;
+    GVL_ALARMS.almTankPressure.cfg.HiHi.common.bRequireAck := TRUE;
+    GVL_ALARMS.almTankPressure.cfg.HiHi.common.eSeverity   := E_AlarmSeverity.CRITICAL;
+    GVL_ALARMS.almTankPressure.cfg.HiHi.common.tOnDelay    := T#250MS;
+    GVL_ALARMS.almTankPressure.cfg.HiHi.common.sMessage    := 'Tank pressure HiHi (>110)';
+    GVL_ALARMS.almTankPressure.cfg.HiHi.fThreshold         := 110.0;
+    GVL_ALARMS.almTankPressure.cfg.HiHi.bFailHigh          := TRUE;
+
+    GVL_ALARMS.almTankPressure.cfg.Hi.common.bEnable       := TRUE;
+    GVL_ALARMS.almTankPressure.cfg.Hi.common.bRequireAck   := FALSE;
+    GVL_ALARMS.almTankPressure.cfg.Hi.common.eSeverity     := E_AlarmSeverity.WARNING;
+    GVL_ALARMS.almTankPressure.cfg.Hi.common.tOnDelay      := T#500MS;
+    GVL_ALARMS.almTankPressure.cfg.Hi.common.sMessage      := 'Tank pressure Hi (>100)';
+    GVL_ALARMS.almTankPressure.cfg.Hi.fThreshold           := 100.0;
+    GVL_ALARMS.almTankPressure.cfg.Hi.bFailHigh            := TRUE;
+
+    GVL_ALARMS.almTankPressure.cfg.Lo.common.bEnable       := TRUE;
+    GVL_ALARMS.almTankPressure.cfg.Lo.common.bRequireAck   := FALSE;
+    GVL_ALARMS.almTankPressure.cfg.Lo.common.eSeverity     := E_AlarmSeverity.WARNING;
+    GVL_ALARMS.almTankPressure.cfg.Lo.common.tOnDelay      := T#500MS;
+    GVL_ALARMS.almTankPressure.cfg.Lo.common.sMessage      := 'Tank pressure Lo (<20)';
+    GVL_ALARMS.almTankPressure.cfg.Lo.fThreshold           := 20.0;
+    GVL_ALARMS.almTankPressure.cfg.Lo.bFailLow             := TRUE;
+
+    GVL_ALARMS.almTankPressure.cfg.LoLo.common.bEnable     := TRUE;
+    GVL_ALARMS.almTankPressure.cfg.LoLo.common.bRequireAck := TRUE;
+    GVL_ALARMS.almTankPressure.cfg.LoLo.common.eSeverity   := E_AlarmSeverity.CRITICAL;
+    GVL_ALARMS.almTankPressure.cfg.LoLo.common.tOnDelay    := T#250MS;
+    GVL_ALARMS.almTankPressure.cfg.LoLo.common.sMessage    := 'Tank pressure LoLo (<10)';
+    GVL_ALARMS.almTankPressure.cfg.LoLo.fThreshold         := 10.0;
+    GVL_ALARMS.almTankPressure.cfg.LoLo.bFailLow           := TRUE;
+
+    // --- almSequenceFaulted : boolean mirror over stsFaulted ---------------
+    GVL_ALARMS.almSequenceFaulted.cfg.common.bEnable     := TRUE;
+    GVL_ALARMS.almSequenceFaulted.cfg.common.bRequireAck := TRUE;
+    GVL_ALARMS.almSequenceFaulted.cfg.common.eSeverity   := E_AlarmSeverity.CRITICAL;
+    GVL_ALARMS.almSequenceFaulted.cfg.common.tOnDelay    := T#100MS;
+    GVL_ALARMS.almSequenceFaulted.cfg.common.sMessage    := 'Sequence faulted';
+END_IF;
+
+// ---------------------------------------------------------------------------
+// Simulated process value — triangle wave 0..120..0 over ~24 s at T#100MS
+// tick. Replace with a real FB_AnalogInput.sts.stsValue once hardware exists.
+// ---------------------------------------------------------------------------
+tonSim(IN := NOT tonSim.Q, PT := T#100MS);
+IF tonSim.Q THEN
+    IF bSimRising THEN
+        fSimPressure := fSimPressure + 1.0;
+        IF fSimPressure >= 120.0 THEN bSimRising := FALSE; END_IF;
+    ELSE
+        fSimPressure := fSimPressure - 1.0;
+        IF fSimPressure <= 0.0   THEN bSimRising := TRUE;  END_IF;
+    END_IF;
+END_IF;
+
+// ---------------------------------------------------------------------------
+// Cyclic calls — the alarms do the rest (debounce, latch, severity rollup).
+// ---------------------------------------------------------------------------
+GVL_ALARMS.almTankPressure(inpPv := fSimPressure);
+GVL_ALARMS.almSequenceFaulted(inpActive := sm.Status.header.stsFaulted);
+]]></ST>
+    </Implementation>
+    <LineIds Name="PRG_Alarms">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

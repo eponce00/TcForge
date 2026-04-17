@@ -8,7 +8,7 @@
 // Link at instance site via
 //     {attribute 'TcLinkTo' := '.io.inRaw.dw := TIID^...^Value'}
 //
-// See docs/8-IO-Binding.md for the full worked examples.
+// See docs/5-IO-Binding.md for the full worked examples.
 TYPE ST_AnalogInput_IO :
 STRUCT
     inRaw : U_IoRaw_In;

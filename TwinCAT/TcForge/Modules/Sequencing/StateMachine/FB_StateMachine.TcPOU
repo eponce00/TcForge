@@ -62,11 +62,6 @@ VAR
     // Running interlock (latching - auto-aborts from any active state)
     intlkRunning : FB_Interlock;
 
-    // Temp variables
-    permIndex : UDINT;
-    stepIsZero : BOOL;
-    seqDone : BOOL;
-
     // Step ownership (internal)
     _nextStep : DINT;
 END_VAR]]></Declaration>
@@ -134,14 +129,13 @@ intlkRunning();
     END_IF;
 
     //-------------------------------------------------------------------------
-    // Sequence completion inference
+    // Sequence completion inference — current step is the final step of its
+    // state (range is in-state AND next-step is zero).
     //-------------------------------------------------------------------------
-    seqDone := _IsStepInStateRange(
+    R_TRIG_5(CLK := _IsStepInStateRange(
         state := Status.State,
         nStep := Status.Step.Current
-    ) AND (_nextStep = 0);
-
-    R_TRIG_5(CLK := seqDone);
+    ) AND (_nextStep = 0));
     IF R_TRIG_5.Q THEN
         _completeStateRequested := TRUE;
     END_IF;
@@ -259,8 +253,7 @@ intlkRunning();
     //-------------------------------------------------------------------------
 
     // Reset timer and clear step name when transitioning to step 0
-    stepIsZero := (Status.Step.Current = 0);
-    R_TRIG_1(CLK := stepIsZero);
+    R_TRIG_1(CLK := Status.Step.Current = 0);
     IF R_TRIG_1.Q THEN
         Status.Step.Name := '';
         _ClearStepPermissives();
@@ -389,7 +382,10 @@ intlkRunning();
     <Folder Name="Internal" Id="{f0c10002-0001-0001-0001-000000000002}" />
         <Folder Name="Private" Id="{f0c10003-0001-0001-0001-000000000003}" />
         <Method Name="_ClearStepPermissives" Id="{d4e5f6a7-b8c9-0123-def0-123456789abf}" FolderPath="Private\">
-            <Declaration><![CDATA[METHOD PRIVATE _ClearStepPermissives]]></Declaration>
+            <Declaration><![CDATA[METHOD PRIVATE _ClearStepPermissives
+VAR
+    i : UDINT;
+END_VAR]]></Declaration>
             <Implementation>
                 <ST><![CDATA[Status.Step.PermCfg.nBypassable := 0;
 Status.Step.PermStatus.bOK := FALSE;
@@ -397,13 +393,13 @@ Status.Step.PermStatus.nPermissives := 0;
 Status.Step.PermStatus.nBypassMask := 0;
 Status.Step.PermStatus.nFirstFailureBitIndex := 999;
 
-FOR permIndex := 0 TO 63 DO
-        Status.Step.PermCfg.aNames[permIndex] := '';
-        Status.Step.PermStatus.aFaceplates[permIndex].name := '';
-        Status.Step.PermStatus.aFaceplates[permIndex].stsOK := FALSE;
-        Status.Step.PermStatus.aFaceplates[permIndex].stsMapped := FALSE;
-        Status.Step.PermStatus.aFaceplates[permIndex].stsBypassed := FALSE;
-        Status.Step.PermStatus.aFaceplates[permIndex].cfgBypassable := FALSE;
+FOR i := 0 TO 63 DO
+    Status.Step.PermCfg.aNames[i]                       := '';
+    Status.Step.PermStatus.aFaceplates[i].name          := '';
+    Status.Step.PermStatus.aFaceplates[i].stsOK         := FALSE;
+    Status.Step.PermStatus.aFaceplates[i].stsMapped     := FALSE;
+    Status.Step.PermStatus.aFaceplates[i].stsBypassed   := FALSE;
+    Status.Step.PermStatus.aFaceplates[i].cfgBypassable := FALSE;
 END_FOR;]]></ST>
             </Implementation>
         </Method>
@@ -475,6 +471,21 @@ ELSE
 END_CASE;]]></ST>
             </Implementation>
         </Method>
+        <Method Name="_ClearCommandFlags" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac5}" FolderPath="Private\">
+            <Declaration><![CDATA[// Reset every pending command-request flag. Each public command method
+// calls this first, then re-sets the single flag it actually requests, so
+// the body only ever sees one active request at a time.
+METHOD PRIVATE _ClearCommandFlags]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[_abortRequested         := FALSE;
+_completeStateRequested := FALSE;
+_homeRequested          := FALSE;
+_pauseRequested         := FALSE;
+_proceedRequested       := FALSE;
+_startRequested         := FALSE;
+_stopRequested          := FALSE;]]></ST>
+            </Implementation>
+        </Method>
         <Method Name="ResolveFaultString" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac4}" FolderPath="Private\">
             <Declaration><![CDATA[METHOD PROTECTED ResolveFaultString : STRING(79)
 VAR_INPUT
@@ -508,12 +519,7 @@ END_VAR]]></Declaration>
     RETURN;
 END_IF;
 
-_startRequested := FALSE;
-_stopRequested := FALSE;
-_homeRequested := FALSE;
-_pauseRequested := FALSE;
-_proceedRequested := FALSE;
-_completeStateRequested := FALSE;
+_ClearCommandFlags();
 _abortRequested := TRUE;
 _AcceptCommand(eRequester := eRequester);
 Abort := E_RpcMethodResponse.ACCEPTED;]]></ST>
@@ -544,12 +550,7 @@ IF NOT permAuto.sts.bOK THEN
     RETURN;
 END_IF;
 
-_abortRequested := FALSE;
-_pauseRequested := FALSE;
-_proceedRequested := FALSE;
-_startRequested := FALSE;
-_stopRequested := FALSE;
-_completeStateRequested := FALSE;
+_ClearCommandFlags();
 _homeRequested := TRUE;
 _AcceptCommand(eRequester := eRequester);
 Home := E_RpcMethodResponse.ACCEPTED;]]></ST>
@@ -570,12 +571,7 @@ IF NOT (Status.State = E_SM_State.RUNNING) THEN
     RETURN;
 END_IF;
 
-_abortRequested := FALSE;
-_homeRequested := FALSE;
-_proceedRequested := FALSE;
-_startRequested := FALSE;
-_stopRequested := FALSE;
-_completeStateRequested := FALSE;
+_ClearCommandFlags();
 _pauseRequested := TRUE;
 _AcceptCommand(eRequester := eRequester);
 Pause := E_RpcMethodResponse.ACCEPTED;]]></ST>
@@ -606,12 +602,7 @@ IF NOT permAuto.sts.bOK THEN
     RETURN;
 END_IF;
 
-_abortRequested := FALSE;
-_homeRequested := FALSE;
-_pauseRequested := FALSE;
-_startRequested := FALSE;
-_stopRequested := FALSE;
-_completeStateRequested := FALSE;
+_ClearCommandFlags();
 _proceedRequested := TRUE;
 _AcceptCommand(eRequester := eRequester);
 Proceed := E_RpcMethodResponse.ACCEPTED;]]></ST>
@@ -657,12 +648,7 @@ IF NOT permAuto.sts.bOK THEN
     RETURN;
 END_IF;
 
-_abortRequested := FALSE;
-_pauseRequested := FALSE;
-_homeRequested := FALSE;
-_proceedRequested := FALSE;
-_stopRequested := FALSE;
-_completeStateRequested := FALSE;
+_ClearCommandFlags();
 _startRequested := TRUE;
 _AcceptCommand(eRequester := eRequester);
 Start := E_RpcMethodResponse.ACCEPTED;]]></ST>
@@ -682,12 +668,7 @@ END_VAR]]></Declaration>
     RETURN;
 END_IF;
 
-_abortRequested := FALSE;
-_homeRequested := FALSE;
-_proceedRequested := FALSE;
-_startRequested := FALSE;
-_pauseRequested := FALSE;
-_completeStateRequested := FALSE;
+_ClearCommandFlags();
 _stopRequested := TRUE;
 _AcceptCommand(eRequester := eRequester);
 Stop := E_RpcMethodResponse.ACCEPTED;]]></ST>

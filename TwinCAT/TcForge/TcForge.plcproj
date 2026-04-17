@@ -173,6 +173,9 @@
     <Compile Include="Modules\Common\Utilities\F_Now.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Modules\Common\Utilities\FB_BitMatrix64.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Modules\Common\Utilities\FB_LPF_FirstOrder_IIR.TcPOU">
       <SubType>Code</SubType>
     </Compile>

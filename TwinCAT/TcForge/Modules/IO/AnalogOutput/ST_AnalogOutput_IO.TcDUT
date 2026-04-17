@@ -8,7 +8,7 @@
 // Link at instance site via
 //     {attribute 'TcLinkTo' := '.io.outRaw.dw := TIID^...^Output'}
 //
-// See docs/8-IO-Binding.md for the full worked examples.
+// See docs/5-IO-Binding.md for the full worked examples.
 TYPE ST_AnalogOutput_IO :
 STRUCT
     outRaw : U_IoRaw_Out;

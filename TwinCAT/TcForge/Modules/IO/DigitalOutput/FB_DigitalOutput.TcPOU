@@ -38,7 +38,7 @@ END_VAR
 
 VAR
     // Hardware-linked struct (AT %Q*). Wired at instance declaration with
-    // {attribute 'TcLinkTo' := '.io.outSignal := TIID^...'}. See docs/8-IO-Binding.md.
+    // {attribute 'TcLinkTo' := '.io.outSignal := TIID^...'}. See docs/5-IO-Binding.md.
     {attribute 'OPC.UA.DA' := '0'}
     io              : ST_DigitalOutput_IO;
 

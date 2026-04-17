@@ -4,7 +4,7 @@
     <Declaration><![CDATA[{attribute 'qualified_only'}
 {attribute 'to_string'}
 // Fault codes for FB_DigitalInput. Range convention matches the shared
-// device-fault convention (see docs/7-Architecture.md):
+// device-fault convention (see docs/2-Architecture.md):
 //   0        No fault
 //   1-9      Timeouts
 //   10-19    Feedback / hardware / signal
