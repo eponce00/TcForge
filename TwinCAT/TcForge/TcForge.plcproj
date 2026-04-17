@@ -143,11 +143,6 @@
     </PlaceholderReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Core.tmc">
-      <SubType>Content</SubType>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
     <None Include="TcForge.tmc">
       <SubType>Content</SubType>
     </None>

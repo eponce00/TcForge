@@ -19,17 +19,6 @@
     <Released>false</Released>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="DUTs\ST_CameraStates.TcDUT">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="GVLs\Hardware_Mapping.TcGVL">
-      <SubType>Code</SubType>
-      <LinkAlways>true</LinkAlways>
-    </Compile>
-    <Compile Include="GVLs\Cognex_Mapping.TcGVL">
-      <SubType>Code</SubType>
-      <LinkAlways>true</LinkAlways>
-    </Compile>
     <Compile Include="PlcTask.TcTTO">
       <SubType>Code</SubType>
     </Compile>
