@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_FaultHandler" Id="{c0000020-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Device-agnostic fault book-keeping. Stores the current fault code,
+// the most-recent fault code that survives a Clear, and a short ring
+// buffer of historical entries with timestamps and requesters.
+//
+// Raise() is idempotent on the current code so devices can call it
+// every cycle the condition is true without flooding the ring buffer.
+// Clear() preserves the last-* fields and the ring so the history is
+// not lost after an operator resets the device.
+//
+// String resolution is intentionally not in here: each device owns a
+// private fault enum and a matching F_<Device>_FaultToString function.
+FUNCTION_BLOCK FB_FaultHandler
+VAR CONSTANT
+    RING_SIZE : UDINT := 8;
+END_VAR
+
+VAR PERSISTENT
+    ring          : ARRAY[0..7] OF ST_FaultEntry;
+    ringHead      : UDINT;
+    lastCode      : DINT;
+    lastTs        : LTIME;
+    lastRequester : E_Requester;
+END_VAR
+
+VAR
+    currentCode : DINT;
+    currentTs   : LTIME;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Cyclic body is intentionally empty. All work happens in the
+// Raise / Clear / accessor methods called by the owning device.]]></ST>
+    </Implementation>
+    <Method Name="Raise" Id="{c0000020-0000-0000-1000-000000000001}">
+      <Declaration><![CDATA[// Raise a fault. Idempotent per-code: repeated calls with the same non-zero
+// code within one fault episode push only one entry onto the ring buffer.
+// A different non-zero code replaces the current fault and is also logged.
+// Returns TRUE when a new ring entry was pushed this call.
+METHOD PUBLIC Raise : BOOL
+VAR_INPUT
+    code      : DINT;
+    requester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF code = 0 THEN
+    Raise := FALSE;
+    RETURN;
+END_IF;
+
+// Same fault still active — nothing new to record.
+IF code = currentCode THEN
+    Raise := FALSE;
+    RETURN;
+END_IF;
+
+// New fault or transition to a different code — update and log.
+currentCode   := code;
+currentTs     := _Now();
+lastCode      := code;
+lastTs        := currentTs;
+lastRequester := requester;
+
+ring[ringHead].code      := code;
+ring[ringHead].ts        := currentTs;
+ring[ringHead].requester := requester;
+ringHead := (ringHead + 1) MOD RING_SIZE;
+
+Raise := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Clear" Id="{c0000020-0000-0000-1000-000000000002}">
+      <Declaration><![CDATA[// Clear the currently-active fault. Preserves the ring buffer and the
+// last-* fields so operators and HMIs can still see what happened.
+METHOD PUBLIC Clear
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[currentCode := 0;
+currentTs   := LTIME#0ns;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="IsFaulted" Id="{c0000020-0000-0000-1000-000000000003}">
+      <Declaration><![CDATA[METHOD PUBLIC IsFaulted : BOOL
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsFaulted := currentCode <> 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetCurrentCode" Id="{c0000020-0000-0000-1000-000000000004}">
+      <Declaration><![CDATA[METHOD PUBLIC GetCurrentCode : DINT
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetCurrentCode := currentCode;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetCurrentTs" Id="{c0000020-0000-0000-1000-000000000005}">
+      <Declaration><![CDATA[METHOD PUBLIC GetCurrentTs : LTIME
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetCurrentTs := currentTs;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetLastCode" Id="{c0000020-0000-0000-1000-000000000006}">
+      <Declaration><![CDATA[METHOD PUBLIC GetLastCode : DINT
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetLastCode := lastCode;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetLastTs" Id="{c0000020-0000-0000-1000-000000000007}">
+      <Declaration><![CDATA[METHOD PUBLIC GetLastTs : LTIME
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetLastTs := lastTs;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetLastRequester" Id="{c0000020-0000-0000-1000-000000000008}">
+      <Declaration><![CDATA[METHOD PUBLIC GetLastRequester : E_Requester
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetLastRequester := lastRequester;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_Now" Id="{c0000020-0000-0000-1000-00000000000a}">
+      <Declaration><![CDATA[// System timestamp. Tc2_System.F_GetSystemTime returns ULINT of 100 ns
+// intervals since 1601-01-01 UTC; converted to LTIME (nanoseconds) by *100.
+METHOD PRIVATE _Now : LTIME
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Now := ULINT_TO_LTIME(Tc2_System.F_GetSystemTime() * 100);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetRingEntry" Id="{c0000020-0000-0000-1000-000000000009}">
+      <Declaration><![CDATA[// Return ring entry at offset idx (0 = oldest kept entry, RING_SIZE-1 = newest).
+// Out-of-range idx returns an empty entry.
+METHOD PUBLIC GetRingEntry : ST_FaultEntry
+VAR_INPUT
+    idx : UDINT;
+END_VAR
+VAR
+    slot : UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF idx >= RING_SIZE THEN
+    RETURN;
+END_IF;
+
+// ringHead points to the *next* write slot; oldest entry is at ringHead.
+slot := (ringHead + idx) MOD RING_SIZE;
+GetRingEntry := ring[slot];]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_FaultHandler">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FaultHandler.Raise">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FaultHandler.Clear">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FaultHandler.IsFaulted">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FaultHandler.GetCurrentCode">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FaultHandler.GetCurrentTs">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FaultHandler.GetLastCode">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FaultHandler.GetLastTs">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FaultHandler.GetLastRequester">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FaultHandler.GetRingEntry">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FaultHandler._Now">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,17 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_StateMachine" Id="{7408693c-f749-4b9e-8684-bfcba9889df8}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_StateMachine
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_StateMachine EXTENDS FB_DeviceBase IMPLEMENTS I_Abortable
 VAR_INPUT
-    EnableIn : BOOL;
     cfgAutoRun : BOOL;
-    inpBlockedCondition : DINT;
-    inpStarvedCondition : DINT;
     inpSubmoduleFaulted : BOOL;
 END_VAR
 
 VAR_OUTPUT
-    EnableOut : BOOL;
     Status : ST_SM_Status;
 END_VAR
 
@@ -35,14 +31,20 @@ VAR
     _stopRequested : BOOL;
     _retryActive : BOOL;
     RetryComplete : BOOL;
-    
+
+    // OEE condition latches. Updated by ReportBlocked / ReportStarved, consumed
+    // and cleared by the body each cycle. Kept internal so the FB contract
+    // never mutates external inputs.
+    _blockedCode : DINT;
+    _starvedCode : DINT;
+
     // Timer
     StepTimer : TON;
-    
+
     // Edge detection
     R_TRIG_1 : R_TRIG;
     R_TRIG_5 : R_TRIG;
-    
+
     // Internal state tracking
     _previousState : E_SM_State;
     PreviousStep : DINT;
@@ -50,24 +52,21 @@ VAR
     LsOdd : DINT;
     _returnState : E_SM_State;
     ReturnNextStep : DINT;
-    
+
     // Permission handlers
     permAuto : FB_Permissives;
     permHome : FB_Permissives;
     permProceed : FB_Permissives;
     permStart : FB_Permissives;
-    
+
     // Running interlock (latching - auto-aborts from any active state)
     intlkRunning : FB_Interlock;
-    
+
     // Temp variables
     permIndex : UDINT;
     stepIsZero : BOOL;
     seqDone : BOOL;
-    
-    // Source control
-    bSourceLockedToProg : BOOL;
-    
+
     // Step ownership (internal)
     _nextStep : DINT;
 END_VAR]]></Declaration>
@@ -76,26 +75,23 @@ END_VAR]]></Declaration>
 //-----------------------------------------------------------------------------
 // Main Implementation
 //-----------------------------------------------------------------------------
-EnableOut := EnableIn;
+//-------------------------------------------------------------------------
+// Process permissions for different states
+//-------------------------------------------------------------------------
+permHome();
+permStart();
+permProceed();
+permAuto();
 
-// Only execute if enabled
-IF EnableIn THEN
-    //-------------------------------------------------------------------------
-    // Process permissions for different states
-    //-------------------------------------------------------------------------
-    permHome();
-    permStart();
-    permProceed();
-    permAuto();
-    
-    intlkRunning();
-    
+intlkRunning();
+
     // Auto-abort if any running interlock trips (e-stop, safety gate, etc.)
     IF NOT intlkRunning.sts.bOK AND
        NOT (Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTING) THEN
         _abortRequested := TRUE;
+        _fault.Raise(code := E_SM_Fault.RunningInterlockTripped, requester := E_Requester.PROG);
     END_IF;
-    
+
     //-------------------------------------------------------------------------
     // Ready state calculations
     //-------------------------------------------------------------------------
@@ -132,7 +128,7 @@ IF EnableIn THEN
        (Status.State = E_SM_State.READY) AND (Status.LastState = E_SM_State.RUNNING) THEN
         _startRequested := TRUE;
     END_IF;
-    
+
     //-------------------------------------------------------------------------
     // Sequence completion inference
     //-------------------------------------------------------------------------
@@ -237,14 +233,14 @@ IF EnableIn THEN
         _nextStep := 0;
         Status.State := E_SM_State.ABORTING;
     END_IF;
-    
+
     //-------------------------------------------------------------------------
     // Track state changes
     //-------------------------------------------------------------------------
     IF Status.State <> _previousState THEN
         Status.LastState := _previousState;
     END_IF;
-    
+
     //-------------------------------------------------------------------------
     // Derived status flags
     //-------------------------------------------------------------------------
@@ -257,7 +253,7 @@ IF EnableIn THEN
     //-------------------------------------------------------------------------
     // Step and timer management
     //-------------------------------------------------------------------------
-    
+
     // Reset timer and clear step name when transitioning to step 0
     stepIsZero := (Status.Step.Current = 0);
     R_TRIG_1(CLK := stepIsZero);
@@ -268,12 +264,12 @@ IF EnableIn THEN
         StepTimer(IN := FALSE, PT := T#99H);
         Status.Step.TimerSeconds := 0.0;
     END_IF;
-    
+
     // Auto-initialize first step when entering an active state
     IF Status.Step.Current = 0 AND Status.ActiveState THEN
         _nextStep := _GetFirstStepForState(state := Status.State);
     END_IF;
-    
+
     // Detect step change and update
     IF Status.Step.Current <> _nextStep THEN
         PreviousStep := Status.Step.Current;
@@ -282,9 +278,9 @@ IF EnableIn THEN
         StepTimer(IN := FALSE, PT := T#99H);
         Status.Step.TimerSeconds := 0.0;
     END_IF;
-    
+
     Status.Step.Next := _nextStep;
-    
+
     // Step timer logic
     IF NOT (Status.State = E_SM_State.PAUSED) OR ((Status.State = E_SM_State.PAUSED) AND _completeStateRequested) THEN
         IF TimerReset THEN
@@ -298,14 +294,22 @@ IF EnableIn THEN
     ELSE
         StepTimer(IN := FALSE, PT := T#99H);
     END_IF;
-    
+
     //-------------------------------------------------------------------------
-    // Fault detection
+    // Fault detection — surface through the shared fault handler so the
+    // ring-buffer/history in ST_DeviceHeader_Sts stays populated.
     //-------------------------------------------------------------------------
     LsOdd := Status.Step.Current MOD 2;
     Status.Faulted := LsOdd <> 0;
     Status.SubmoduleFaulted := inpSubmoduleFaulted;
-    
+
+    IF Status.Faulted THEN
+        _fault.Raise(code := E_SM_Fault.OddStepFault, requester := _lastRequester);
+    END_IF;
+    IF Status.SubmoduleFaulted THEN
+        _fault.Raise(code := E_SM_Fault.SubmoduleFaulted, requester := _lastRequester);
+    END_IF;
+
     //-------------------------------------------------------------------------
     // Retry logic
     //-------------------------------------------------------------------------
@@ -313,53 +317,51 @@ IF EnableIn THEN
         _retryActive := FALSE;
         RetryComplete := FALSE;
     END_IF;
-    
+
     IF _retryActive THEN
         RetryComplete := TRUE;
     END_IF;
-    
+
     IF _retryActive AND Status.Faulted THEN
         // Roll back to previous (even, non-faulted) step to re-enter it
         _nextStep := Status.Step.Current - 1;
     END_IF;
-    
+
     //-------------------------------------------------------------------------
-    // OEE condition codes (Blocked / Starved)
+    // OEE condition codes (Blocked / Starved) — consume the internal latches.
+    // The latches are fed externally via ReportBlocked() / ReportStarved().
     //-------------------------------------------------------------------------
-    IF inpBlockedCondition = 0 THEN
+    IF _blockedCode = 0 THEN
         Status.BlockedCondition := 0;
     END_IF;
-    
-    IF inpBlockedCondition <> 0 AND
+
+    IF _blockedCode <> 0 AND
        (Status.State = E_SM_State.RUNNING OR Status.State = E_SM_State.STOPPING OR
         Status.State = E_SM_State.READY) THEN
-        Status.BlockedCondition := inpBlockedCondition;
-        inpBlockedCondition := 0;
+        Status.BlockedCondition := _blockedCode;
+        _blockedCode := 0;
     END_IF;
-    
-    IF inpStarvedCondition = 0 THEN
+
+    IF _starvedCode = 0 THEN
         Status.StarvedCondition := 0;
     END_IF;
-    
-    IF inpStarvedCondition <> 0 AND
+
+    IF _starvedCode <> 0 AND
        (Status.State = E_SM_State.RUNNING OR Status.State = E_SM_State.STOPPING OR
         Status.State = E_SM_State.READY) THEN
-        Status.StarvedCondition := inpStarvedCondition;
-        inpStarvedCondition := 0;
+        Status.StarvedCondition := _starvedCode;
+        _starvedCode := 0;
     END_IF;
-    
-ELSE
-    // Reset command requests when disabled
-    _startRequested := FALSE;
-    _stopRequested := FALSE;
-    _homeRequested := FALSE;
-    _abortRequested := FALSE;
-    _pauseRequested := FALSE;
-    _proceedRequested := FALSE;
-    _completeStateRequested := FALSE;
-    Status.Step.Name := '';
-        _ClearStepPermissives();
-END_IF;
+
+    //-------------------------------------------------------------------------
+    // Common device header (stateString, stsReady/Busy/Faulted/SourceLocked,
+    // fault codes + strings, timestamps). Published via Status.header.
+    //-------------------------------------------------------------------------
+    _UpdateHeader(
+        header      := Status.header,
+        stateString := _StateToString(state := Status.State),
+        stsBusy     := Status.ActiveState
+    );
 ]]></ST>
     </Implementation>
     <Folder Name="Public" Id="{f0c10001-0001-0001-0001-000000000001}" />
@@ -431,20 +433,58 @@ END_VAR]]></Declaration>
                                              (nStep <= _GetLastStepForState(state := state));]]></ST>
             </Implementation>
         </Method>
+        <Method Name="_StateToString" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac3}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PRIVATE _StateToString : STRING(31)
+VAR_INPUT
+    state : E_SM_State;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[CASE state OF
+    E_SM_State.STOPPED:    _StateToString := 'STOPPED';
+    E_SM_State.READY:      _StateToString := 'READY';
+    E_SM_State.PAUSED:     _StateToString := 'PAUSED';
+    E_SM_State.HOMING:     _StateToString := 'HOMING';
+    E_SM_State.RUNNING:    _StateToString := 'RUNNING';
+    E_SM_State.STOPPING:   _StateToString := 'STOPPING';
+    E_SM_State.ABORTING:   _StateToString := 'ABORTING';
+    E_SM_State.PAUSING:    _StateToString := 'PAUSING';
+    E_SM_State.PROCEEDING: _StateToString := 'PROCEEDING';
+ELSE
+    _StateToString := 'UNKNOWN';
+END_CASE;]]></ST>
+            </Implementation>
+        </Method>
+        <Method Name="ResolveFaultString" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac4}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[CASE code OF
+    E_SM_Fault.None:                    ResolveFaultString := 'No Fault';
+    E_SM_Fault.OddStepFault:            ResolveFaultString := 'Step is a fault step';
+    E_SM_Fault.SubmoduleFaulted:        ResolveFaultString := 'Submodule reported fault';
+    E_SM_Fault.RunningInterlockTripped: ResolveFaultString := 'Running interlock tripped';
+ELSE
+    ResolveFaultString := 'Unknown Fault';
+END_CASE;]]></ST>
+            </Implementation>
+        </Method>
     <Method Name="Abort" Id="{c1234567-1234-1234-1234-12345678C001}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// Safety command — always accepted (bypasses source lock and fault check).
+// Rejected only when the machine is already terminally stopped or already
+// running the Abort sequence.
 METHOD Abort : E_RpcMethodResponse
 VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[// Safety command - skip source check, skip fault check
-IF Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTING THEN
+        <ST><![CDATA[IF Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTING THEN
     Abort := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
 
-// Execute - clear other requests, set abort
 _startRequested := FALSE;
 _stopRequested := FALSE;
 _homeRequested := FALSE;
@@ -452,6 +492,7 @@ _pauseRequested := FALSE;
 _proceedRequested := FALSE;
 _completeStateRequested := FALSE;
 _abortRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
 Abort := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
@@ -462,29 +503,24 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[// Common validation
-Home := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
+        <ST><![CDATA[Home := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
 IF Home <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
-// State check
 IF NOT (Status.State = E_SM_State.STOPPED) THEN
     Home := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
 
-// Permission check (Home-specific)
 IF NOT permHome.sts.bOK THEN
     Home := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
 
-// Permission check (global auto permissives)
 IF NOT permAuto.sts.bOK THEN
     Home := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
 
-// Execute
 _abortRequested := FALSE;
 _pauseRequested := FALSE;
 _proceedRequested := FALSE;
@@ -492,16 +528,8 @@ _startRequested := FALSE;
 _stopRequested := FALSE;
 _completeStateRequested := FALSE;
 _homeRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
 Home := E_RpcMethodResponse.ACCEPTED;]]></ST>
-      </Implementation>
-    </Method>
-    <Method Name="LockSource" Id="{c1234567-1234-1234-1234-12345678C008}" FolderPath="Public\">
-      <Declaration><![CDATA[METHOD LockSource
-VAR_INPUT
-    bLock : BOOL;
-END_VAR]]></Declaration>
-      <Implementation>
-        <ST><![CDATA[bSourceLockedToProg := bLock;]]></ST>
       </Implementation>
     </Method>
     <Method Name="Pause" Id="{c1234567-1234-1234-1234-12345678C003}" FolderPath="Public\">
@@ -511,17 +539,14 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[// Common validation
-Pause := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
+        <ST><![CDATA[Pause := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
 IF Pause <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
-// State check
 IF NOT (Status.State = E_SM_State.RUNNING) THEN
     Pause := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
 
-// Execute
 _abortRequested := FALSE;
 _homeRequested := FALSE;
 _proceedRequested := FALSE;
@@ -529,6 +554,7 @@ _startRequested := FALSE;
 _stopRequested := FALSE;
 _completeStateRequested := FALSE;
 _pauseRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
 Pause := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
@@ -539,29 +565,24 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[// Common validation
-Proceed := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
+        <ST><![CDATA[Proceed := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
 IF Proceed <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
-// State check
 IF NOT (Status.State = E_SM_State.PAUSED) THEN
     Proceed := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
 
-// Permission check (Proceed-specific)
 IF NOT permProceed.sts.bOK THEN
     Proceed := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
 
-// Permission check (global auto permissives)
 IF NOT permAuto.sts.bOK THEN
     Proceed := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
 
-// Execute
 _abortRequested := FALSE;
 _homeRequested := FALSE;
 _pauseRequested := FALSE;
@@ -569,6 +590,7 @@ _startRequested := FALSE;
 _stopRequested := FALSE;
 _completeStateRequested := FALSE;
 _proceedRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
 Proceed := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
@@ -579,12 +601,11 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[// Common validation
-Retry := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
+        <ST><![CDATA[Retry := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
 IF Retry <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
-// Execute - set retry directly
 _retryActive := TRUE;
+_AcceptCommand(eRequester := eRequester);
 Retry := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
@@ -595,29 +616,24 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[// Common validation
-Start := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
+        <ST><![CDATA[Start := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
 IF Start <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
-// State check
 IF NOT (Status.State = E_SM_State.READY) THEN
     Start := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
 
-// Permission check (Start-specific)
 IF NOT permStart.sts.bOK THEN
     Start := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
 
-// Permission check (global auto permissives)
 IF NOT permAuto.sts.bOK THEN
     Start := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
     RETURN;
 END_IF;
 
-// Execute
 _abortRequested := FALSE;
 _pauseRequested := FALSE;
 _homeRequested := FALSE;
@@ -625,23 +641,24 @@ _proceedRequested := FALSE;
 _stopRequested := FALSE;
 _completeStateRequested := FALSE;
 _startRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
 Start := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
     <Method Name="Stop" Id="{c1234567-1234-1234-1234-12345678C007}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// Safety-adjacent command — skip source check and fault check. Rejected only
+// when the machine is already terminally stopped or already stopping.
 METHOD Stop : E_RpcMethodResponse
 VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[// Safety command - skip source check, skip fault check
-IF Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.STOPPING THEN
+        <ST><![CDATA[IF Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.STOPPING THEN
     Stop := E_RpcMethodResponse.REJECTED_WRONG_STATE;
     RETURN;
 END_IF;
 
-// Execute
 _abortRequested := FALSE;
 _homeRequested := FALSE;
 _proceedRequested := FALSE;
@@ -649,7 +666,33 @@ _startRequested := FALSE;
 _pauseRequested := FALSE;
 _completeStateRequested := FALSE;
 _stopRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
 Stop := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ReportBlocked" Id="{c1234567-1234-1234-1234-12345678C008}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// External hook for OEE condition reporting. Pass a non-zero reason code while
+// the machine is blocked (e.g. downstream buffer full); pass 0 to clear. The
+// body publishes the active code on Status.BlockedCondition in active states.
+METHOD PUBLIC ReportBlocked
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_blockedCode := code;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ReportStarved" Id="{c1234567-1234-1234-1234-12345678C009}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// External hook for OEE condition reporting. Pass a non-zero reason code while
+// the machine is starved (e.g. upstream feeder empty); pass 0 to clear.
+METHOD PUBLIC ReportStarved
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_starvedCode := code;]]></ST>
       </Implementation>
     </Method>
     <Method Name="MapRunningIntlk" Id="{f7a8b9c0-d1e2-4f30-a001-000000000001}" FolderPath="Public\">
@@ -735,13 +778,16 @@ END_IF;]]></ST>
         <LineIds Name="FB_StateMachine._IsStepInStateRange">
             <LineId Id="1" Count="0" />
         </LineIds>
+        <LineIds Name="FB_StateMachine._StateToString">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+        <LineIds Name="FB_StateMachine.ResolveFaultString">
+            <LineId Id="1" Count="0" />
+        </LineIds>
     <LineIds Name="FB_StateMachine.Abort">
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_StateMachine.Home">
-      <LineId Id="1" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_StateMachine.LockSource">
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_StateMachine.Pause">
@@ -757,6 +803,18 @@ END_IF;]]></ST>
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_StateMachine.Stop">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.ReportBlocked">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.ReportStarved">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.MapRunningIntlk">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.ResetRunningIntlk">
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_StateMachine.SetNextStep">

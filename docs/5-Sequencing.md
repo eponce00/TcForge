@@ -2,7 +2,7 @@
 
 The sequencing module provides `FB_StateMachine` and `FB_Step` — the two blocks you need to drive any multi-step automatic process. This document covers the state model, how sequences are structured, and how to wire permissives.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [RPC Method Response](3-RPC-Method-Response.md) · [HMI Integration](4-HMI-Integration.md) · [Persistent Variables →](6-Persistent-Variables.md)
+> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [RPC Method Response](3-RPC-Method-Response.md) · [HMI Integration](4-HMI-Integration.md) · [Persistent Variables →](6-Persistent-Variables.md) · [Architecture](7-Architecture.md) · [I/O Binding](8-IO-Binding.md)
 
 ---
 
@@ -69,26 +69,56 @@ Minimum call in the cyclic program:
 
 ```iecst
 fbStateMachine(
-    EnableIn    := TRUE,
     cfgAutoRun  := FALSE
 );
 ```
 
 | Input | Purpose |
 |-------|---------|
-| `EnableIn` | Enables the FB. When `FALSE` all command requests are cleared. |
 | `cfgAutoRun` | Automatically re-starts a new cycle when `READY` after a completed run and start permissives are met. |
 
 ### 5.2.2 Key outputs
 
 | Output | Type | Description |
 |--------|------|-------------|
-| `Status` | `ST_SM_Status` | State, last state, faulted flag, blocked/starved, ready flags |
+| `Status` | `ST_SM_Status` | Embeds `header : ST_DeviceHeader_Sts` (ready/busy/faulted, fault code + string, timestamps), plus `State`, `LastState`, `BlockedCondition`, `StarvedCondition`, `Step` snapshot |
 | `StepInfo` | `ST_SM_StepInfo` | CurrentStep, CurrentStepName, NextStep, StepTimerSeconds |
 | `HomePermOK`, `StartPermOK`, `ProceedPermOK`, `AutoPermOK` | `BOOL` | Flat perm-OK flags directly on the FB output |
 | `StepPermCfg` | `ST_Permissive_Config` | Active step's permissive config (mirrored from FB_Step) |
 | `StepPermStatus` | `ST_Permissive_Status` | Active step's permissive status (mirrored from FB_Step) |
-| `ConditionStatus` | `ST_SM_Conditions` | OEE-level blocked / starved condition codes |
+
+### 5.2.3 OEE conditions — `ReportBlocked` / `ReportStarved`
+
+OEE condition codes (`BlockedCondition`, `StarvedCondition`) are written by external reporter methods, not by mutating inputs. The caller — typically the same program that ran the sequence programs — pushes the active reason code each scan:
+
+```iecst
+// Report from the station program that knows *why* the line is blocked/starved
+IF NOT inpDownstreamReady THEN
+    fbStateMachine.ReportBlocked(code := 101);   // 101 = downstream buffer full
+ELSE
+    fbStateMachine.ReportBlocked(code := 0);     // 0 clears the condition
+END_IF;
+
+IF NOT inpUpstreamPartPresent THEN
+    fbStateMachine.ReportStarved(code := 202);   // 202 = upstream queue empty
+ELSE
+    fbStateMachine.ReportStarved(code := 0);
+END_IF;
+```
+
+The state machine copies the latest reported value into `Status.BlockedCondition` / `Status.StarvedCondition` each cycle. A non-zero value means the condition is active; zero means clear. Use any code space you like as long as zero is reserved for "no condition".
+
+### 5.2.4 Faults — where they come from
+
+`FB_StateMachine` raises its own faults through the inherited `_fault` handler using `E_SM_Fault`:
+
+| Code | Trigger |
+|------|---------|
+| `OddStepFault` | Sequence advanced onto an odd step (fault step by convention). |
+| `SubmoduleFaulted` | `inpSubmoduleFaulted` asserted by a child module. |
+| `RunningInterlockTripped` | Running-state interlock (`intlkRunning`) tripped and forced an abort. |
+
+The fault code, text (resolved from `E_SM_Fault`), timestamp and ring buffer all surface through `Status.header` — see [§7 Architecture](7-Architecture.md) for the shared header contract.
 
 ---
 

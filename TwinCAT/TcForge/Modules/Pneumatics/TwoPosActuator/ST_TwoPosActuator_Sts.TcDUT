@@ -6,6 +6,11 @@
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_TwoPosActuator_Sts :
 STRUCT
+    // Common device header (ready/busy/faulted, fault codes + strings, timestamps).
+    {attribute 'OPC.UA.DA.Description' := 'Common device status header'}
+    header : ST_DeviceHeader_Sts;
+
+    // Device-specific state & feedback flags below.
     {attribute 'OPC.UA.DA.Description' := 'Current state of actuator'}
     state : E_TwoPosActuator_State;
     {attribute 'OPC.UA.DA.Description' := 'TRUE when actuator is advanced'}
@@ -14,22 +19,10 @@ STRUCT
     stsRetracted : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'TRUE when actuator is in motion'}
     stsMoving : BOOL;
-    {attribute 'OPC.UA.DA.Description' := 'TRUE when actuator is faulted'}
-    stsFaulted : BOOL;
-    {attribute 'OPC.UA.DA.Description' := 'Current fault code'}
-    faultCode : E_TwoPosActuator_Fault;
-    {attribute 'OPC.UA.DA.Description' := 'Last fault code for diagnostics'}
-    lastFaultCode : E_TwoPosActuator_Fault;
     {attribute 'OPC.UA.DA' := '0'}
     osAdvanced : BOOL;
     {attribute 'OPC.UA.DA' := '0'}
     osRetracted : BOOL;
-    {attribute 'OPC.UA.DA.Description' := 'Current state as text'}
-    stateString : STRING(80);
-    {attribute 'OPC.UA.DA.Description' := 'Current fault as text'}
-    faultString : STRING(80);
-    {attribute 'OPC.UA.DA.Description' := 'Last fault as text'}
-    lastFaultString : STRING(80);
 END_STRUCT
 END_TYPE]]></Declaration>
   </DUT>

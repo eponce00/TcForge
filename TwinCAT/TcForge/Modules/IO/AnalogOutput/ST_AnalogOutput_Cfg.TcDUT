@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_AnalogOutput_Cfg" Id="{b0100004-0001-0000-0000-000000000001}">
+    <Declaration><![CDATA[TYPE ST_AnalogOutput_Cfg :
+STRUCT
+    cfgScaleMin : REAL := 0.0;
+    cfgScaleMax : REAL := 100.0;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

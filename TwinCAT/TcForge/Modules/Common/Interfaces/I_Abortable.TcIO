@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <Itf Name="I_Abortable" Id="{5b80fb3a-d9a4-40af-9287-6e153ef863d3}">
+    <Declaration><![CDATA[// Devices that expose an Abort command. Abort is part of the safety-command
+// family along with Reset: it must always be accepted from any requester and
+// must not be gated by the source-lock or fault flags. It may be rejected
+// only when it would have no effect (device already in a terminal stopped
+// state).
+INTERFACE I_Abortable
+]]></Declaration>
+    <Method Name="Abort" Id="{1d05286b-2f29-4970-9039-d4a23089e228}">
+      <Declaration><![CDATA[METHOD Abort : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

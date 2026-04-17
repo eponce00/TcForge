@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_FaultEntry" Id="{c0000010-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// One entry in a device fault-history ring buffer.
+// code      : device-specific fault code (0 = empty slot)
+// ts        : timestamp when the fault was first raised
+// requester : whoever triggered the command that faulted (PROG / OPERATOR)
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_FaultEntry :
+STRUCT
+    code      : DINT;
+    ts        : LTIME;
+    requester : E_Requester;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

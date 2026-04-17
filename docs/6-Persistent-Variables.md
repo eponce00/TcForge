@@ -2,7 +2,7 @@
 
 This document covers how to use TwinCAT persistent variables correctly — which keyword to use, what to persist, how to configure the IPC hardware, and the risks to be aware of.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [HMI Integration](4-HMI-Integration.md) · [Sequencing](5-Sequencing.md)
+> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [HMI Integration](4-HMI-Integration.md) · [Sequencing](5-Sequencing.md) · [Architecture →](7-Architecture.md) · [I/O Binding →](8-IO-Binding.md)
 
 ---
 

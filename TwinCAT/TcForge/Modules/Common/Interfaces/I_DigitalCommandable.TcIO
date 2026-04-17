@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <Itf Name="I_DigitalCommandable" Id="{c0000004-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[INTERFACE I_DigitalCommandable
+]]></Declaration>
+    <Method Name="SetOn" Id="{c0000004-0000-0000-1000-000000000001}">
+      <Declaration><![CDATA[METHOD SetOn : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+    </Method>
+    <Method Name="SetOff" Id="{c0000004-0000-0000-1000-000000000002}">
+      <Declaration><![CDATA[METHOD SetOff : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

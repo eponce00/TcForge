@@ -2,7 +2,7 @@
 
 These standards govern the `TcForge` library and any projects built on it. They ensure consistency across all function blocks, from device-level actuators to the state machine.
 
-> **Navigation:** [← README](../README.md) · [Command Source Control →](2-Command-Source-Control.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md) · [Persistent Variables →](6-Persistent-Variables.md)
+> **Navigation:** [← README](../README.md) · [Command Source Control →](2-Command-Source-Control.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md) · [Persistent Variables →](6-Persistent-Variables.md) · [Architecture →](7-Architecture.md) · [I/O Binding →](8-IO-Binding.md)
 
 ---
 

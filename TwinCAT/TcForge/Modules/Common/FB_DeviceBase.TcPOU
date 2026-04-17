@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DeviceBase" Id="{c0000001-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Abstract base for TcForge device-like function blocks. Provides:
+//   - a composed FB_FaultHandler (_fault) for current / last / ring
+//   - the source-lock flag (bSourceLockedToProg)
+//   - safety-command primitives (Reset) that are always accepted
+//   - a default I_Diagnosable implementation that delegates to _fault
+//   - protected helpers for children to populate ST_DeviceHeader_Sts
+//
+// Children:
+//   - EXTEND this FB and declare their own sts containing ST_DeviceHeader_Sts
+//     as the first member named `header`
+//   - override ResolveFaultString(code) to map their device-specific fault
+//     enum to human-readable text
+//   - call _AcceptCommand(eRequester) at the end of every accepted method
+//   - call _UpdateHeader(sts.header, ...) once per cycle from the body
+FUNCTION_BLOCK ABSTRACT FB_DeviceBase IMPLEMENTS I_Resettable, I_SourceLockable, I_Diagnosable
+VAR
+    {attribute 'OPC.UA.DA' := '0'}
+    _fault : FB_FaultHandler;
+    {attribute 'OPC.UA.DA' := '0'}
+    bSourceLockedToProg : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _lastRequester : E_Requester;
+    {attribute 'OPC.UA.DA' := '0'}
+    _tsLastCommand : LTIME;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Abstract base — children implement their own cyclic logic.]]></ST>
+    </Implementation>
+    <Folder Name="Safety" Id="{c0000001-0000-0000-f000-000000000001}" />
+    <Folder Name="Diagnostics" Id="{c0000001-0000-0000-f000-000000000002}" />
+    <Folder Name="Protected" Id="{c0000001-0000-0000-f000-000000000003}" />
+    <Method Name="Reset" Id="{c0000001-0000-0000-1000-000000000001}" FolderPath="Safety\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// Safety invariant: Reset is always accepted from any requester, regardless
+// of source lock or current fault state. Clears the active fault; history is
+// preserved in the ring buffer. Children may override to add device-specific
+// cleanup (e.g. return-to-idle), but must call SUPER^.Reset and must keep
+// the always-accepted contract.
+METHOD PUBLIC Reset : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_fault.Clear();
+_AcceptCommand(eRequester := eRequester);
+Reset := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LockSource" Id="{c0000001-0000-0000-1000-000000000002}" FolderPath="Safety\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC LockSource : E_RpcMethodResponse
+VAR_INPUT
+    bLock : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bSourceLockedToProg := bLock;
+LockSource := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="IsFaulted" Id="{c0000001-0000-0000-1000-000000000003}" FolderPath="Diagnostics\">
+      <Declaration><![CDATA[METHOD PUBLIC IsFaulted : BOOL
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IsFaulted := _fault.IsFaulted();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetFaultCode" Id="{c0000001-0000-0000-1000-000000000004}" FolderPath="Diagnostics\">
+      <Declaration><![CDATA[METHOD PUBLIC GetFaultCode : DINT
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetFaultCode := _fault.GetCurrentCode();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetFaultString" Id="{c0000001-0000-0000-1000-000000000005}" FolderPath="Diagnostics\">
+      <Declaration><![CDATA[METHOD PUBLIC GetFaultString : STRING(79)
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Virtual dispatch: child's ResolveFaultString() maps the current code.
+GetFaultString := THIS^.ResolveFaultString(code := _fault.GetCurrentCode());]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResolveFaultString" Id="{c0000001-0000-0000-1000-000000000006}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Children override to translate their fault-enum value into human-readable
+// text. Default returns empty so devices without a fault model still compile.
+METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ResolveFaultString := '';]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_AcceptCommand" Id="{c0000001-0000-0000-1000-000000000007}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Book-keeping called at the end of every accepted command method.
+METHOD PROTECTED _AcceptCommand
+VAR_INPUT
+    eRequester : E_Requester;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_lastRequester := eRequester;
+_tsLastCommand := _Now();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_Now" Id="{c0000001-0000-0000-1000-000000000008}" FolderPath="Protected\">
+      <Declaration><![CDATA[// System timestamp used for fault and command logs. Tc2_System.F_GetSystemTime
+// returns ULINT of 100 ns intervals since 1601-01-01 UTC; converted to LTIME
+// (nanoseconds) by multiplying by 100.
+METHOD PROTECTED _Now : LTIME
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_Now := ULINT_TO_LTIME(Tc2_System.F_GetSystemTime() * 100);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_UpdateHeader" Id="{c0000001-0000-0000-1000-000000000009}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Refreshes the common header a child embeds as `header` in its sts struct.
+// Call once per cycle from the child's cyclic body. Device-specific fields
+// (stsAdvanced, stsValue, etc.) stay in the child sts alongside `header`.
+METHOD PROTECTED _UpdateHeader
+VAR_IN_OUT
+    header : ST_DeviceHeader_Sts;
+END_VAR
+VAR_INPUT
+    stateString : STRING(31);
+    stsBusy     : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[header.stateString     := stateString;
+header.stsBusy         := stsBusy;
+header.stsFaulted      := _fault.IsFaulted();
+header.stsReady        := NOT header.stsFaulted AND NOT stsBusy AND NOT bSourceLockedToProg;
+header.stsSourceLocked := bSourceLockedToProg;
+header.faultCode       := _fault.GetCurrentCode();
+header.faultString     := THIS^.ResolveFaultString(code := header.faultCode);
+header.lastFaultCode   := _fault.GetLastCode();
+header.lastFaultString := THIS^.ResolveFaultString(code := header.lastFaultCode);
+header.lastRequester   := _lastRequester;
+header.tsLastCommand   := _tsLastCommand;
+header.tsLastFault     := _fault.GetLastTs();]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_DeviceBase">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeviceBase.Reset">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeviceBase.LockSource">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeviceBase.IsFaulted">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeviceBase.GetFaultCode">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeviceBase.GetFaultString">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeviceBase.ResolveFaultString">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeviceBase._AcceptCommand">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeviceBase._Now">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeviceBase._UpdateHeader">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

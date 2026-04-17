@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DigitalInput" Id="{a0100001-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_DigitalInput EXTENDS FB_DeviceBase
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg : ST_DigitalInput_Cfg;
+END_VAR
+
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_DigitalInput_Sts;
+END_VAR
+
+VAR_IN_OUT
+    {attribute 'OPC.UA.DA' := '0'}
+    IO : ST_DigitalInput_IO;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Skeleton - no I/O logic yet. Populate the common header so the device
+// surfaces ready/faulted/source-locked status to HMIs consistently.
+_UpdateHeader(header := sts.header, stateString := '', stsBusy := FALSE);]]></ST>
+    </Implementation>
+    <LineIds Name="FB_DigitalInput">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DigitalOutput" Id="{a0100002-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_DigitalOutput EXTENDS FB_DeviceBase IMPLEMENTS I_DigitalCommandable
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg : ST_DigitalOutput_Cfg;
+END_VAR
+
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_DigitalOutput_Sts;
+END_VAR
+
+VAR_IN_OUT
+    {attribute 'OPC.UA.DA' := '0'}
+    IO : ST_DigitalOutput_IO;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Skeleton - no I/O logic yet. Populate the common header so the device
+// surfaces ready/faulted/source-locked status to HMIs consistently.
+_UpdateHeader(header := sts.header, stateString := '', stsBusy := FALSE);]]></ST>
+    </Implementation>
+    <Folder Name="Public" Id="{a0100002-0000-0000-f000-000000000001}" />
+    <Method Name="SetOn" Id="{a0100002-0000-0000-1000-000000000001}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC SetOn : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Skeleton
+SetOn := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetOff" Id="{a0100002-0000-0000-1000-000000000002}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC SetOff : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Skeleton
+SetOff := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_DigitalOutput">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DigitalOutput.SetOn">
+      <LineId Id="1" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_DigitalOutput.SetOff">
+      <LineId Id="1" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_DeviceHeader_Sts" Id="{c0000011-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Common status header embedded at the top of every device sts struct.
+// Populated by FB_DeviceBase each cycle from the composed fault handler and
+// source-lock flag; device-specific fields sit below the header in the child
+// sts struct.
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_DeviceHeader_Sts :
+STRUCT
+    {attribute 'OPC.UA.DA.Description' := 'Human-readable device state'}
+    stateString     : STRING(31);
+    {attribute 'OPC.UA.DA.Description' := 'Device idle, not faulted, source reachable'}
+    stsReady        : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Device actively transitioning'}
+    stsBusy         : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Device fault is currently asserted'}
+    stsFaulted      : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Source is locked to PROG (rejects OPERATOR commands)'}
+    stsSourceLocked : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Current fault code (0 = no fault)'}
+    faultCode       : DINT;
+    {attribute 'OPC.UA.DA.Description' := 'Current fault code as text'}
+    faultString     : STRING(79);
+    {attribute 'OPC.UA.DA.Description' := 'Most recent fault code (survives Reset)'}
+    lastFaultCode   : DINT;
+    {attribute 'OPC.UA.DA.Description' := 'Most recent fault code as text'}
+    lastFaultString : STRING(79);
+    {attribute 'OPC.UA.DA.Description' := 'Who issued the last accepted command'}
+    lastRequester   : E_Requester;
+    {attribute 'OPC.UA.DA.Description' := 'Timestamp of last accepted command'}
+    tsLastCommand   : LTIME;
+    {attribute 'OPC.UA.DA.Description' := 'Timestamp of most recent raised fault'}
+    tsLastFault     : LTIME;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

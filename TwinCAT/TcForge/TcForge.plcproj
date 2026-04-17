@@ -74,6 +74,9 @@
     <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Faceplate.TcDUT">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Modules\Sequencing\StateMachine\E_SM_Fault.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Modules\Sequencing\StateMachine\E_SM_State.TcDUT">
       <SubType>Code</SubType>
     </Compile>
@@ -89,16 +92,100 @@
     <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Step.TcDUT">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Modules\IO\DigitalInput\FB_DigitalInput.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalInput\ST_DigitalInput_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalInput\ST_DigitalInput_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalInput\ST_DigitalInput_IO.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\FB_DigitalOutput.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\ST_DigitalOutput_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\ST_DigitalOutput_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\ST_DigitalOutput_IO.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogInput\FB_AnalogInput.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogInput\ST_AnalogInput_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogInput\ST_AnalogInput_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogInput\ST_AnalogInput_IO.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogOutput\FB_AnalogOutput.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogOutput\ST_AnalogOutput_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogOutput\ST_AnalogOutput_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogOutput\ST_AnalogOutput_IO.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\FB_DeviceBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\FB_FaultHandler.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\ST_DeviceHeader_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\ST_FaultEntry.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Interfaces\I_Resettable.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Interfaces\I_SourceLockable.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Interfaces\I_DigitalCommandable.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Interfaces\I_AnalogCommandable.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Interfaces\I_Abortable.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Interfaces\I_Diagnosable.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Modules" />
     <Folder Include="Modules\Common" />
+    <Folder Include="Modules\Common\Interfaces" />
     <Folder Include="Modules\Interlocks" />
     <Folder Include="Modules\Pneumatics" />
     <Folder Include="Modules\Pneumatics\TwoPosActuator" />
     <Folder Include="Modules\Sequencing" />
     <Folder Include="Modules\Sequencing\Permissives" />
     <Folder Include="Modules\Sequencing\StateMachine" />
+    <Folder Include="Modules\IO" />
+    <Folder Include="Modules\IO\DigitalInput" />
+    <Folder Include="Modules\IO\DigitalOutput" />
+    <Folder Include="Modules\IO\AnalogInput" />
+    <Folder Include="Modules\IO\AnalogOutput" />
     <Folder Include="GVLs" />
     <Folder Include="VISUs" />
   </ItemGroup>

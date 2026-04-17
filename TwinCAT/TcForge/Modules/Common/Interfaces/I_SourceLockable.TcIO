@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <Itf Name="I_SourceLockable" Id="{c0000003-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[INTERFACE I_SourceLockable
+]]></Declaration>
+    <Method Name="LockSource" Id="{c0000003-0000-0000-1000-000000000001}">
+      <Declaration><![CDATA[METHOD LockSource : E_RpcMethodResponse
+VAR_INPUT
+    bLock : BOOL;
+END_VAR]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

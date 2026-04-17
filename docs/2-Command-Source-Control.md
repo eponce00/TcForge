@@ -2,7 +2,7 @@
 
 All commands in this library are issued through **RPC methods** on function blocks — there are no `pcmd` or `ocmd` input pins. Each method validates the request, checks permissions, and executes internally. The FB body handles only cyclic evaluation.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md)
+> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md) · [Architecture →](7-Architecture.md) · [I/O Binding →](8-IO-Binding.md)
 
 ---
 
@@ -129,8 +129,8 @@ response := fbActuator.Advance(E_Requester.OPERATOR);   // OPERATOR (from HMI/OP
 |--------|---------------|-------------|
 | `Advance(eRequester)` | Yes | Validate permissives, state, source; enter Advancing state |
 | `Retract(eRequester)` | Yes | Validate permissives, state, source; enter Retracting state |
-| `AllOff(eRequester)` | Skip source | De-energize all valves, enter Undefined |
-| `Reset(eRequester)` | Yes (allow faulted) | Clear fault latch, store last fault, enter Undefined |
+| `Abort(eRequester)` | Skip source | Always accepted. De-energize all valves, enter Undefined |
+| `Reset(eRequester)` | Skip source | Always accepted. Clear fault history, return to Undefined for re-evaluation |
 | `LockSource(bLock)` | No | Lock or unlock source to PROG |
 
 ---

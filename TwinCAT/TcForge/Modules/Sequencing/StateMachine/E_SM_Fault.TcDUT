@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_SM_Fault" Id="{a1b2c3d4-0002-0001-0001-000000000001}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'to_string'}
+// Fault codes surfaced by FB_StateMachine via ST_DeviceHeader_Sts / FB_FaultHandler.
+// These are aggregated causes; step-level detail still lives in Step.Current.
+TYPE E_SM_Fault :
+(
+    None                    := 0,
+    OddStepFault            := 1,   // current step is odd (fault step by convention)
+    SubmoduleFaulted        := 2,   // external inpSubmoduleFaulted asserted
+    RunningInterlockTripped := 3    // intlkRunning forced an abort
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

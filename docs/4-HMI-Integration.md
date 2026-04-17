@@ -2,7 +2,7 @@
 
 This document describes the OPC UA / HMI integration strategy for function blocks. The PLC exposes `cfg`, `sts`, and RPC methods directly — no parallel HMI structures.
 
-> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [RPC Method Response](3-RPC-Method-Response.md) · [Sequencing →](5-Sequencing.md)
+> **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [RPC Method Response](3-RPC-Method-Response.md) · [Sequencing →](5-Sequencing.md) · [Architecture](7-Architecture.md) · [I/O Binding](8-IO-Binding.md)
 
 ---
 
