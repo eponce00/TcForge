@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AnalogInput_Probe" Id="{b1c2d3e4-f5a6-7890-abcd-000000000d00}" SpecialFunc="None">
+    <Declaration><![CDATA[// Test-only child of FB_AnalogInput. The production FB keeps its
+// hardware-linked `io` UNION in a private VAR section, so tests use this
+// probe to inject raw terminal bytes via the UNION alias that matches
+// the cfgInputType under test (nInt, fReal, di, ...).
+//
+// The probe delegates the cyclic body back to the parent via SUPER^()
+// so the inherited conditioning pipeline runs against the injected raw
+// value. Without that call the child's empty body would replace the
+// parent logic and every assertion would see zeroed status.
+//
+// Lives in the Testing project only — not part of TcForge's public API.
+FUNCTION_BLOCK FB_AnalogInput_Probe EXTENDS TcForge.FB_AnalogInput]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();]]></ST>
+    </Implementation>
+    <Method Name="SetRawInt" Id="{b1c2d3e4-f5a6-7890-abcd-000000000d01}">
+      <Declaration><![CDATA[// Inject the raw terminal value via the INT alias of the UNION.
+// Pair with cfg.cfgInputType := __SYSTEM.TYPE_CLASS.TYPE_INT.
+METHOD PUBLIC SetRawInt
+VAR_INPUT
+    nValue : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[io.inRaw.nInt := nValue;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetRawReal" Id="{b1c2d3e4-f5a6-7890-abcd-000000000d02}">
+      <Declaration><![CDATA[// Inject the raw terminal value via the REAL alias of the UNION.
+// Pair with cfg.cfgInputType := __SYSTEM.TYPE_CLASS.TYPE_REAL.
+METHOD PUBLIC SetRawReal
+VAR_INPUT
+    fValue : REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[io.inRaw.fReal := fValue;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetRawDInt" Id="{b1c2d3e4-f5a6-7890-abcd-000000000d03}">
+      <Declaration><![CDATA[// Inject the raw terminal value via the DINT alias of the UNION.
+// Pair with cfg.cfgInputType := __SYSTEM.TYPE_CLASS.TYPE_DINT.
+METHOD PUBLIC SetRawDInt
+VAR_INPUT
+    nValue : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[io.inRaw.di := nValue;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

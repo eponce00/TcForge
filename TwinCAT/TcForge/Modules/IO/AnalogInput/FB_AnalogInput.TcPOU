@@ -76,14 +76,14 @@ sts.stsQuality := inpQuality;
 
 // 2. Read correct UNION member.
 CASE cfg.cfgInputType OF
-    __SYSTEM.TYPE_CLASS.TYPE_INT:   _rawReal := TO_REAL(io.inRaw.i);
+    __SYSTEM.TYPE_CLASS.TYPE_INT:   _rawReal := TO_REAL(io.inRaw.nInt);
     __SYSTEM.TYPE_CLASS.TYPE_UINT:  _rawReal := TO_REAL(io.inRaw.ui);
     __SYSTEM.TYPE_CLASS.TYPE_WORD:  _rawReal := TO_REAL(io.inRaw.w);
     __SYSTEM.TYPE_CLASS.TYPE_DINT:  _rawReal := TO_REAL(io.inRaw.di);
     __SYSTEM.TYPE_CLASS.TYPE_UDINT: _rawReal := TO_REAL(io.inRaw.udi);
     __SYSTEM.TYPE_CLASS.TYPE_DWORD: _rawReal := TO_REAL(io.inRaw.dw);
 ELSE
-    _rawReal := io.inRaw.r;
+    _rawReal := io.inRaw.fReal;
 END_CASE;
 
 // 3. Quality-gated hold. Ignore the freshly read value while BAD.

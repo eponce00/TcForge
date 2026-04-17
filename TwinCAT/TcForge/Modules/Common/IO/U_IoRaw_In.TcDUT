@@ -2,10 +2,10 @@
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <DUT Name="U_IoRaw_In" Id="{c0000030-0000-0000-0000-000000000003}">
     <Declaration><![CDATA[// 32-bit input UNION for generic raw analog (or bit-packed) terminals.
-// One member `dw` carries the `AT %I*` pragma so the UNION can be linked via
-// TcLinkTo to any EtherCAT input channel up to 32 bits wide. The remaining
-// members are reinterpretation views of the same bytes so the FB body can
-// read whichever representation the cfg selected without runtime copies.
+// The UNION itself carries no AT pragma — the enclosing ST_AnalogInput_IO
+// puts `AT %I*` on its `inRaw` member so the whole 32-bit slot is reserved
+// as input memory, and the UNION members give the FB body zero-cost views
+// of the same bytes.
 //
 // Supported linkages:
 //   - 16-bit INT / UINT / WORD terminals (e.g. EL3024 4-20 mA, EL3064 0-10 V)
@@ -15,16 +15,22 @@
 // Usage pattern: inside FB_AnalogInput declare `io : ST_AnalogInput_IO`; the
 // sts struct exposes the raw terminal as `io.inRaw`. Link from GVL_HW via
 //   {attribute 'TcLinkTo' := '.io.inRaw.dw := TIID^...^Input'}
-// then choose the matching interpretation with cfg.eInputType.
+// then choose the matching interpretation with cfg.cfgInputType.
+//
+// Member naming: use multi-character identifiers only (fReal, nInt, ...).
+// TwinCAT's compiler mis-parses 1-character UNION members (e.g. `r`) when
+// the enclosing FB is extended by a subclass — the member `r : REAL;` in
+// an earlier revision triggered cascading C0009/C0189 parser errors in
+// the Testing project. Keep names at 2+ characters to avoid regressions.
 TYPE U_IoRaw_In :
 UNION
-    dw  AT %I* : DWORD;
-    r          : REAL;
-    w          : WORD;
-    i          : INT;
-    ui         : UINT;
-    di         : DINT;
-    udi        : UDINT;
+    dw    : DWORD;
+    fReal : REAL;
+    w     : WORD;
+    nInt  : INT;
+    ui    : UINT;
+    di    : DINT;
+    udi   : UDINT;
 END_UNION
 END_TYPE
 ]]></Declaration>

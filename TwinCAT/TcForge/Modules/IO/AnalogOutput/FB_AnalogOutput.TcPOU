@@ -99,14 +99,14 @@ sts.stsRawReal := _rawReal;
 //    the previously-written value by simply skipping the write.
 IF inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED THEN
     CASE cfg.cfgOutputType OF
-        __SYSTEM.TYPE_CLASS.TYPE_INT:   io.outRaw.i   := REAL_TO_INT(_rawReal);
-        __SYSTEM.TYPE_CLASS.TYPE_UINT:  io.outRaw.ui  := REAL_TO_UINT(_rawReal);
-        __SYSTEM.TYPE_CLASS.TYPE_WORD:  io.outRaw.w   := REAL_TO_WORD(_rawReal);
-        __SYSTEM.TYPE_CLASS.TYPE_DINT:  io.outRaw.di  := REAL_TO_DINT(_rawReal);
-        __SYSTEM.TYPE_CLASS.TYPE_UDINT: io.outRaw.udi := REAL_TO_UDINT(_rawReal);
-        __SYSTEM.TYPE_CLASS.TYPE_DWORD: io.outRaw.dw  := REAL_TO_DWORD(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_INT:   io.outRaw.nInt := REAL_TO_INT(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_UINT:  io.outRaw.ui   := REAL_TO_UINT(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_WORD:  io.outRaw.w    := REAL_TO_WORD(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_DINT:  io.outRaw.di   := REAL_TO_DINT(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_UDINT: io.outRaw.udi  := REAL_TO_UDINT(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_DWORD: io.outRaw.dw   := REAL_TO_DWORD(_rawReal);
     ELSE
-        io.outRaw.r := _rawReal;
+        io.outRaw.fReal := _rawReal;
     END_CASE;
 END_IF;
 

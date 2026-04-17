@@ -28,6 +28,16 @@ changes are called out explicitly under each release.
   `FB_BitMatrix64`. The two FBs now focus purely on their unique logic
   (latching + unmapped-bad memory for interlocks; none for permissives).
   ~80 lines of duplicated bit-fiddling eliminated.
+- **`U_IoRaw_In` / `U_IoRaw_Out`** — UNION member names widened from
+  1-character aliases to multi-character ones (`r` → `fReal`,
+  `i` → `nInt`); the `AT %I*` / `AT %Q*` pragma moved from a UNION
+  member to the enclosing `ST_AnalogInput_IO.inRaw` /
+  `ST_AnalogOutput_IO.outRaw` variable. Workaround for a TwinCAT
+  parser bug that mis-parsed 1-character UNION members when the
+  enclosing FB was extended by a subclass in a referenced library,
+  which previously blocked unit testing of `FB_AnalogInput` and
+  `FB_AnalogOutput`. Hardware-link syntax (`.io.inRaw.dw` / `.io.outRaw.dw`)
+  is unchanged; only `.r` → `.fReal` and `.i` → `.nInt` on the UNION alias.
 
 ### Docs
 
@@ -73,8 +83,16 @@ changes are called out explicitly under each release.
   both-feedback and lost-feedback faults, `Abort` always accepted, and
   `header.stsBusy` mirroring `stsMoving`. Time-dependent timeout paths
   deferred to integration testing.
+- **`FB_AnalogInput_Test`** (12 cases) via `FB_AnalogInput_Probe` —
+  conditioning pipeline end-to-end: initial status, linear scaling
+  endpoints + midpoint, raw bypass, clamp-low / clamp-high with
+  stsClamped* reporting, `CLAMPED` quality promotion, `cfgClampAsFault`
+  promoting clamps to `ClampLow` / `ClampHigh` faults, `BadConfig` on
+  first scan, BAD-quality last-known-good hold, `TYPE_REAL` UNION
+  member selection, and quality-tag propagation. Unblocked by the
+  `U_IoRaw_In` rename above.
 
-Full suite: 106 tests across 11 suites, green on the remote runtime
+Full suite: 118 tests across 12 suites, green on the remote runtime
 (`172.18.236.100.1.1`).
 
 ## [2026-04-16] — Alarms + architecture simplification

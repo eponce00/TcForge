@@ -14,6 +14,7 @@ VAR
     fbDigitalOutput_Test     : FB_DigitalOutput_Test;
     fbDigitalInput_Test      : FB_DigitalInput_Test;
     fbTwoPosActuator_Test    : FB_TwoPosActuator_Test;
+    fbAnalogInput_Test       : FB_AnalogInput_Test;
 END_VAR
 ]]>
     </Declaration>
