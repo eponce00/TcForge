@@ -45,7 +45,7 @@ When locked, any method call with `eRequester := E_Requester.OPERATOR` is reject
 
 ## 2.3 F_ValidateRequester
 
-All methods use `F_ValidateRequester` as the first validation step:
+All non-safety methods use `F_ValidateRequester` as the first validation step. Its signature is deliberately minimal — three inputs, no flags:
 
 ```iecst
 METHOD Advance : E_RpcMethodResponse
@@ -53,7 +53,11 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR
 ---
-Advance := F_ValidateRequester(eRequester, bSourceLockedToProg, faultLatched, FALSE, FALSE);
+Advance := F_ValidateRequester(
+    eRequester    := eRequester,
+    bSourceLocked := bSourceLockedToProg,
+    bFaulted      := IsFaulted()
+);
 IF Advance <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 // ... device-specific checks and execution
 ```
@@ -65,20 +69,20 @@ Parameters:
 | `eRequester` | `E_Requester` | Who is calling |
 | `bSourceLocked` | `BOOL` | Is source locked to PROG |
 | `bFaulted` | `BOOL` | Is the FB in a faulted state |
-| `bAllowWhenFaulted` | `BOOL` | `TRUE` for Reset-type methods |
-| `bSkipSourceCheck` | `BOOL` | `TRUE` for safety commands (Abort, Stop) |
+
+Safety commands (`Reset`, `Abort`, `Stop`) do **not** call `F_ValidateRequester` at all — they accept unconditionally. There is no "allow when faulted" or "skip source check" parameter because these commands need to work precisely when something is wrong.
 
 ---
 
 ## 2.4 Method Validation Chain
 
-When a method is called, validation proceeds in this order:
+When a non-safety method is called, validation proceeds in this order:
 
 1. **Source check** — if locked to PROG and requester is OPERATOR → `REJECTED_SOURCE_NOT_ALLOWED`
-2. **Fault check** — if faulted and not allowed when faulted → `REJECTED_FAULTED`
+2. **Fault check** — if faulted → `REJECTED_FAULTED`
 3. **State check** — wrong state → `REJECTED_WRONG_STATE` or `REJECTED_ALREADY_AT_TARGET`
 4. **Permissive check** — permissives not met → `REJECTED_PERMISSIVE_NOT_MET`
-5. **Execute** — perform command logic → `ACCEPTED`
+5. **Execute** — perform command logic, call `_AcceptCommand(eRequester)` for book-keeping → `ACCEPTED`
 
 ### 2.4.1 Method Pattern
 
@@ -90,7 +94,11 @@ VAR_INPUT
 END_VAR
 
 // 1. Source + fault validation
-Advance := F_ValidateRequester(eRequester, bSourceLockedToProg, faultLatched, FALSE, FALSE);
+Advance := F_ValidateRequester(
+    eRequester    := eRequester,
+    bSourceLocked := bSourceLockedToProg,
+    bFaulted      := IsFaulted()
+);
 IF Advance <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 // 2. State check
@@ -106,9 +114,10 @@ IF NOT advancePermissives.sts.OK THEN
     RETURN;
 END_IF;
 
-// 4. Execute
+// 4. Execute + book-keep
 currentState := E_TwoPosActuator_State.Advancing;
 advanceTimer(IN := FALSE);
+_AcceptCommand(eRequester := eRequester);
 Advance := E_RpcMethodResponse.ACCEPTED;
 ```
 
@@ -125,30 +134,31 @@ response := fbActuator.Advance(E_Requester.OPERATOR);   // OPERATOR (from HMI/OP
 
 ## 2.5 FB_TwoPosActuator Methods
 
-| Method | Source Checked | Description |
-|--------|---------------|-------------|
-| `Advance(eRequester)` | Yes | Validate permissives, state, source; enter Advancing state |
-| `Retract(eRequester)` | Yes | Validate permissives, state, source; enter Retracting state |
-| `Abort(eRequester)` | Skip source | Always accepted. De-energize all valves, enter Undefined |
-| `Reset(eRequester)` | Skip source | Always accepted. Clear fault history, return to Undefined for re-evaluation |
-| `LockSource(bLock)` | No | Lock or unlock source to PROG |
+| Method | Validated | Description |
+|--------|-----------|-------------|
+| `Advance(eRequester)` | `F_ValidateRequester` + state + permissives | Enter Advancing state |
+| `Retract(eRequester)` | `F_ValidateRequester` + state + permissives | Enter Retracting state |
+| `Abort(eRequester)` | Always accepted | De-energize all valves, enter Undefined |
+| `Reset(eRequester)` | Always accepted | Clear active fault, return to Undefined for re-evaluation |
+| `LockSource(bLock)` | Always accepted | Lock or unlock source to PROG |
 
 ---
 
 ## 2.6 FB_StateMachine Methods
 
-| Method | Source Checked | Description |
-|--------|---------------|-------------|
-| `Start(eRequester)` | Yes | Must be Ready; check start perms and interlocks |
-| `Home(eRequester)` | Yes | Must be Stopped; check home perms and interlocks |
-| `Stop(eRequester)` | No (safety) | Always accepted; transition to Stopping |
-| `Abort(eRequester)` | No (safety) | Always accepted; transition to Aborting |
-| `Pause(eRequester)` | Yes | Must be Running |
-| `Proceed(eRequester)` | Yes | Must be Paused; check proceed perms and interlocks |
-| `Retry(eRequester)` | Yes | Always accepted; triggers retry for current step |
-| `LockSource(bLock)` | No | Lock or unlock source to PROG |
+| Method | Validated | Description |
+|--------|-----------|-------------|
+| `Start(eRequester)` | `F_ValidateRequester` + state + permissives | Must be Ready; check start perms and interlocks |
+| `Home(eRequester)` | `F_ValidateRequester` + state + permissives | Must be Stopped; check home perms and interlocks |
+| `Stop(eRequester)` | Always accepted | Transition to Stopping |
+| `Abort(eRequester)` | Always accepted | Transition to Aborting |
+| `Pause(eRequester)` | `F_ValidateRequester` + state | Must be Running |
+| `Proceed(eRequester)` | `F_ValidateRequester` + state + permissives | Must be Paused; check proceed perms and interlocks |
+| `Retry(eRequester)` | Always accepted | Triggers retry for current step |
+| `Reset(eRequester)` | Always accepted | Clears fault, returns to Ready |
+| `LockSource(bLock)` | Always accepted | Lock or unlock source to PROG |
 
-> **Note:** `Stop` and `Abort` bypass source checks — an emergency stop must never be rejected.
+> **Note:** Safety commands (`Stop`, `Abort`, `Reset`, `Retry`) bypass `F_ValidateRequester` entirely — an emergency stop must never be rejected.
 
 ---
 
@@ -168,7 +178,7 @@ response := fbActuator.Advance(E_Requester.OPERATOR);   // OPERATOR (from HMI/OP
 
 - **No ADVANCED source** — two sources (`PROG` / `OPERATOR`) are sufficient. The enum can be extended.
 - **No manual override distinction** — the operator either has authority or doesn't.
-- **Safety commands always accept** — `Stop` and `Abort` skip all validation.
-- **Reset allowed when faulted** — by definition, Reset is the exit from fault. It still checks source lock.
+- **Safety commands always accept** — `Reset`, `Abort`, and `Stop` don't call `F_ValidateRequester` at all. Reset is the exit from fault; Abort and Stop must fire regardless of source lock.
+- **Minimal validator** — `F_ValidateRequester` has three inputs (requester, source lock, fault). Commands that need to bypass the gate simply don't call it rather than carrying feature flags.
 - **Methods hold the logic** — eliminates scan delay between flag and execution.
 - **Default requester is PROG** — PLC code should not have to specify it on every call.

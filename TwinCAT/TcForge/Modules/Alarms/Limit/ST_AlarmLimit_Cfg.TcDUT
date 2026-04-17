@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_AlarmLimit_Cfg" Id="{b0200003-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Four-level limit ladder: HiHi / Hi / Lo / LoLo. Each level is a full
+// ST_AlarmThreshold_Cfg, so each can have its own delay, severity, ack
+// requirement, and message. Remember every level defaults to bEnable := FALSE.
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_AlarmLimit_Cfg :
+STRUCT
+    {attribute 'OPC.UA.DA.Description' := 'High-High (critical high, e.g. emergency shutdown)'}
+    HiHi : ST_AlarmThreshold_Cfg;
+
+    {attribute 'OPC.UA.DA.Description' := 'High (warning high, operator alert)'}
+    Hi   : ST_AlarmThreshold_Cfg;
+
+    {attribute 'OPC.UA.DA.Description' := 'Low (warning low)'}
+    Lo   : ST_AlarmThreshold_Cfg;
+
+    {attribute 'OPC.UA.DA.Description' := 'Low-Low (critical low)'}
+    LoLo : ST_AlarmThreshold_Cfg;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

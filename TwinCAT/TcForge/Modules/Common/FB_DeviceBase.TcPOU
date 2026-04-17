@@ -2,10 +2,10 @@
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_DeviceBase" Id="{c0000001-0000-0000-0000-000000000001}" SpecialFunc="None">
     <Declaration><![CDATA[// Abstract base for TcForge device-like function blocks. Provides:
-//   - a composed FB_FaultHandler (_fault) for current / last / ring
+//   - built-in fault book-keeping (current + last + persistent ring buffer)
 //   - the source-lock flag (bSourceLockedToProg)
 //   - safety-command primitives (Reset) that are always accepted
-//   - a default I_Diagnosable implementation that delegates to _fault
+//   - diagnostics methods (IsFaulted / GetFaultCode / GetFaultString)
 //   - protected helpers for children to populate ST_DeviceHeader_Sts
 //
 // Children:
@@ -13,18 +13,56 @@
 //     as the first member named `header`
 //   - override ResolveFaultString(code) to map their device-specific fault
 //     enum to human-readable text
+//   - call _Raise(code, source, reason) to register a fault (idempotent on
+//     `code`); _ClearFault() to clear without losing history
 //   - call _AcceptCommand(eRequester) at the end of every accepted method
 //   - call _UpdateHeader(sts.header, ...) once per cycle from the body
-FUNCTION_BLOCK ABSTRACT FB_DeviceBase IMPLEMENTS I_Resettable, I_SourceLockable, I_Diagnosable
+//
+// Fault semantics:
+//   - _Raise is idempotent on `code`. Repeated calls with the same non-zero
+//     code push only one ring entry per episode; a different code replaces
+//     the current fault and pushes a new entry (so a progression like
+//     Timeout -> OddStep is preserved).
+//   - _ClearFault wipes the active fault only. last* fields and the ring
+//     survive so HMIs can still show what happened.
+//   - The last-fault fields and ring buffer are PERSISTENT so that a process
+//     restart does not silently lose the most recent fault context.
+FUNCTION_BLOCK ABSTRACT FB_DeviceBase
+VAR CONSTANT
+    FAULT_RING_SIZE : UDINT := 8;
+END_VAR
+
 VAR
-    {attribute 'OPC.UA.DA' := '0'}
-    _fault : FB_FaultHandler;
     {attribute 'OPC.UA.DA' := '0'}
     bSourceLockedToProg : BOOL;
     {attribute 'OPC.UA.DA' := '0'}
     _lastRequester : E_Requester;
     {attribute 'OPC.UA.DA' := '0'}
     _tsLastCommand : LTIME;
+
+    // Active fault (not persistent; Reset on restart so recovery logic re-runs).
+    {attribute 'OPC.UA.DA' := '0'}
+    _faultCode   : DINT;
+    {attribute 'OPC.UA.DA' := '0'}
+    _faultTs     : LTIME;
+    {attribute 'OPC.UA.DA' := '0'}
+    _faultSource : STRING(31);
+    {attribute 'OPC.UA.DA' := '0'}
+    _faultReason : STRING(79);
+END_VAR
+
+VAR PERSISTENT
+    // Most recent fault — survives Reset (and PLC restart) so HMIs can always
+    // show "last fault info".
+    _lastFaultCode      : DINT;
+    _lastFaultTs        : LTIME;
+    _lastFaultRequester : E_Requester;
+    _lastFaultSource    : STRING(31);
+    _lastFaultReason    : STRING(79);
+
+    // Short ring-buffer history.
+    _faultRing     : ARRAY[0..7] OF ST_FaultEntry;
+    _faultRingHead : UDINT;
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[// Abstract base — children implement their own cyclic logic.]]></ST>
@@ -44,7 +82,7 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[_fault.Clear();
+        <ST><![CDATA[_ClearFault();
 _AcceptCommand(eRequester := eRequester);
 Reset := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
@@ -64,14 +102,14 @@ LockSource := E_RpcMethodResponse.ACCEPTED;]]></ST>
       <Declaration><![CDATA[METHOD PUBLIC IsFaulted : BOOL
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IsFaulted := _fault.IsFaulted();]]></ST>
+        <ST><![CDATA[IsFaulted := _faultCode <> 0;]]></ST>
       </Implementation>
     </Method>
     <Method Name="GetFaultCode" Id="{c0000001-0000-0000-1000-000000000004}" FolderPath="Diagnostics\">
       <Declaration><![CDATA[METHOD PUBLIC GetFaultCode : DINT
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[GetFaultCode := _fault.GetCurrentCode();]]></ST>
+        <ST><![CDATA[GetFaultCode := _faultCode;]]></ST>
       </Implementation>
     </Method>
     <Method Name="GetFaultString" Id="{c0000001-0000-0000-1000-000000000005}" FolderPath="Diagnostics\">
@@ -79,7 +117,7 @@ LockSource := E_RpcMethodResponse.ACCEPTED;]]></ST>
 ]]></Declaration>
       <Implementation>
         <ST><![CDATA[// Virtual dispatch: child's ResolveFaultString() maps the current code.
-GetFaultString := THIS^.ResolveFaultString(code := _fault.GetCurrentCode());]]></ST>
+GetFaultString := THIS^.ResolveFaultString(code := _faultCode);]]></ST>
       </Implementation>
     </Method>
     <Method Name="ResolveFaultString" Id="{c0000001-0000-0000-1000-000000000006}" FolderPath="Protected\">
@@ -101,20 +139,69 @@ VAR_INPUT
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[_lastRequester := eRequester;
-_tsLastCommand := _Now();]]></ST>
+_tsLastCommand := F_Now();]]></ST>
       </Implementation>
     </Method>
-    <Method Name="_Now" Id="{c0000001-0000-0000-1000-000000000008}" FolderPath="Protected\">
-      <Declaration><![CDATA[// System timestamp used for fault and command logs. Tc2_System.F_GetSystemTime
-// returns ULINT of 100 ns intervals since 1601-01-01 UTC; converted to LTIME
-// (nanoseconds) by multiplying by 100.
-METHOD PROTECTED _Now : LTIME
+    <Method Name="_Raise" Id="{c0000001-0000-0000-1000-000000000008}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Raise a fault with optional source (where it came from) and reason (free-form).
+// Idempotent on `code`: a second call with the same non-zero code in the
+// same episode is a no-op (returns FALSE) even if source/reason differ — so
+// cyclic callers can spam this without flooding the ring. A different
+// non-zero code replaces the current fault and pushes a new ring entry.
+// The requester recorded with the fault is the most recent command requester
+// (_lastRequester), which is what the operator / HMI has context for.
+// Returns TRUE when a new ring entry was pushed this call.
+METHOD PROTECTED _Raise : BOOL
+VAR_INPUT
+    code   : DINT;
+    source : STRING(31);
+    reason : STRING(79);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF code = 0 THEN
+    _Raise := FALSE;
+    RETURN;
+END_IF;
+
+IF code = _faultCode THEN
+    _Raise := FALSE;
+    RETURN;
+END_IF;
+
+_faultCode   := code;
+_faultTs     := F_Now();
+_faultSource := source;
+_faultReason := reason;
+
+_lastFaultCode      := code;
+_lastFaultTs        := _faultTs;
+_lastFaultRequester := _lastRequester;
+_lastFaultSource    := source;
+_lastFaultReason    := reason;
+
+_faultRing[_faultRingHead].code      := code;
+_faultRing[_faultRingHead].ts        := _faultTs;
+_faultRing[_faultRingHead].requester := _lastRequester;
+_faultRing[_faultRingHead].source    := source;
+_faultRing[_faultRingHead].reason    := reason;
+_faultRingHead := (_faultRingHead + 1) MOD FAULT_RING_SIZE;
+
+_Raise := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_ClearFault" Id="{c0000001-0000-0000-1000-000000000009}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Clear the currently-active fault. Preserves the ring buffer and the
+// last-fault fields so HMIs can still show what happened.
+METHOD PROTECTED _ClearFault
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[_Now := ULINT_TO_LTIME(Tc2_System.F_GetSystemTime() * 100);]]></ST>
+        <ST><![CDATA[_faultCode   := 0;
+_faultTs     := LTIME#0ns;
+_faultSource := '';
+_faultReason := '';]]></ST>
       </Implementation>
     </Method>
-    <Method Name="_UpdateHeader" Id="{c0000001-0000-0000-1000-000000000009}" FolderPath="Protected\">
+    <Method Name="_UpdateHeader" Id="{c0000001-0000-0000-1000-00000000000a}" FolderPath="Protected\">
       <Declaration><![CDATA[// Refreshes the common header a child embeds as `header` in its sts struct.
 // Call once per cycle from the child's cyclic body. Device-specific fields
 // (stsAdvanced, stsValue, etc.) stay in the child sts alongside `header`.
@@ -129,16 +216,20 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[header.stateString     := stateString;
 header.stsBusy         := stsBusy;
-header.stsFaulted      := _fault.IsFaulted();
+header.stsFaulted      := _faultCode <> 0;
 header.stsReady        := NOT header.stsFaulted AND NOT stsBusy AND NOT bSourceLockedToProg;
 header.stsSourceLocked := bSourceLockedToProg;
-header.faultCode       := _fault.GetCurrentCode();
-header.faultString     := THIS^.ResolveFaultString(code := header.faultCode);
-header.lastFaultCode   := _fault.GetLastCode();
-header.lastFaultString := THIS^.ResolveFaultString(code := header.lastFaultCode);
+header.faultCode       := _faultCode;
+header.faultString     := THIS^.ResolveFaultString(code := _faultCode);
+header.faultSource     := _faultSource;
+header.faultReason     := _faultReason;
+header.lastFaultCode   := _lastFaultCode;
+header.lastFaultString := THIS^.ResolveFaultString(code := _lastFaultCode);
+header.lastFaultSource := _lastFaultSource;
+header.lastFaultReason := _lastFaultReason;
 header.lastRequester   := _lastRequester;
 header.tsLastCommand   := _tsLastCommand;
-header.tsLastFault     := _fault.GetLastTs();]]></ST>
+header.tsLastFault     := _lastFaultTs;]]></ST>
       </Implementation>
     </Method>
     <LineIds Name="FB_DeviceBase">
@@ -165,7 +256,10 @@ header.tsLastFault     := _fault.GetLastTs();]]></ST>
     <LineIds Name="FB_DeviceBase._AcceptCommand">
       <LineId Id="1" Count="0" />
     </LineIds>
-    <LineIds Name="FB_DeviceBase._Now">
+    <LineIds Name="FB_DeviceBase._Raise">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeviceBase._ClearFault">
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_DeviceBase._UpdateHeader">

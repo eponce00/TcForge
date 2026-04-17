@@ -1,12 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_AnalogOutput" Id="{a0100004-0000-0000-0000-000000000001}" SpecialFunc="None">
-    <Declaration><![CDATA[{attribute 'OPC.UA.DA' := '1'}
-FUNCTION_BLOCK FB_AnalogOutput EXTENDS FB_DeviceBase IMPLEMENTS I_AnalogCommandable
+    <Declaration><![CDATA[// Generic analog output driver.
+//
+// Pipeline:
+//   SetValue -> persistent command -> clamp to MinCv/MaxCv -> EU-to-raw
+//   linear scaling -> UNION write (type chosen by cfg.cfgOutputType)
+//
+// Command is persisted so an unexpected PLC restart resumes the last
+// requested setpoint rather than quietly writing 0 to the field device.
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_AnalogOutput EXTENDS FB_DeviceBase
 VAR_INPUT
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
-    cfg : ST_AnalogOutput_Cfg;
+    cfg        : ST_AnalogOutput_Cfg;
+    {attribute 'OPC.UA.DA' := '0'}
+    inpQuality : E_IO_Quality := E_IO_Quality.GOOD;
 END_VAR
 
 VAR_OUTPUT
@@ -15,33 +25,203 @@ VAR_OUTPUT
     sts : ST_AnalogOutput_Sts;
 END_VAR
 
-VAR_IN_OUT
+VAR PERSISTENT
+    // Last commanded value (EU). Survives power cycle.
     {attribute 'OPC.UA.DA' := '0'}
-    IO : ST_AnalogOutput_IO;
+    _requestSync : REAL;
+END_VAR
+
+VAR
+    // Hardware-linked struct (UNION; dw member AT %Q*). Wired at instance
+    // declaration with
+    //   {attribute 'TcLinkTo' := '.io.outRaw.dw := TIID^...'}.
+    {attribute 'OPC.UA.DA' := '0'}
+    io             : ST_AnalogOutput_IO;
+
+    // Commissioning state.
+    {attribute 'OPC.UA.DA' := '0'}
+    _firstScan     : BOOL := TRUE;
+    {attribute 'OPC.UA.DA' := '0'}
+    _configBad     : BOOL;
+
+    // Quality watchdog.
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonBadQuality : TON;
+
+    // Scratch values.
+    {attribute 'OPC.UA.DA' := '0'}
+    _clampedEu     : REAL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _rawReal       : REAL;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[// Skeleton - no I/O logic yet. Populate the common header so the device
-// surfaces ready/faulted/source-locked status to HMIs consistently.
+      <ST><![CDATA[// 1. First-scan config validation.
+IF _firstScan THEN
+    _firstScan := FALSE;
+    _configBad := (NOT cfg.cfgUseRawValue)
+                  AND (cfg.cfgEuMax - cfg.cfgEuMin = 0.0 OR cfg.cfgRawMin > cfg.cfgRawMax);
+END_IF;
+
+sts.stsUnit       := cfg.cfgUnit;
+sts.stsQuality    := inpQuality;
+sts.stsCommanded  := _requestSync;
+
+// 2. Clamp the command in EU space.
+sts.stsClampedLow  := FALSE;
+sts.stsClampedHigh := FALSE;
+_clampedEu         := _requestSync;
+
+IF NOT cfg.cfgUseRawValue THEN
+    IF _clampedEu < cfg.cfgMinCv THEN
+        _clampedEu        := cfg.cfgMinCv;
+        sts.stsClampedLow := TRUE;
+    ELSIF _clampedEu > cfg.cfgMaxCv THEN
+        _clampedEu         := cfg.cfgMaxCv;
+        sts.stsClampedHigh := TRUE;
+    END_IF;
+END_IF;
+sts.stsClampActive := sts.stsClampedLow OR sts.stsClampedHigh;
+sts.stsValue       := _clampedEu;
+
+// 3. Scale EU -> raw (or pass through if cfgUseRawValue).
+IF cfg.cfgUseRawValue THEN
+    _rawReal := _clampedEu;
+ELSIF (cfg.cfgEuMax - cfg.cfgEuMin) <> 0.0 THEN
+    _rawReal := cfg.cfgRawMin
+              + (cfg.cfgRawMax - cfg.cfgRawMin)
+                * ((_clampedEu - cfg.cfgEuMin) / (cfg.cfgEuMax - cfg.cfgEuMin));
+ELSE
+    _rawReal := 0.0;
+END_IF;
+sts.stsRawReal := _rawReal;
+
+// 4. Write the UNION member matching cfg.cfgOutputType. BAD quality holds
+//    the previously-written value by simply skipping the write.
+IF inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED THEN
+    CASE cfg.cfgOutputType OF
+        __SYSTEM.TYPE_CLASS.TYPE_INT:   io.outRaw.i   := REAL_TO_INT(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_UINT:  io.outRaw.ui  := REAL_TO_UINT(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_WORD:  io.outRaw.w   := REAL_TO_WORD(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_DINT:  io.outRaw.di  := REAL_TO_DINT(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_UDINT: io.outRaw.udi := REAL_TO_UDINT(_rawReal);
+        __SYSTEM.TYPE_CLASS.TYPE_DWORD: io.outRaw.dw  := REAL_TO_DWORD(_rawReal);
+    ELSE
+        io.outRaw.r := _rawReal;
+    END_CASE;
+END_IF;
+
+// 5. Quality watchdog.
+_tonBadQuality(
+    IN := inpQuality = E_IO_Quality.BAD AND cfg.cfgQualityFaultAfter > T#0MS,
+    PT := cfg.cfgQualityFaultAfter
+);
+
+// 6. Single-source-of-truth fault raise.
+_RaiseActiveFault();
+
+// 7. Refresh shared header.
 _UpdateHeader(header := sts.header, stateString := '', stsBusy := FALSE);]]></ST>
     </Implementation>
     <Folder Name="Public" Id="{a0100004-0000-0000-f000-000000000001}" />
+    <Folder Name="Protected" Id="{a0100004-0000-0000-f000-000000000002}" />
     <Method Name="SetValue" Id="{a0100004-0000-0000-1000-000000000001}" FolderPath="Public\">
       <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
 METHOD PUBLIC SetValue : E_RpcMethodResponse
 VAR_INPUT
-    rValue : REAL;
+    rValue     : REAL;
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[// Skeleton
-SetValue := E_RpcMethodResponse.ACCEPTED;]]></ST>
+        <ST><![CDATA[SetValue := F_ValidateRequester(
+    eRequester    := eRequester,
+    bSourceLocked := bSourceLockedToProg,
+    bFaulted      := IsFaulted()
+);
+
+IF SetValue <> E_RpcMethodResponse.ACCEPTED THEN
+    RETURN;
+END_IF;
+
+_requestSync := rValue;
+_AcceptCommand(eRequester := eRequester);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_RaiseActiveFault" Id="{a0100004-0000-0000-1000-000000000002}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Priority chain for AnalogOutput faults:
+//   BadConfig > BadQuality > ClampHigh > ClampLow
+METHOD PROTECTED _RaiseActiveFault
+VAR
+    code   : DINT;
+    source : STRING(31);
+    reason : STRING(79);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[code := 0;
+
+IF _configBad THEN
+    code   := E_AnalogOutput_Fault.BadConfig;
+    source := 'CONFIG';
+    reason := 'cfgEuMin >= cfgEuMax or cfgRawMin > cfgRawMax';
+ELSIF _tonBadQuality.Q THEN
+    code   := E_AnalogOutput_Fault.BadQuality;
+    source := 'QUALITY';
+    reason := 'inpQuality stayed BAD past cfgQualityFaultAfter';
+ELSIF cfg.cfgClampAsFault AND sts.stsClampedHigh THEN
+    code   := E_AnalogOutput_Fault.ClampHigh;
+    source := 'CLAMP_H';
+    reason := CONCAT('Command clamped at MaxCv=', REAL_TO_STRING(cfg.cfgMaxCv));
+ELSIF cfg.cfgClampAsFault AND sts.stsClampedLow THEN
+    code   := E_AnalogOutput_Fault.ClampLow;
+    source := 'CLAMP_L';
+    reason := CONCAT('Command clamped at MinCv=', REAL_TO_STRING(cfg.cfgMinCv));
+END_IF;
+
+IF code = 0 THEN
+    IF IsFaulted() THEN
+        _ClearFault();
+    END_IF;
+ELSE
+    _Raise(
+        code   := code,
+        source := source,
+        reason := reason
+    );
+END_IF;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResolveFaultString" Id="{a0100004-0000-0000-1000-000000000003}" FolderPath="Protected\">
+      <Declaration><![CDATA[METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE code OF
+    0:
+        ResolveFaultString := '';
+    E_AnalogOutput_Fault.BadQuality:
+        ResolveFaultString := 'Output quality BAD past configured timeout';
+    E_AnalogOutput_Fault.ClampLow:
+        ResolveFaultString := 'Command clamped at MinCv';
+    E_AnalogOutput_Fault.ClampHigh:
+        ResolveFaultString := 'Command clamped at MaxCv';
+    E_AnalogOutput_Fault.BadConfig:
+        ResolveFaultString := 'Invalid scaling range configured';
+ELSE
+    ResolveFaultString := CONCAT('AnalogOutput fault ', DINT_TO_STRING(code));
+END_CASE;]]></ST>
       </Implementation>
     </Method>
     <LineIds Name="FB_AnalogOutput">
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_AnalogOutput.SetValue">
-      <LineId Id="1" Count="1" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AnalogOutput._RaiseActiveFault">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AnalogOutput.ResolveFaultString">
+      <LineId Id="1" Count="0" />
     </LineIds>
   </POU>
 </TcPlcObject>

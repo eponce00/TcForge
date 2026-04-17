@@ -2,7 +2,7 @@
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_TwoPosActuator" Id="{a1234567-1234-1234-1234-123456789007}" SpecialFunc="None">
     <Declaration><![CDATA[{attribute 'OPC.UA.DA' := '1'}
-FUNCTION_BLOCK FB_TwoPosActuator EXTENDS FB_DeviceBase IMPLEMENTS I_Abortable
+FUNCTION_BLOCK FB_TwoPosActuator EXTENDS FB_DeviceBase
 VAR_INPUT
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
@@ -15,12 +15,14 @@ VAR_OUTPUT
     sts : ST_TwoPosActuator_Sts;
 END_VAR
 
-VAR_IN_OUT
-    {attribute 'OPC.UA.DA' := '0'}
-    IO : ST_TwoPosActuator_IO;
-END_VAR
-
 VAR
+    // Allocated I/O struct. The AT %I* / %Q* primitives inside ST_TwoPosActuator_IO
+    // are linked at the FB instance declaration using {attribute 'TcLinkTo' := ...}
+    // — see docs/8-IO-Binding.md. The struct is VAR (not VAR_IN_OUT) so the FB
+    // owns its wiring and callers don't need to pass an external struct.
+    {attribute 'OPC.UA.DA' := '0'}
+    io : ST_TwoPosActuator_IO;
+
     // Composed permissive handlers (visible on OPC under the FB instance).
     advancePermissives : FB_Permissives;
     retractPermissives : FB_Permissives;
@@ -50,109 +52,153 @@ END_VAR]]></Declaration>
       <ST><![CDATA[//-----------------------------------------------------------------------------
 // Cyclic monitoring. Commands are issued via methods; this body only watches
 // for completion/faults and keeps sts in sync. Fault latching + last-fault
-// history live in FB_DeviceBase._fault.
+// history live in FB_DeviceBase (_Raise / _ClearFault).
 //-----------------------------------------------------------------------------
 advancePermissives();
 retractPermissives();
 
-bothFeedbackActive := IO.inFbkAdvanced AND IO.inFbkRetracted;
+bothFeedbackActive := io.inFbkAdvanced AND io.inFbkRetracted;
 
 previousState := currentState;
 
 CASE currentState OF
 
     E_TwoPosActuator_State.Undefined:
-        IO.outValveAdvance := FALSE;
-        IO.outValveRetract := FALSE;
+        io.outValveAdvance := FALSE;
+        io.outValveRetract := FALSE;
 
         IF bothFeedbackActive THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.BothFeedbackOn);
-        ELSIF IO.inFbkAdvanced AND NOT IO.inFbkRetracted THEN
+            _Raise(
+                code   := E_TwoPosActuator_Fault.BothFeedbackOn,
+                source := 'FEEDBACK',
+                reason := 'Both advanced and retracted feedback asserted simultaneously'
+            );
+        ELSIF io.inFbkAdvanced AND NOT io.inFbkRetracted THEN
             currentState := E_TwoPosActuator_State.Advanced;
-        ELSIF IO.inFbkRetracted AND NOT IO.inFbkAdvanced THEN
+        ELSIF io.inFbkRetracted AND NOT io.inFbkAdvanced THEN
             currentState := E_TwoPosActuator_State.Retracted;
         END_IF;
 
     E_TwoPosActuator_State.Retracted:
         IF cfg.cfgHoldAtRetracted THEN
-            IO.outValveRetract := TRUE;
+            io.outValveRetract := TRUE;
         ELSE
-            IO.outValveRetract := FALSE;
+            io.outValveRetract := FALSE;
         END_IF;
-        IO.outValveAdvance := FALSE;
+        io.outValveAdvance := FALSE;
 
         IF bothFeedbackActive THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.BothFeedbackOn);
-        ELSIF NOT IO.inFbkRetracted THEN
+            _Raise(
+                code   := E_TwoPosActuator_Fault.BothFeedbackOn,
+                source := 'FEEDBACK',
+                reason := 'Both advanced and retracted feedback asserted simultaneously'
+            );
+        ELSIF NOT io.inFbkRetracted THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.UndefinedState);
+            _Raise(
+                code   := E_TwoPosActuator_Fault.UndefinedState,
+                source := 'FEEDBACK',
+                reason := 'Retracted feedback lost after reaching position'
+            );
         END_IF;
 
     E_TwoPosActuator_State.Advancing:
-        IO.outValveAdvance := TRUE;
-        IO.outValveRetract := FALSE;
+        io.outValveAdvance := TRUE;
+        io.outValveRetract := FALSE;
         advanceTimer(IN := TRUE, PT := DINT_TO_TIME(cfg.cfgAdvTimeoutS * 1000));
 
-        IF IO.inFbkAdvanced AND NOT IO.inFbkRetracted THEN
+        IF io.inFbkAdvanced AND NOT io.inFbkRetracted THEN
             currentState := E_TwoPosActuator_State.Advanced;
             advanceTimer(IN := FALSE);
         ELSIF advanceTimer.Q THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.AdvanceTimeout);
+            _Raise(
+                code   := E_TwoPosActuator_Fault.AdvanceTimeout,
+                source := 'MOTION',
+                reason := 'inFbkAdvanced did not assert within cfgAdvTimeoutS'
+            );
             advanceTimer(IN := FALSE);
         ELSIF bothFeedbackActive THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.BothFeedbackOn);
+            _Raise(
+                code   := E_TwoPosActuator_Fault.BothFeedbackOn,
+                source := 'FEEDBACK',
+                reason := 'Both advanced and retracted feedback asserted while advancing'
+            );
             advanceTimer(IN := FALSE);
         ELSIF NOT advancePermissives.sts.bOK THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.PermissivesNotOK);
+            _Raise(
+                code   := E_TwoPosActuator_Fault.PermissivesNotOK,
+                source := 'PERMISSIVES',
+                reason := 'Advance permissive dropped during travel'
+            );
             advanceTimer(IN := FALSE);
         END_IF;
 
     E_TwoPosActuator_State.Advanced:
         IF cfg.cfgHoldAtAdvanced THEN
-            IO.outValveAdvance := TRUE;
+            io.outValveAdvance := TRUE;
         ELSE
-            IO.outValveAdvance := FALSE;
+            io.outValveAdvance := FALSE;
         END_IF;
-        IO.outValveRetract := FALSE;
+        io.outValveRetract := FALSE;
 
         IF bothFeedbackActive THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.BothFeedbackOn);
-        ELSIF NOT IO.inFbkAdvanced THEN
+            _Raise(
+                code   := E_TwoPosActuator_Fault.BothFeedbackOn,
+                source := 'FEEDBACK',
+                reason := 'Both advanced and retracted feedback asserted simultaneously'
+            );
+        ELSIF NOT io.inFbkAdvanced THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.UndefinedState);
+            _Raise(
+                code   := E_TwoPosActuator_Fault.UndefinedState,
+                source := 'FEEDBACK',
+                reason := 'Advanced feedback lost after reaching position'
+            );
         END_IF;
 
     E_TwoPosActuator_State.Retracting:
-        IO.outValveRetract := TRUE;
-        IO.outValveAdvance := FALSE;
+        io.outValveRetract := TRUE;
+        io.outValveAdvance := FALSE;
         retractTimer(IN := TRUE, PT := DINT_TO_TIME(cfg.cfgRetTimeoutS * 1000));
 
-        IF IO.inFbkRetracted AND NOT IO.inFbkAdvanced THEN
+        IF io.inFbkRetracted AND NOT io.inFbkAdvanced THEN
             currentState := E_TwoPosActuator_State.Retracted;
             retractTimer(IN := FALSE);
         ELSIF retractTimer.Q THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.RetractTimeout);
+            _Raise(
+                code   := E_TwoPosActuator_Fault.RetractTimeout,
+                source := 'MOTION',
+                reason := 'inFbkRetracted did not assert within cfgRetTimeoutS'
+            );
             retractTimer(IN := FALSE);
         ELSIF bothFeedbackActive THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.BothFeedbackOn);
+            _Raise(
+                code   := E_TwoPosActuator_Fault.BothFeedbackOn,
+                source := 'FEEDBACK',
+                reason := 'Both advanced and retracted feedback asserted while retracting'
+            );
             retractTimer(IN := FALSE);
         ELSIF NOT retractPermissives.sts.bOK THEN
             currentState := E_TwoPosActuator_State.Fault;
-            _fault.Raise(code := E_TwoPosActuator_Fault.PermissivesNotOK);
+            _Raise(
+                code   := E_TwoPosActuator_Fault.PermissivesNotOK,
+                source := 'PERMISSIVES',
+                reason := 'Retract permissive dropped during travel'
+            );
             retractTimer(IN := FALSE);
         END_IF;
 
     E_TwoPosActuator_State.Fault:
-        IO.outValveAdvance := FALSE;
-        IO.outValveRetract := FALSE;
+        io.outValveAdvance := FALSE;
+        io.outValveRetract := FALSE;
         advanceTimer(IN := FALSE);
         retractTimer(IN := FALSE);
 END_CASE;
@@ -174,7 +220,7 @@ sts.osRetracted := rTrigRetracted.Q;
 
 //-------------------------------------------------------------------------
 // Common header — delegated to the base; fault/source/timestamps filled from
-// _fault and the source lock. stsBusy mirrors sts.stsMoving.
+// the inherited fault book-keeping and source lock. stsBusy mirrors sts.stsMoving.
 //-------------------------------------------------------------------------
 _UpdateHeader(
     header      := sts.header,
@@ -191,7 +237,7 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Advance := F_ValidateRequester(eRequester, bSourceLockedToProg, _fault.IsFaulted(), FALSE, FALSE);
+        <ST><![CDATA[Advance := F_ValidateRequester(eRequester, bSourceLockedToProg, IsFaulted());
 IF Advance <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 IF currentState = E_TwoPosActuator_State.Advanced OR currentState = E_TwoPosActuator_State.Advancing THEN
@@ -217,7 +263,7 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Retract := F_ValidateRequester(eRequester, bSourceLockedToProg, _fault.IsFaulted(), FALSE, FALSE);
+        <ST><![CDATA[Retract := F_ValidateRequester(eRequester, bSourceLockedToProg, IsFaulted());
 IF Retract <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 IF currentState = E_TwoPosActuator_State.Retracted OR currentState = E_TwoPosActuator_State.Retracting THEN
@@ -245,8 +291,8 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IO.outValveAdvance := FALSE;
-IO.outValveRetract := FALSE;
+        <ST><![CDATA[io.outValveAdvance := FALSE;
+io.outValveRetract := FALSE;
 advanceTimer(IN := FALSE);
 retractTimer(IN := FALSE);
 currentState := E_TwoPosActuator_State.Undefined;
@@ -267,8 +313,8 @@ END_VAR]]></Declaration>
         <ST><![CDATA[SUPER^.Reset(eRequester := eRequester);
 
 currentState := E_TwoPosActuator_State.Undefined;
-IO.outValveAdvance := FALSE;
-IO.outValveRetract := FALSE;
+io.outValveAdvance := FALSE;
+io.outValveRetract := FALSE;
 advanceTimer(IN := FALSE);
 retractTimer(IN := FALSE);
 Reset := E_RpcMethodResponse.ACCEPTED;]]></ST>

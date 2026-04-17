@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_LPF_FirstOrder_IIR" Id="{c0000031-0000-0000-0000-000000000002}" SpecialFunc="None">
+    <Declaration><![CDATA[// First-order IIR low-pass filter. Exponential smoothing of the form
+//     y[n] = y[n-1] + alpha * (x[n] - y[n-1])
+// with alpha = dt / (tau + dt). Tau is the 63.2 % rise-time constant.
+//
+// When dt or tau are effectively zero the filter passes the input through
+// unchanged and raises bError. _prevOutput_sync persists across scans so the
+// filter state survives restarts; it is zeroed on cold start.
+FUNCTION_BLOCK FB_LPF_FirstOrder_IIR
+VAR_INPUT
+    fInput  : LREAL;    // input sample
+    fDt     : LREAL;    // time since previous call [s]
+    fTau    : LREAL;    // time constant [s]
+END_VAR
+VAR_OUTPUT
+    fOutput : LREAL;    // filtered output
+    bError  : BOOL;     // TRUE when fDt or fTau were too small to filter
+END_VAR
+VAR
+    _filtAlpha        : LREAL;
+    _prevOutput_sync  : LREAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF fDt < 1E-38 OR fTau < 1E-38 THEN
+    fOutput := fInput;
+    bError  := TRUE;
+    _prevOutput_sync := fOutput;
+    RETURN;
+END_IF;
+
+bError := FALSE;
+
+_filtAlpha := fDt / (fTau + fDt);
+fOutput    := _prevOutput_sync + _filtAlpha * (fInput - _prevOutput_sync);
+
+_prevOutput_sync := fOutput;]]></ST>
+    </Implementation>
+    <LineIds Name="FB_LPF_FirstOrder_IIR">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,15 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <DUT Name="ST_AnalogInput_Sts" Id="{b0100003-0002-0000-0000-000000000001}">
-    <Declaration><![CDATA[{attribute 'OPC.UA.DA' := '1'}
+    <Declaration><![CDATA[// Status of FB_AnalogInput. `header` is shared with every device FB;
+// device-specific fields sit below. Process-alarm status (HH/HI/LO/LL) is
+// not part of this surface — use FB_AlarmLimit composed with stsValue.
+{attribute 'OPC.UA.DA' := '1'}
 {attribute 'OPC.UA.DA.Access' := '1'}
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_AnalogInput_Sts :
 STRUCT
-    header   : ST_DeviceHeader_Sts;
-    stsValue : REAL;
+    header          : ST_DeviceHeader_Sts;
+
+    {attribute 'OPC.UA.DA.Description' := 'Final value in engineering units (after clamp, scale, filter)'}
+    stsValue        : REAL;
+    {attribute 'OPC.UA.DA.Description' := 'Raw value as REAL, before clamping and scaling'}
+    stsRawReal      : REAL;
+    {attribute 'OPC.UA.DA.Description' := 'Scaled value (EU), before filter'}
+    stsScaled       : REAL;
+    {attribute 'OPC.UA.DA.Description' := 'Echo of cfg.cfgUnit for HMI consumption'}
+    stsUnit         : E_Unit := E_Unit.PERCENT;
+    {attribute 'OPC.UA.DA.Description' := 'Signal quality tag (may be promoted to CLAMPED)'}
+    stsQuality      : E_IO_Quality := E_IO_Quality.UNKNOWN;
+
+    {attribute 'OPC.UA.DA.Description' := 'Raw below configured RawMin'}
+    stsClampedLow   : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Raw above configured RawMax'}
+    stsClampedHigh  : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Either clamp direction active'}
+    stsClampActive  : BOOL;
 END_STRUCT
-END_TYPE
-]]></Declaration>
+END_TYPE]]></Declaration>
   </DUT>
 </TcPlcObject>

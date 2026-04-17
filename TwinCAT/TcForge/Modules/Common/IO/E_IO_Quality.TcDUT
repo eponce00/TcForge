@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_IO_Quality" Id="{c0000030-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Signal quality tag carried by every IO block's status. The value lets the
+// HMI and downstream logic react to wire breaks, out-of-range readings, or
+// sensor faults without each consumer reinventing its own "is this bit /
+// reading trustworthy?" logic.
+//
+// Meaning:
+//   UNKNOWN : block has not evaluated yet (first scan, or no data source)
+//   BAD     : signal is not usable (wire break, TwinCAT WcState, etc.)
+//   GOOD    : signal is valid and within configured range
+//   CLAMPED : signal is valid but was forced to the scaling limit
+//
+// By default every FB sets its input quality to GOOD on first scan unless an
+// explicit quality probe (e.g. FB_BasicIoQuality) writes otherwise.
+{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE E_IO_Quality :
+(
+    UNKNOWN := 0,
+    BAD     := 1,
+    GOOD    := 2,
+    CLAMPED := 3
+) USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

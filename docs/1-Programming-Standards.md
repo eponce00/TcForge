@@ -2,7 +2,7 @@
 
 These standards govern the `TcForge` library and any projects built on it. They ensure consistency across all function blocks, from device-level actuators to the state machine.
 
-> **Navigation:** [← README](../README.md) · [Command Source Control →](2-Command-Source-Control.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md) · [Persistent Variables →](6-Persistent-Variables.md) · [Architecture →](7-Architecture.md) · [I/O Binding →](8-IO-Binding.md)
+> **Navigation:** [← README](../README.md) · [Command Source Control →](2-Command-Source-Control.md) · [RPC Method Response →](3-RPC-Method-Response.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md) · [Persistent Variables →](6-Persistent-Variables.md) · [Architecture →](7-Architecture.md) · [I/O Binding →](8-IO-Binding.md) · [Alarms →](9-Alarms.md)
 
 ---
 
@@ -13,6 +13,8 @@ These standards govern the `TcForge` library and any projects built on it. They 
 | Common | Shared types, enums, and validation helpers used across all modules | `E_Requester`, `E_RpcMethodResponse`, `F_ValidateRequester` |
 | Sequencing | State machine, sequence steps, and permissive evaluation | `FB_StateMachine`, `FB_Step`, `FB_Permissives` |
 | Pneumatics | Physical actuator control with feedback monitoring | `FB_TwoPosActuator` |
+| IO | Digital / analog field I/O with scaling, filtering, quality watchdogs | `FB_DigitalInput`, `FB_AnalogInput`, `FB_AnalogOutput` |
+| Alarms | Process-condition detectors sharing a uniform status / ack surface | `FB_AlarmThreshold`, `FB_AlarmLimit`, `FB_AlarmDeviation`, `FB_AlarmRateOfChange` |
 
 ---
 
@@ -101,12 +103,13 @@ All command logic lives inside **methods**. The FB body handles only cyclic moni
 
 Each method follows a validation chain:
 
-1. **`F_ValidateRequester`** — source lock + fault check
+1. **`F_ValidateRequester(eRequester, bSourceLocked, bFaulted)`** — source lock + fault check
 2. **State check** — is the FB in a valid state for this command?
 3. **Permissive check** — are required permissives met?
 4. **Execute** — write outputs, set state, clear conflicting flags
+5. **Book-keep** — call `_AcceptCommand(eRequester)` on acceptance so the fault ring and header record who issued the command.
 
-Safety commands (`Stop`, `Abort`) skip source and fault checks.
+Safety commands (`Reset`, `Abort`, `Stop`) always accept — they don't call `F_ValidateRequester` at all.
 
 ### 1.4.2 Body Responsibilities
 
@@ -230,16 +233,16 @@ END_VAR
 
 ## 1.8 Status and Faults
 
-- Group public statuses in a `_Sts` struct: state enum, booleans, fault code, last fault code.
-- Fault codes use an enum (`E_*_Fault`) with specific reasons.
-- Latch faults until explicitly cleared via a `Reset` method.
-- `Reset` uses `F_ValidateRequester` with `bAllowWhenFaulted := TRUE`.
+- Group public statuses in a `_Sts` struct with `header : ST_DeviceHeader_Sts` as the first field; device-specific fields follow.
+- Fault codes use an enum (`E_*_Fault`) with specific reasons. Number codes per the range convention in [§7.3.3](7-Architecture.md#733-fault-code-range-convention).
+- Raise faults via the inherited `_Raise(code, source, reason)` helper (see [§7.4](7-Architecture.md#74-fault-book-keeping)). Faults latch until explicitly cleared via `Reset` (which calls `_ClearFault()`).
+- `Reset` is always accepted — it does **not** call `F_ValidateRequester`. `F_ValidateRequester(eRequester, bSourceLocked, bFaulted)` takes exactly three inputs; there is no "allow when faulted" or "skip source check" flag.
 
 ---
 
 ## 1.9 IO Mapping
 
-- Use a single `VAR_IN_OUT` IO struct for mapping field IO: inputs (feedbacks) and outputs (valve commands) together.
+- Each device holds its I/O as an internal `VAR io : ST_<Dev>_IO` — **never** `VAR_IN_OUT`. Hardware symbols appear only inside `_IO`, linked via `TcLinkTo` on the FB instance. See [§8 I/O Binding](8-IO-Binding.md) for the full contract.
 - FB logic only drives `out*` fields; it never writes `in*` fields.
 
 ---

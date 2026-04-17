@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AlarmBase" Id="{a0200000-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Abstract base for every FB_Alarm*. Owns the common moving parts:
+//   - debounce (TON/TOF) driven by cfg.common.tOnDelay / tOffDelay
+//   - latch / ack bookkeeping (VAR PERSISTENT so an unexpected restart does
+//     not silently "un-latch" an unacknowledged critical alarm)
+//   - rising / falling / ack timestamps (LTIME)
+//   - the Ack / LockSource RPC methods contracted by I_Alarm
+//   - the shared ST_Alarm_Sts status surface
+//
+// Concrete alarms:
+//   - EXTEND this FB
+//   - declare their own cfg : ST_Alarm<Type>_Cfg (with a nested `common : ST_Alarm_Cfg`)
+//     plus any extra signal inputs
+//   - compute a raw boolean trip condition from cfg + inputs
+//   - call _Evaluate(cfgCommon := cfg.common, bRawCondition := ...) ONCE per
+//     cycle from their body
+//
+// The base deliberately keeps a very small API surface — children should
+// never write into sts, the timers, or the latch flags directly.
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK ABSTRACT FB_AlarmBase IMPLEMENTS I_Alarm
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_Alarm_Sts;
+END_VAR
+VAR
+    {attribute 'OPC.UA.DA' := '0'}
+    bSourceLockedToProg : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _ton : TON;
+    {attribute 'OPC.UA.DA' := '0'}
+    _tof : TOF;
+    {attribute 'OPC.UA.DA' := '0'}
+    _prevDebounced : BOOL;
+END_VAR
+VAR PERSISTENT
+    // Latch / ack state is persistent: a process restart must not silently
+    // hide an unacknowledged critical alarm. Operators re-acknowledge on boot.
+    _latchedSync : BOOL;
+    _ackedSync   : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Abstract base — children provide the cyclic body and call _Evaluate().]]></ST>
+    </Implementation>
+    <Folder Name="Protected" Id="{a0200000-0000-0000-f000-000000000001}" />
+    <Folder Name="Public" Id="{a0200000-0000-0000-f000-000000000002}" />
+    <Method Name="Ack" Id="{a0200000-0000-0000-1000-000000000001}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// Acknowledge the current latch. Idempotent — repeated Acks on the same latch
+// just refresh tsAcked / ackRequester. If the condition has already cleared,
+// the next cyclic _Evaluate releases the latch.
+METHOD PUBLIC Ack : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Ack := F_ValidateRequester(
+    eRequester    := eRequester,
+    bSourceLocked := bSourceLockedToProg,
+    bFaulted      := FALSE);
+
+IF Ack = E_RpcMethodResponse.ACCEPTED AND _latchedSync THEN
+    _ackedSync        := TRUE;
+    sts.ackRequester  := eRequester;
+    sts.tsAcked       := F_Now();
+END_IF;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LockSource" Id="{a0200000-0000-0000-1000-000000000002}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// When bLock = TRUE, only PROG requesters may Ack(); OPERATOR calls are
+// rejected with REJECTED_SOURCE_NOT_ALLOWED. Use for interlock-grade alarms
+// that must only be cleared by sequence logic.
+METHOD PUBLIC LockSource : E_RpcMethodResponse
+VAR_INPUT
+    bLock : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bSourceLockedToProg := bLock;
+LockSource := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_Evaluate" Id="{a0200000-0000-0000-1000-000000000006}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Called once per cycle by the concrete child. Takes the child's flattened
+// common cfg and the pre-computed raw trip condition, and does the rest:
+// debounce → latch/ack → severity → timestamps → sts.
+METHOD PROTECTED _Evaluate
+VAR_INPUT
+    cfgCommon     : ST_Alarm_Cfg;
+    bRawCondition : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Disabled: stop timers, clear everything, but keep the message echo so the
+// HMI can still render "(disabled) Tank level high" if it wants.
+IF NOT cfgCommon.bEnable THEN
+    _ton(IN := FALSE, PT := T#0MS);
+    _tof(IN := FALSE, PT := T#0MS);
+    _latchedSync        := FALSE;
+    _ackedSync          := FALSE;
+    _prevDebounced      := FALSE;
+    sts.stsEnabled      := FALSE;
+    sts.stsRaw          := FALSE;
+    sts.stsDebounced    := FALSE;
+    sts.stsActive       := FALSE;
+    sts.stsLatched      := FALSE;
+    sts.stsAcked        := FALSE;
+    sts.eSeverity       := E_AlarmSeverity.NONE;
+    sts.sMessage        := cfgCommon.sMessage;
+    RETURN;
+END_IF;
+
+sts.stsEnabled := TRUE;
+sts.stsRaw     := bRawCondition;
+sts.sMessage   := cfgCommon.sMessage;
+
+// Asymmetric debounce: raw → TON (arm delay) → TOF (release hysteresis)
+_ton(IN := bRawCondition, PT := cfgCommon.tOnDelay);
+_tof(IN := _ton.Q,        PT := cfgCommon.tOffDelay);
+sts.stsDebounced := _tof.Q;
+
+// Edge-triggered timestamps
+IF sts.stsDebounced AND NOT _prevDebounced THEN
+    sts.tsTripped := F_Now();
+ELSIF NOT sts.stsDebounced AND _prevDebounced THEN
+    sts.tsCleared := F_Now();
+END_IF;
+_prevDebounced := sts.stsDebounced;
+
+// Latch / ack state machine
+IF cfgCommon.bRequireAck THEN
+    // Rising edge of debounced → fresh latch
+    IF sts.stsDebounced AND NOT _latchedSync THEN
+        _latchedSync := TRUE;
+        _ackedSync   := FALSE;
+    END_IF;
+    // Release only after operator ack AND condition cleared
+    IF NOT sts.stsDebounced AND _latchedSync AND _ackedSync THEN
+        _latchedSync := FALSE;
+        _ackedSync   := FALSE;
+    END_IF;
+    sts.stsActive  := _latchedSync;
+    sts.stsLatched := _latchedSync AND NOT _ackedSync;
+    sts.stsAcked   := _ackedSync;
+ELSE
+    // Self-clearing, no latch
+    _latchedSync   := FALSE;
+    _ackedSync     := FALSE;
+    sts.stsActive  := sts.stsDebounced;
+    sts.stsLatched := FALSE;
+    sts.stsAcked   := FALSE;
+END_IF;
+
+// Severity follows active state so aggregators can MAX() blindly.
+IF sts.stsActive THEN
+    sts.eSeverity := cfgCommon.eSeverity;
+ELSE
+    sts.eSeverity := E_AlarmSeverity.NONE;
+END_IF;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

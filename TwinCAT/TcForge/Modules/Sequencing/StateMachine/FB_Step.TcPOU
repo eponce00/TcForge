@@ -54,6 +54,7 @@ VAR
     _permsSatisfied : BOOL;
     _permsEvalReady : BOOL;
     _exitDone : BOOL;
+    _timeoutFired : BOOL;       // guard: timeout fires at most once per activation
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[
@@ -81,6 +82,7 @@ IF _active THEN
         Entry := TRUE;
         _permsEvalReady := FALSE;
         _exitDone := FALSE;
+        _timeoutFired := FALSE;
 
     ELSIF NOT _permsEvalReady THEN
         //---------------------------------------------------------------------
@@ -98,9 +100,20 @@ IF _active THEN
             Execute := TRUE;
         END_IF;
 
-        // Timeout fault detection
-        IF nTimeout > 0 AND sm.Status.Step.TimerSeconds > DINT_TO_REAL(nTimeout) THEN
-            sm.SetStepFault(bFault := TRUE);
+        // Timeout fault detection: push StepTimeout through the fault handler
+        // with a default "Step N [name]: Step Timeout" reason, then jump to
+        // the odd fault step so the existing state-machine semantics still
+        // apply. Guarded by _timeoutFired so the fault/advance only happen once.
+        IF NOT _timeoutFired AND nTimeout > 0 AND
+           sm.Status.Step.TimerSeconds > DINT_TO_REAL(nTimeout) THEN
+            sm._RaiseStepFault(
+                stepNum  := nStep,
+                stepName := sName,
+                code     := E_SM_Fault.StepTimeout,
+                reason   := ''
+            );
+            sm.SetNextStep(nStep := nStep + 1);
+            _timeoutFired := TRUE;
         END_IF;
 
     ELSIF NOT _exitDone THEN
@@ -123,6 +136,7 @@ ELSE
     // Reset lifecycle tracking when step is not active
     _permsEvalReady := FALSE;
     _exitDone := FALSE;
+    _timeoutFired := FALSE;
 END_IF;
 
 _prevActive := _active;
@@ -141,10 +155,55 @@ END_VAR]]></Declaration>
 _perms.cfg.aNames[nIndex] := sDescription;]]></ST>
       </Implementation>
     </Method>
+    <Method Name="RaiseFault" Id="{b2c3d4e5-f6a7-8901-bcde-f12345678902}" FolderPath="Public\">
+      <Declaration><![CDATA[// Called from inside a step body to record a device fault with a specific
+// code and a human-readable reason, then advance to the odd fault step
+// (nStep + 1) so the state-machine fault convention still applies.
+//
+// Idempotent within a step activation: multiple calls in the same scan (or
+// the same fault episode across scans) push only the first entry onto the
+// ring per-code (the base FB's _Raise dedupes on code). Calling with a
+// different code overwrites current and pushes a new ring entry.
+//
+// Example:
+//   IF step3004.Execute AND NOT sensorOK THEN
+//       step3004.RaiseFault(
+//           code   := E_SM_Fault.StepUserFault,
+//           reason := 'Sensor A reports out-of-range reading 42.7 bar'
+//       );
+//   END_IF;
+//
+// C0371 is the "VAR_IN_OUT accessed from method" warning. Safe here because
+// RaiseFault is only legal inside a step block, after FB_Step() has been
+// called with a valid sm reference.
+METHOD RaiseFault
+VAR_INPUT
+    code   : DINT;
+    reason : STRING(79);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[{warning disable C0371}
+IF NOT _active THEN
+    RETURN;
+END_IF;
+
+sm._RaiseStepFault(
+    stepNum  := nStep,
+    stepName := sName,
+    code     := code,
+    reason   := reason
+);
+sm.SetNextStep(nStep := nStep + 1);
+{warning restore C0371}]]></ST>
+      </Implementation>
+    </Method>
     <LineIds Name="FB_Step">
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_Step.MapPerm">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Step.RaiseFault">
       <LineId Id="1" Count="0" />
     </LineIds>
   </POU>

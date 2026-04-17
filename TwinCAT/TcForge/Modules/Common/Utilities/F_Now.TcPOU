@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="F_Now" Id="{6644fb04-4183-40b4-816d-9727eeaa1870}" SpecialFunc="None">
+    <Declaration><![CDATA[// Shared LTIME timestamp used across TcForge for fault / command / alarm logs.
+// Tc2_System.F_GetSystemTime returns ULINT of 100 ns intervals since
+// 1601-01-01 UTC; converted to LTIME (nanoseconds) by multiplying by 100.
+FUNCTION F_Now : LTIME
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[F_Now := ULINT_TO_LTIME(Tc2_System.F_GetSystemTime() * 100);]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

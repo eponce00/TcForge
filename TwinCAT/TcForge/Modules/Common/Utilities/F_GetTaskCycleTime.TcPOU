@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="F_GetTaskCycleTime" Id="{c0000031-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Returns the cycle time of the calling task as a TIME value (ms resolution).
+// Useful for filters and ramps that need `dt` in physical units rather than
+// PLC scans.
+//
+// Internally: TwinCAT stores CycleTime as UDINT in units of 100 ns, so we
+// divide by 10_000 to convert to ms before casting to TIME.
+FUNCTION F_GetTaskCycleTime : TIME
+VAR_STAT
+    fbGetCurTaskIndex : GETCURTASKINDEX;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbGetCurTaskIndex();
+F_GetTaskCycleTime := UDINT_TO_TIME(
+    TwinCAT_SystemInfoVarList._TaskInfo[fbGetCurTaskIndex.index].CycleTime / 10_000
+);]]></ST>
+    </Implementation>
+    <LineIds Name="F_GetTaskCycleTime">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

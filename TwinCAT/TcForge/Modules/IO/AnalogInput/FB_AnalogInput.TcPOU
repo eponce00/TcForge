@@ -1,12 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_AnalogInput" Id="{a0100003-0000-0000-0000-000000000001}" SpecialFunc="None">
-    <Declaration><![CDATA[{attribute 'OPC.UA.DA' := '1'}
+    <Declaration><![CDATA[// Generic analog input conditioner.
+//
+// Pipeline:
+//   UNION terminal -> type select -> quality gate -> clamp to scaling range
+//   -> linear EU scaling -> optional first-order LPF -> sts
+//
+// The UNION input (io.inRaw) means one FB instance handles any raw form the
+// hardware produces — 0-10 V (INT), 4-20 mA (INT), 32-bit counter (UDINT),
+// scaled REAL, bit-packed WORD, etc. Pick the interpretation with
+// cfg.cfgInputType.
+//
+// Scope: conditioning only. Process-alarm limits (HH / HI / LO / LL),
+// latching, severity, and ack all live on FB_AlarmLimit — compose it with
+// sts.stsValue if you need that behaviour. Faults here are restricted to
+// ground truths about the signal itself (quality, clamp, bad config).
+{attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_AnalogInput EXTENDS FB_DeviceBase
 VAR_INPUT
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
-    cfg : ST_AnalogInput_Cfg;
+    cfg        : ST_AnalogInput_Cfg;
+    {attribute 'OPC.UA.DA' := '0'}
+    inpQuality : E_IO_Quality := E_IO_Quality.GOOD;
 END_VAR
 
 VAR_OUTPUT
@@ -15,16 +32,210 @@ VAR_OUTPUT
     sts : ST_AnalogInput_Sts;
 END_VAR
 
-VAR_IN_OUT
+VAR
+    // Hardware-linked struct (UNION; dw member AT %I*). Wired at instance
+    // declaration with
+    //   {attribute 'TcLinkTo' := '.io.inRaw.dw := TIID^...'}.
     {attribute 'OPC.UA.DA' := '0'}
-    IO : ST_AnalogInput_IO;
+    io             : ST_AnalogInput_IO;
+
+    // Commissioning state.
+    {attribute 'OPC.UA.DA' := '0'}
+    _firstScan     : BOOL := TRUE;
+    {attribute 'OPC.UA.DA' := '0'}
+    _configBad     : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _taskDtSec     : REAL;
+
+    // Filter + watchdog timers.
+    {attribute 'OPC.UA.DA' := '0'}
+    _filter        : FB_LPF_FirstOrder_IIR;
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonBadQuality : TON;
+
+    // Scratch values (reset every scan).
+    {attribute 'OPC.UA.DA' := '0'}
+    _rawReal       : REAL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _clampedRaw    : REAL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _scaledReal    : REAL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _finalReal     : REAL;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[// Skeleton - no I/O logic yet. Populate the common header so the device
-// surfaces ready/faulted/source-locked status to HMIs consistently.
+      <ST><![CDATA[// 1. First scan: config validation + task dt cache for the filter.
+IF _firstScan THEN
+    _firstScan := FALSE;
+    _taskDtSec := TIME_TO_REAL(F_GetTaskCycleTime()) / 1000.0;
+    _configBad := cfg.cfgRawMin >= cfg.cfgRawMax OR cfg.cfgEuMin > cfg.cfgEuMax;
+END_IF;
+
+sts.stsUnit    := cfg.cfgUnit;
+sts.stsQuality := inpQuality;
+
+// 2. Read correct UNION member.
+CASE cfg.cfgInputType OF
+    __SYSTEM.TYPE_CLASS.TYPE_INT:   _rawReal := TO_REAL(io.inRaw.i);
+    __SYSTEM.TYPE_CLASS.TYPE_UINT:  _rawReal := TO_REAL(io.inRaw.ui);
+    __SYSTEM.TYPE_CLASS.TYPE_WORD:  _rawReal := TO_REAL(io.inRaw.w);
+    __SYSTEM.TYPE_CLASS.TYPE_DINT:  _rawReal := TO_REAL(io.inRaw.di);
+    __SYSTEM.TYPE_CLASS.TYPE_UDINT: _rawReal := TO_REAL(io.inRaw.udi);
+    __SYSTEM.TYPE_CLASS.TYPE_DWORD: _rawReal := TO_REAL(io.inRaw.dw);
+ELSE
+    _rawReal := io.inRaw.r;
+END_CASE;
+
+// 3. Quality-gated hold. Ignore the freshly read value while BAD.
+IF inpQuality = E_IO_Quality.BAD THEN
+    _rawReal := sts.stsRawReal;
+END_IF;
+
+sts.stsRawReal := _rawReal;
+
+// 4. Raw-value bypass — no clamp / scale / filter.
+IF cfg.cfgUseRawValue THEN
+    _finalReal         := _rawReal;
+    sts.stsScaled      := _rawReal;
+    sts.stsClampedLow  := FALSE;
+    sts.stsClampedHigh := FALSE;
+    sts.stsClampActive := FALSE;
+ELSE
+    // 4a. Clamp-and-report against the scaling range. The same comparison
+    //     drives both the scaling clamp and the stsClamped* booleans so the
+    //     HMI surface always matches what the math actually used.
+    sts.stsClampedLow  := _rawReal < cfg.cfgRawMin;
+    sts.stsClampedHigh := _rawReal > cfg.cfgRawMax;
+    sts.stsClampActive := sts.stsClampedLow OR sts.stsClampedHigh;
+
+    _clampedRaw := _rawReal;
+    IF sts.stsClampedLow THEN
+        _clampedRaw := cfg.cfgRawMin;
+    ELSIF sts.stsClampedHigh THEN
+        _clampedRaw := cfg.cfgRawMax;
+    END_IF;
+
+    // Promote quality tag while clamped (even if no fault is raised).
+    IF sts.stsClampActive AND sts.stsQuality = E_IO_Quality.GOOD THEN
+        sts.stsQuality := E_IO_Quality.CLAMPED;
+    END_IF;
+
+    // 4b. Linear scaling — safe because first-scan validated the range.
+    IF cfg.cfgRawMax - cfg.cfgRawMin <> 0 THEN
+        _scaledReal := cfg.cfgEuMin
+                     + (_clampedRaw - cfg.cfgRawMin)
+                       * (cfg.cfgEuMax - cfg.cfgEuMin)
+                       / (cfg.cfgRawMax - cfg.cfgRawMin);
+    ELSE
+        _scaledReal := cfg.cfgEuMin;
+    END_IF;
+    sts.stsScaled := _scaledReal;
+
+    // 4c. Optional first-order LPF. Pass-through when tau is 0.
+    IF cfg.cfgFilterTau <> T#0MS THEN
+        _filter(
+            fInput := _scaledReal,
+            fDt    := _taskDtSec,
+            fTau   := TIME_TO_REAL(cfg.cfgFilterTau) / 1000.0
+        );
+        _finalReal := LREAL_TO_REAL(_filter.fOutput);
+    ELSE
+        _finalReal := _scaledReal;
+    END_IF;
+END_IF;
+
+sts.stsValue := _finalReal;
+
+// 5. Quality watchdog.
+_tonBadQuality(
+    IN := inpQuality = E_IO_Quality.BAD AND cfg.cfgQualityFaultAfter > T#0MS,
+    PT := cfg.cfgQualityFaultAfter
+);
+
+// 6. Single-source-of-truth fault raise. See _RaiseActiveFault for priority.
+_RaiseActiveFault();
+
+// 7. Refresh shared header.
 _UpdateHeader(header := sts.header, stateString := '', stsBusy := FALSE);]]></ST>
     </Implementation>
+    <Folder Name="Protected" Id="{a0100003-0000-0000-f000-000000000001}" />
+    <Method Name="_RaiseActiveFault" Id="{a0100003-0000-0000-1000-000000000001}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Pick the highest-severity active fault and raise it. Priority:
+//   BadConfig (commissioning)
+//   BadQuality (watchdog)
+//   ClampHigh / ClampLow (if cfgClampAsFault)
+//
+// If no rule applies the active fault (if any) is cleared so the device
+// auto-recovers when the condition goes away.
+METHOD PROTECTED _RaiseActiveFault
+VAR
+    code   : DINT;
+    source : STRING(31);
+    reason : STRING(79);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[code := 0;
+
+IF _configBad THEN
+    code   := E_AnalogInput_Fault.BadConfig;
+    source := 'CONFIG';
+    reason := 'cfgRawMin >= cfgRawMax or cfgEuMin > cfgEuMax';
+ELSIF _tonBadQuality.Q THEN
+    code   := E_AnalogInput_Fault.BadQuality;
+    source := 'QUALITY';
+    reason := 'inpQuality stayed BAD past cfgQualityFaultAfter';
+ELSIF cfg.cfgClampAsFault AND sts.stsClampedHigh THEN
+    code   := E_AnalogInput_Fault.ClampHigh;
+    source := 'CLAMP_H';
+    reason := CONCAT('Raw reading above RawMax=', REAL_TO_STRING(cfg.cfgRawMax));
+ELSIF cfg.cfgClampAsFault AND sts.stsClampedLow THEN
+    code   := E_AnalogInput_Fault.ClampLow;
+    source := 'CLAMP_L';
+    reason := CONCAT('Raw reading below RawMin=', REAL_TO_STRING(cfg.cfgRawMin));
+END_IF;
+
+IF code = 0 THEN
+    IF IsFaulted() THEN
+        _ClearFault();
+    END_IF;
+ELSE
+    _Raise(
+        code   := code,
+        source := source,
+        reason := reason
+    );
+END_IF;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResolveFaultString" Id="{a0100003-0000-0000-1000-000000000002}" FolderPath="Protected\">
+      <Declaration><![CDATA[METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE code OF
+    0:
+        ResolveFaultString := '';
+    E_AnalogInput_Fault.BadQuality:
+        ResolveFaultString := 'Signal quality BAD past configured timeout';
+    E_AnalogInput_Fault.ClampLow:
+        ResolveFaultString := 'Raw reading below RawMin';
+    E_AnalogInput_Fault.ClampHigh:
+        ResolveFaultString := 'Raw reading above RawMax';
+    E_AnalogInput_Fault.BadConfig:
+        ResolveFaultString := 'Invalid scaling range configured';
+ELSE
+    ResolveFaultString := CONCAT('AnalogInput fault ', DINT_TO_STRING(code));
+END_CASE;]]></ST>
+      </Implementation>
+    </Method>
     <LineIds Name="FB_AnalogInput">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AnalogInput._RaiseActiveFault">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AnalogInput.ResolveFaultString">
       <LineId Id="1" Count="0" />
     </LineIds>
   </POU>

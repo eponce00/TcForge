@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AlarmLimit" Id="{a0200003-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Four-level limit ladder (HiHi / Hi / Lo / LoLo) built on four composed
+// FB_AlarmThreshold instances. Each level has its own full config; delays,
+// severity, and ack behaviour are set per level.
+//
+// Flood suppression: HiHi hides Hi, LoLo hides Lo on the rollup flags. The
+// raw sub-statuses (HiHi / Hi / Lo / LoLo) are still exposed for forensics.
+//
+// Ack() cascades to every sub-alarm. LockSource() cascades identically, so the
+// composite honours a single source-lock decision.
+//
+// Typical config (alongside an analog input):
+//   cfg.HiHi.common.bEnable := TRUE; cfg.HiHi.fThreshold := 110.0;
+//   cfg.HiHi.bFailHigh := TRUE;      cfg.HiHi.common.eSeverity := E_AlarmSeverity.CRITICAL;
+//   cfg.Hi.common.bEnable   := TRUE; cfg.Hi.fThreshold   := 100.0;
+//   cfg.Hi.bFailHigh   := TRUE;      cfg.Hi.common.eSeverity   := E_AlarmSeverity.WARNING;
+//   cfg.Lo.common.bEnable   := TRUE; cfg.Lo.fThreshold   :=  20.0;
+//   cfg.Lo.bFailLow    := TRUE;      cfg.Lo.common.eSeverity   := E_AlarmSeverity.WARNING;
+//   cfg.LoLo.common.bEnable := TRUE; cfg.LoLo.fThreshold :=  10.0;
+//   cfg.LoLo.bFailLow  := TRUE;      cfg.LoLo.common.eSeverity := E_AlarmSeverity.CRITICAL;
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_AlarmLimit IMPLEMENTS I_Alarm
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg   : ST_AlarmLimit_Cfg;
+
+    {attribute 'OPC.UA.DA' := '0'}
+    inpPv : REAL;
+END_VAR
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_AlarmLimit_Sts;
+END_VAR
+VAR
+    _hiHi : FB_AlarmThreshold;
+    _hi   : FB_AlarmThreshold;
+    _lo   : FB_AlarmThreshold;
+    _loLo : FB_AlarmThreshold;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Push config into each sub-alarm every cycle so HMI changes take effect.
+_hiHi.cfg := cfg.HiHi;
+_hi.cfg   := cfg.Hi;
+_lo.cfg   := cfg.Lo;
+_loLo.cfg := cfg.LoLo;
+
+_hiHi(inpValue := inpPv);
+_hi(inpValue   := inpPv);
+_lo(inpValue   := inpPv);
+_loLo(inpValue := inpPv);
+
+// Expose raw sub-statuses
+sts.HiHi := _hiHi.sts;
+sts.Hi   := _hi.sts;
+sts.Lo   := _lo.sts;
+sts.LoLo := _loLo.sts;
+
+// Rollup with suppression (higher priority hides lower on same direction)
+sts.stsHiHiActive := _hiHi.sts.stsActive;
+sts.stsHiActive   := _hi.sts.stsActive   AND NOT sts.stsHiHiActive;
+sts.stsLoLoActive := _loLo.sts.stsActive;
+sts.stsLoActive   := _lo.sts.stsActive   AND NOT sts.stsLoLoActive;
+
+sts.stsAnyActive := sts.stsHiHiActive OR sts.stsHiActive OR sts.stsLoActive OR sts.stsLoLoActive;
+
+// Aggregate severity — highest currently-active level wins.
+sts.eSeverity := E_AlarmSeverity.NONE;
+IF _hiHi.sts.eSeverity > sts.eSeverity THEN sts.eSeverity := _hiHi.sts.eSeverity; END_IF;
+IF _hi.sts.eSeverity   > sts.eSeverity THEN sts.eSeverity := _hi.sts.eSeverity;   END_IF;
+IF _lo.sts.eSeverity   > sts.eSeverity THEN sts.eSeverity := _lo.sts.eSeverity;   END_IF;
+IF _loLo.sts.eSeverity > sts.eSeverity THEN sts.eSeverity := _loLo.sts.eSeverity; END_IF;]]></ST>
+    </Implementation>
+    <Method Name="Ack" Id="{a0200003-0000-0000-1000-000000000001}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// Composite Ack — cascades to all four levels. Returns ACCEPTED if at least
+// one level accepted; reports any source-lock rejection otherwise.
+METHOD PUBLIC Ack : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR
+VAR
+    r1, r2, r3, r4 : E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[r1 := _hiHi.Ack(eRequester := eRequester);
+r2 := _hi.Ack(eRequester   := eRequester);
+r3 := _lo.Ack(eRequester   := eRequester);
+r4 := _loLo.Ack(eRequester := eRequester);
+
+IF r1 = E_RpcMethodResponse.ACCEPTED OR r2 = E_RpcMethodResponse.ACCEPTED
+   OR r3 = E_RpcMethodResponse.ACCEPTED OR r4 = E_RpcMethodResponse.ACCEPTED THEN
+    Ack := E_RpcMethodResponse.ACCEPTED;
+ELSE
+    // Every level rejected — all four reject for the same reason (source
+    // lock / not latched), so returning the HiHi response is representative.
+    Ack := r1;
+END_IF;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LockSource" Id="{a0200003-0000-0000-1000-000000000002}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC LockSource : E_RpcMethodResponse
+VAR_INPUT
+    bLock : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_hiHi.LockSource(bLock := bLock);
+_hi.LockSource(bLock   := bLock);
+_lo.LockSource(bLock   := bLock);
+_loLo.LockSource(bLock := bLock);
+LockSource := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

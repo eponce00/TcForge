@@ -1,6 +1,6 @@
 # 5 Sequencing
 
-The sequencing module provides `FB_StateMachine` and `FB_Step` — the two blocks you need to drive any multi-step automatic process. This document covers the state model, how sequences are structured, and how to wire permissives.
+The sequencing module provides `FB_StateMachine` and `FB_Step` — the two blocks you need to drive any multi-step automatic process. This document covers the state model, how sequences are structured, how to wire permissives, and how steps participate in the unified fault model from [§7 Architecture](7-Architecture.md).
 
 > **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [RPC Method Response](3-RPC-Method-Response.md) · [HMI Integration](4-HMI-Integration.md) · [Persistent Variables →](6-Persistent-Variables.md) · [Architecture](7-Architecture.md) · [I/O Binding](8-IO-Binding.md)
 
@@ -81,7 +81,7 @@ fbStateMachine(
 
 | Output | Type | Description |
 |--------|------|-------------|
-| `Status` | `ST_SM_Status` | Embeds `header : ST_DeviceHeader_Sts` (ready/busy/faulted, fault code + string, timestamps), plus `State`, `LastState`, `BlockedCondition`, `StarvedCondition`, `Step` snapshot |
+| `Status` | `ST_SM_Status` | Embeds `header : ST_DeviceHeader_Sts` (ready/busy/faulted, fault code + string + source + reason, timestamps), plus `State`, `LastState`, `BlockedCondition`, `StarvedCondition`, `Step` snapshot |
 | `StepInfo` | `ST_SM_StepInfo` | CurrentStep, CurrentStepName, NextStep, StepTimerSeconds |
 | `HomePermOK`, `StartPermOK`, `ProceedPermOK`, `AutoPermOK` | `BOOL` | Flat perm-OK flags directly on the FB output |
 | `StepPermCfg` | `ST_Permissive_Config` | Active step's permissive config (mirrored from FB_Step) |
@@ -108,17 +108,24 @@ END_IF;
 
 The state machine copies the latest reported value into `Status.BlockedCondition` / `Status.StarvedCondition` each cycle. A non-zero value means the condition is active; zero means clear. Use any code space you like as long as zero is reserved for "no condition".
 
-### 5.2.4 Faults — where they come from
+### 5.2.4 Faults — `E_SM_Fault`
 
-`FB_StateMachine` raises its own faults through the inherited `_fault` handler using `E_SM_Fault`:
+`FB_StateMachine` raises its own faults through `_Raise(code, source, reason)` inherited from `FB_DeviceBase` (see [§7.4 Fault Book-Keeping](7-Architecture.md#74-fault-book-keeping)). Fault codes follow the range convention from [§7.3.3](7-Architecture.md#733-fault-code-range-convention):
 
-| Code | Trigger |
-|------|---------|
-| `OddStepFault` | Sequence advanced onto an odd step (fault step by convention). |
-| `SubmoduleFaulted` | `inpSubmoduleFaulted` asserted by a child module. |
-| `RunningInterlockTripped` | Running-state interlock (`intlkRunning`) tripped and forced an abort. |
+| Code | Name                       | Range        | Trigger                                                                                   |
+|------|----------------------------|--------------|-------------------------------------------------------------------------------------------|
+| 1    | `StepTimeout`              | 1–9 Timeouts | A step's `nTimeout` (seconds) was exceeded. Source = `'STEP_<N>'`.                        |
+| 2    | `OddStepReached`           | 1–9 Timeouts | Sequence landed on an odd step without a more specific fault already being active.        |
+| 3    | `StepUserFault`            | 1–9 Timeouts | A step body called `step.RaiseFault(code, reason)` to report a custom condition.          |
+| 50   | `RunningInterlockTripped`  | 50–59 Intlk  | Running-state interlock (`intlkRunning`) tripped and forced an abort. Source = `'INTLK_RUNNING'`. |
+| 70   | `SubmoduleFaulted`         | 70–79 Prop   | `inpSubmoduleFaulted` asserted by a child module. Source = `'SUBMODULE'`.                 |
 
-The fault code, text (resolved from `E_SM_Fault`), timestamp and ring buffer all surface through `Status.header` — see [§7 Architecture](7-Architecture.md) for the shared header contract.
+All five raise with **source** and (when useful) **reason** so the HMI shows where and why:
+
+- `StepTimeout` / `StepUserFault` / `OddStepReached`: raised by `FB_StateMachine._RaiseStepFault(stepNum, stepName, code, reason)`. `source` is auto-built as `'STEP_<nnnn>'`; `reason` defaults to `'Step <N> [<name>]: <resolved fault string>'` when the caller doesn't supply one. This guarantees the HMI never sees an empty reason.
+- `RunningInterlockTripped` / `SubmoduleFaulted`: raised by the state machine body with a constant `source` tag and a fixed `reason` sentence.
+
+The fault code, text, source, reason, timestamp and ring buffer all surface through `Status.header` — see [§7 Architecture](7-Architecture.md) for the shared header contract.
 
 ---
 
@@ -207,13 +214,76 @@ Fault steps use the odd-step convention. The step directly above the normal step
 3002 — next normal step
 ```
 
-`FB_Step` automatically advances to `nStep + 1` on timeout expiry.
+`FB_Step` automatically advances to `nStep + 1` on timeout expiry **and** raises a fault on the way. The fault itself is what the HMI displays; the odd step is just the rendezvous point for any cleanup logic.
 
 ---
 
-## 5.4 Permissives
+## 5.4 Raising Faults From a Step
 
-### 5.4.1 State-level permissives (on FB_StateMachine)
+Two kinds of fault enter the state machine from a step body, both routed through the unified fault model (§7.4):
+
+### 5.4.1 Automatic `StepTimeout`
+
+Fires when `Status.Step.TimerSeconds > nTimeout` and `nTimeout > 0`. The step:
+
+1. Calls `sm._RaiseStepFault(stepNum := nStep, stepName := sName, code := E_SM_Fault.StepTimeout, reason := '')`.
+2. Writes `nNextStep := nStep + 1` so the sequence lands on the odd fault step.
+3. Guards with an internal `_timeoutFired` flag so the transition only happens once per step activation.
+
+On the HMI, the header ends up with:
+
+- `faultCode     = 1` (`E_SM_Fault.StepTimeout`)
+- `faultString   = 'Step Timeout'`
+- `faultSource   = 'STEP_3004'`
+- `faultReason   = 'Step 3004 [Inspect part]: Step Timeout'` (auto-built when `reason` is empty)
+
+### 5.4.2 Author-supplied `step.RaiseFault(code, reason)`
+
+When a step detects a condition that needs a specific fault code or a human-readable reason the library can't infer, call `RaiseFault` directly on the step instance:
+
+```iecst
+step3004(
+    sm        := sm,
+    nStep     := 3004,
+    nNextStep := 3006,
+    sName     := 'Inspect part',
+    nTimeout  := 10
+);
+
+IF step3004.Execute AND NOT inpSensorOK THEN
+    step3004.RaiseFault(
+        code   := E_SM_Fault.StepUserFault,
+        reason := 'Sensor A reports out-of-range reading 42.7 bar'
+    );
+END_IF;
+```
+
+What happens:
+
+1. `FB_Step.RaiseFault` is a no-op if the step is not currently active (safe to call unconditionally).
+2. It forwards to `sm._RaiseStepFault(stepNum, stepName, code, reason)`, which raises the fault via the base class's `_Raise(code, source, reason)` with:
+   - `source = 'STEP_<N>'` (auto-built from `nStep`)
+   - `reason = <your sentence>` (or the default `'Step <N> [<name>]: <resolved fault string>'` if you pass `''`)
+3. It advances the sequence to `nStep + 1` — the odd fault step — so any per-step cleanup can run.
+
+Guidelines:
+
+- **Use a specific code when you have one.** If the condition is a wiring fault, raise `MyDev_Fault.BadWiring`, not `StepUserFault`. This keeps fault codes meaningful across runs and machines.
+- **Use `StepUserFault` (`E_SM_Fault.StepUserFault`, code `3`) as the catch-all** when the sequence needs a fault but no device-specific enum applies.
+- **Always pass a reason** when the code's resolved string isn't self-explanatory. The operator never sees the enum name; they see `faultString` and `faultReason`.
+- **Multiple `RaiseFault` calls in one scan are safe.** `_Raise` is idempotent on `code` ([§7.3.2](7-Architecture.md#732-idempotent-raising)); only the first call pushes to the ring, later calls with the same code no-op.
+
+### 5.4.3 Falling back to `OddStepReached`
+
+If the sequence lands on an odd step *without* anyone raising a more specific fault (for example, a branch that explicitly targeted `3005`), `FB_StateMachine` auto-raises `OddStepReached` with `source = 'STEP_<odd>'` and a default reason. This keeps `Status.Faulted = TRUE` consistent with the odd-step convention even when no timeout or user fault triggered.
+
+Because it only fires when no other fault is already active, a proper `StepTimeout` or `StepUserFault` always wins — no risk of overwriting the real reason with a generic one.
+
+---
+
+## 5.5 Permissives
+
+### 5.5.1 State-level permissives (on FB_StateMachine)
 
 Four permissive groups gate the main commands. Wire them in MAIN or in a dedicated permissive program:
 
@@ -232,7 +302,7 @@ fbStateMachine.internalStartPerm.MapInput(bitIndex := 1, inputValue := bRobotRea
 fbStateMachine.internalAutoPerm.MapInput(bitIndex := 0, inputValue := bEstopOK);
 ```
 
-### 5.4.2 Step-level permissives (on FB_Step)
+### 5.5.2 Step-level permissives (on FB_Step)
 
 Map per-step conditions inside the `Execute` phase each scan. The active step automatically republishes its permissive data to `FB_StateMachine.StepPermCfg` and `FB_StateMachine.StepPermStatus` for HMI / OPC:
 
@@ -247,7 +317,7 @@ The step will not exit (will not enter `Exiting`) until all mapped permissives a
 
 ---
 
-## 5.5 Step Number Convention
+## 5.6 Step Number Convention
 
 | Range | State |
 |-------|-------|

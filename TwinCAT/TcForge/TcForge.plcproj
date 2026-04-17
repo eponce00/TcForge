@@ -140,10 +140,43 @@
     <Compile Include="Modules\IO\AnalogOutput\ST_AnalogOutput_IO.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\FB_DeviceBase.TcPOU">
+    <Compile Include="Modules\IO\DigitalInput\E_DigitalInput_Fault.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\FB_FaultHandler.TcPOU">
+    <Compile Include="Modules\IO\DigitalOutput\E_DigitalOutput_Fault.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\E_DigitalOutput_Mode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogInput\E_AnalogInput_Fault.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogOutput\E_AnalogOutput_Fault.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\E_IO_Quality.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\E_Unit.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\U_IoRaw_In.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\U_IoRaw_Out.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Utilities\F_GetTaskCycleTime.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Utilities\F_Now.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Utilities\FB_LPF_FirstOrder_IIR.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\FB_DeviceBase.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Modules\Common\ST_DeviceHeader_Sts.TcDUT">
@@ -152,22 +185,52 @@
     <Compile Include="Modules\Common\ST_FaultEntry.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Interfaces\I_Resettable.TcIO">
+    <Compile Include="Modules\Common\Interfaces\I_Alarm.TcIO">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Interfaces\I_SourceLockable.TcIO">
+    <Compile Include="Modules\Alarms\Common\E_AlarmSeverity.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Interfaces\I_DigitalCommandable.TcIO">
+    <Compile Include="Modules\Alarms\Common\ST_Alarm_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Interfaces\I_AnalogCommandable.TcIO">
+    <Compile Include="Modules\Alarms\Common\ST_Alarm_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Interfaces\I_Abortable.TcIO">
+    <Compile Include="Modules\Alarms\Common\FB_AlarmBase.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Interfaces\I_Diagnosable.TcIO">
+    <Compile Include="Modules\Alarms\Simple\ST_AlarmSimple_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Simple\FB_AlarmSimple.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Threshold\ST_AlarmThreshold_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Threshold\FB_AlarmThreshold.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Limit\ST_AlarmLimit_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Limit\ST_AlarmLimit_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Limit\FB_AlarmLimit.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Deviation\ST_AlarmDeviation_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Deviation\FB_AlarmDeviation.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\RateOfChange\ST_AlarmRateOfChange_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\RateOfChange\FB_AlarmRateOfChange.TcPOU">
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>
@@ -175,6 +238,8 @@
     <Folder Include="Modules" />
     <Folder Include="Modules\Common" />
     <Folder Include="Modules\Common\Interfaces" />
+    <Folder Include="Modules\Common\IO" />
+    <Folder Include="Modules\Common\Utilities" />
     <Folder Include="Modules\Interlocks" />
     <Folder Include="Modules\Pneumatics" />
     <Folder Include="Modules\Pneumatics\TwoPosActuator" />
@@ -186,6 +251,13 @@
     <Folder Include="Modules\IO\DigitalOutput" />
     <Folder Include="Modules\IO\AnalogInput" />
     <Folder Include="Modules\IO\AnalogOutput" />
+    <Folder Include="Modules\Alarms" />
+    <Folder Include="Modules\Alarms\Common" />
+    <Folder Include="Modules\Alarms\Simple" />
+    <Folder Include="Modules\Alarms\Threshold" />
+    <Folder Include="Modules\Alarms\Limit" />
+    <Folder Include="Modules\Alarms\Deviation" />
+    <Folder Include="Modules\Alarms\RateOfChange" />
     <Folder Include="GVLs" />
     <Folder Include="VISUs" />
   </ItemGroup>

@@ -9,10 +9,11 @@ A TwinCAT 3 library of reusable function blocks for Beckhoff PLCs, plus an examp
 
 | Module     | What it covers                                                                               |
 | ---------- | -------------------------------------------------------------------------------------------- |
-| Common     | Shared types, enums, validation helpers, `FB_DeviceBase`, `FB_FaultHandler`, core interfaces.|
+| Common     | Shared types, enums, validation helpers, `F_Now`, `FB_DeviceBase` (owns the fault ring + header).|
 | Sequencing | State machines and sequence steps with an Entry/Execute/Exiting lifecycle, plus permissives. |
 | Pneumatics | Actuator control with feedback monitoring.                                                   |
-| IO         | Digital/Analog input and output skeletons wired to `FB_DeviceBase`.                          |
+| IO         | `FB_DigitalInput` / `FB_DigitalOutput` / `FB_AnalogInput` / `FB_AnalogOutput` — debounce, pulse modes, UNION-based raw terminals, scaling, IIR filter. Process-limit alarms compose externally via `FB_AlarmLimit`. |
+| Alarms     | `FB_AlarmSimple` / `FB_AlarmThreshold` / `FB_AlarmLimit` / `FB_AlarmDeviation` / `FB_AlarmRateOfChange` — uniform debounce / latch / ack / severity / timestamps surface via `FB_AlarmBase` + `I_Alarm`. |
 
 
 ## Conventions
@@ -46,8 +47,9 @@ Open `TwinCAT/TcForge.sln` in TwinCAT XAE, build it, and browse `TcForgeExample`
 | 4   | [HMI Integration](docs/4-HMI-Integration.md)               | OPC UA pragmas, cfg/sts exposure, RPC over OPC UA.              |
 | 5   | [Sequencing](docs/5-Sequencing.md)                         | `FB_StateMachine`, `FB_Step`, authoring sequences, permissives. |
 | 6   | [Persistent Variables](docs/6-Persistent-Variables.md)     | PERSISTENT vs RETAIN and UPS configuration.                     |
-| 7   | [Architecture](docs/7-Architecture.md)                     | `FB_DeviceBase`, `FB_FaultHandler`, interfaces, header pattern. |
+| 7   | [Architecture](docs/7-Architecture.md)                     | `FB_DeviceBase`, unified fault model, device header pattern.    |
 | 8   | [I/O Binding](docs/8-IO-Binding.md)                        | `ST_*_IO` pattern, `@AT %I*/%Q*`, scaling to plant-sized I/O.   |
+| 9   | [Alarms](docs/9-Alarms.md)                                 | `FB_AlarmBase`, severity model, ack semantics, alarm catalog.   |
 
 
 ## License

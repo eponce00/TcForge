@@ -5,6 +5,10 @@
 // code      : device-specific fault code (0 = empty slot)
 // ts        : timestamp when the fault was first raised
 // requester : whoever triggered the command that faulted (PROG / OPERATOR)
+// source    : where inside the device raised it (step number + name, interlock
+//             name, 'SUBMODULE', etc.). Empty => caller didn't supply context.
+// reason    : free-form human-readable detail. Empty => HMI falls back to
+//             ResolveFaultString(code).
 {attribute 'OPC.UA.DA' := '1'}
 {attribute 'OPC.UA.DA.Access' := '1'}
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
@@ -13,6 +17,8 @@ STRUCT
     code      : DINT;
     ts        : LTIME;
     requester : E_Requester;
+    source    : STRING(31);
+    reason    : STRING(79);
 END_STRUCT
 END_TYPE]]></Declaration>
   </DUT>

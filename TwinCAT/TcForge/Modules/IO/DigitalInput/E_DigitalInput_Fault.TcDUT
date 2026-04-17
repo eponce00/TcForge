@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_DigitalInput_Fault" Id="{a1100001-0004-0000-0000-000000000001}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'to_string'}
+// Fault codes for FB_DigitalInput. Range convention matches the shared
+// device-fault convention (see docs/7-Architecture.md):
+//   0        No fault
+//   1-9      Timeouts
+//   10-19    Feedback / hardware / signal
+//   20-29    State violations
+//   40-49    Configuration / process limits
+//   50-59    Interlocks / permissives
+TYPE E_DigitalInput_Fault :
+(
+    None          := 0,
+
+    BadQuality    := 10,    // inpQuality latched to BAD longer than cfg.tQualityFaultAfter
+    StuckHigh     := 11,    // debounced value stuck TRUE past cfg.tStuckFaultAfter (if configured)
+    StuckLow      := 12     // debounced value stuck FALSE past cfg.tStuckFaultAfter (if configured)
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

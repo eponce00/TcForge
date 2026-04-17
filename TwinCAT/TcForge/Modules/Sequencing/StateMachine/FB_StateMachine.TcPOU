@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_StateMachine" Id="{7408693c-f749-4b9e-8684-bfcba9889df8}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_StateMachine EXTENDS FB_DeviceBase IMPLEMENTS I_Abortable
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_StateMachine EXTENDS FB_DeviceBase
 VAR_INPUT
     cfgAutoRun : BOOL;
     inpSubmoduleFaulted : BOOL;
@@ -89,7 +89,11 @@ intlkRunning();
     IF NOT intlkRunning.sts.bOK AND
        NOT (Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTING) THEN
         _abortRequested := TRUE;
-        _fault.Raise(code := E_SM_Fault.RunningInterlockTripped, requester := E_Requester.PROG);
+        _Raise(
+            code   := E_SM_Fault.RunningInterlockTripped,
+            source := 'INTLK_RUNNING',
+            reason := 'Running interlock tripped, auto-aborting'
+        );
     END_IF;
 
     //-------------------------------------------------------------------------
@@ -298,16 +302,33 @@ intlkRunning();
     //-------------------------------------------------------------------------
     // Fault detection — surface through the shared fault handler so the
     // ring-buffer/history in ST_DeviceHeader_Sts stays populated.
+    //
+    // Ordering discipline:
+    //   1. Submodule faults raise immediately with a specific code + source.
+    //   2. OddStepReached is the "nothing more specific said anything" default
+    //      for landing on an odd step. We only auto-raise it when no fault is
+    //      currently active, so a more specific raise (StepTimeout raised by
+    //      FB_Step, StepUserFault raised by step.RaiseFault, etc.) wins.
     //-------------------------------------------------------------------------
     LsOdd := Status.Step.Current MOD 2;
     Status.Faulted := LsOdd <> 0;
     Status.SubmoduleFaulted := inpSubmoduleFaulted;
 
-    IF Status.Faulted THEN
-        _fault.Raise(code := E_SM_Fault.OddStepFault, requester := _lastRequester);
-    END_IF;
     IF Status.SubmoduleFaulted THEN
-        _fault.Raise(code := E_SM_Fault.SubmoduleFaulted, requester := _lastRequester);
+        _Raise(
+            code   := E_SM_Fault.SubmoduleFaulted,
+            source := 'SUBMODULE',
+            reason := 'Submodule reported fault via inpSubmoduleFaulted'
+        );
+    END_IF;
+
+    IF Status.Faulted AND GetFaultCode() = 0 THEN
+        _RaiseStepFault(
+            stepNum  := Status.Step.Current,
+            stepName := Status.Step.Name,
+            code     := E_SM_Fault.OddStepReached,
+            reason   := ''
+        );
     END_IF;
 
     //-------------------------------------------------------------------------
@@ -462,9 +483,11 @@ END_VAR]]></Declaration>
             <Implementation>
                 <ST><![CDATA[CASE code OF
     E_SM_Fault.None:                    ResolveFaultString := 'No Fault';
-    E_SM_Fault.OddStepFault:            ResolveFaultString := 'Step is a fault step';
-    E_SM_Fault.SubmoduleFaulted:        ResolveFaultString := 'Submodule reported fault';
-    E_SM_Fault.RunningInterlockTripped: ResolveFaultString := 'Running interlock tripped';
+    E_SM_Fault.StepTimeout:             ResolveFaultString := 'Step Timeout';
+    E_SM_Fault.OddStepReached:          ResolveFaultString := 'Step Faulted';
+    E_SM_Fault.StepUserFault:           ResolveFaultString := 'Step User Fault';
+    E_SM_Fault.RunningInterlockTripped: ResolveFaultString := 'Running Interlock Tripped';
+    E_SM_Fault.SubmoduleFaulted:        ResolveFaultString := 'Submodule Faulted';
 ELSE
     ResolveFaultString := 'Unknown Fault';
 END_CASE;]]></ST>
@@ -503,7 +526,7 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Home := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
+        <ST><![CDATA[Home := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted);
 IF Home <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 IF NOT (Status.State = E_SM_State.STOPPED) THEN
@@ -539,7 +562,7 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Pause := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
+        <ST><![CDATA[Pause := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted);
 IF Pause <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 IF NOT (Status.State = E_SM_State.RUNNING) THEN
@@ -565,7 +588,7 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Proceed := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
+        <ST><![CDATA[Proceed := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted);
 IF Proceed <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 IF NOT (Status.State = E_SM_State.PAUSED) THEN
@@ -601,7 +624,7 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Retry := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
+        <ST><![CDATA[Retry := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted);
 IF Retry <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 _retryActive := TRUE;
@@ -616,7 +639,7 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Start := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted, FALSE, FALSE);
+        <ST><![CDATA[Start := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted);
 IF Start <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
 
 IF NOT (Status.State = E_SM_State.READY) THEN
@@ -749,18 +772,47 @@ END_VAR]]></Declaration>
 Status.Step.PermStatus := sts;]]></ST>
             </Implementation>
         </Method>
-    <Method Name="SetStepFault" Id="{e5f6a7b8-c9d0-1234-ef01-23456789abcd}" FolderPath="Internal\">
-      <Declaration><![CDATA[// INTERNAL: used by FB_Step to fault the current step (timeout, etc.).
-// Faults by advancing to the next (odd) step number -- Status.Faulted derives
-// from (CurrentStep MOD 2). Not part of the user API.
-METHOD INTERNAL SetStepFault
+    <Method Name="_RaiseStepFault" Id="{e5f6a7b8-c9d0-1234-ef01-23456789abcd}" FolderPath="Internal\">
+      <Declaration><![CDATA[// INTERNAL: unified step-fault entry point used by FB_Step (timeout, user
+// RaiseFault) and by the SM body (OddStepReached auto-raise). Builds a
+// default reason when the caller leaves it empty so the ring never stores
+// blank context, then raises through the inherited fault book-keeping.
+//
+// This method does NOT advance the step; callers do that via SetNextStep
+// when appropriate (e.g. FB_Step's timeout path jumps to nStep + 1).
+METHOD INTERNAL _RaiseStepFault
 VAR_INPUT
-    bFault : BOOL;
+    stepNum  : DINT;
+    stepName : STRING(40);
+    code     : DINT;
+    reason   : STRING(79);
+END_VAR
+VAR
+    srcStr    : STRING(31);
+    reasonStr : STRING(79);
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IF bFault THEN
-    _nextStep := Status.Step.Current + 1;
-END_IF;]]></ST>
+        <ST><![CDATA[srcStr := CONCAT(STR1 := 'STEP_', STR2 := DINT_TO_STRING(stepNum));
+
+IF reason <> '' THEN
+    reasonStr := reason;
+ELSE
+    // Default: "Step 3004 [Advance cylinder]: Step Faulted"
+    reasonStr := CONCAT(STR1 := 'Step ', STR2 := DINT_TO_STRING(stepNum));
+    IF stepName <> '' THEN
+        reasonStr := CONCAT(STR1 := reasonStr, STR2 := ' [');
+        reasonStr := CONCAT(STR1 := reasonStr, STR2 := stepName);
+        reasonStr := CONCAT(STR1 := reasonStr, STR2 := ']');
+    END_IF;
+    reasonStr := CONCAT(STR1 := reasonStr, STR2 := ': ');
+    reasonStr := CONCAT(STR1 := reasonStr, STR2 := THIS^.ResolveFaultString(code := code));
+END_IF;
+
+_Raise(
+    code   := code,
+    source := srcStr,
+    reason := reasonStr
+);]]></ST>
       </Implementation>
     </Method>
     <LineIds Name="FB_StateMachine">
@@ -826,7 +878,7 @@ END_IF;]]></ST>
         <LineIds Name="FB_StateMachine.SetStepPermissives">
             <LineId Id="1" Count="0" />
         </LineIds>
-    <LineIds Name="FB_StateMachine.SetStepFault">
+    <LineIds Name="FB_StateMachine._RaiseStepFault">
       <LineId Id="1" Count="0" />
     </LineIds>
   </POU>

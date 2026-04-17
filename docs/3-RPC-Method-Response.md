@@ -1,6 +1,6 @@
 # 3 RPC Method Response
 
-All RPC methods across the library return `E_RpcMethodResponse`, a standardized enumeration that tells the caller whether a command was accepted or rejected — and why.
+All RPC methods across the library return `E_RpcMethodResponse`, a standardized enumeration that tells the caller whether a command was accepted or rejected — and why. RPC responses share a **numbering convention** with the persistent fault codes in [§7.4 Architecture — Unified Fault Model](7-Architecture.md#74-the-unified-fault-model) but belong to a different storage scope.
 
 > **Navigation:** [← README](../README.md) · [Programming Standards](1-Programming-Standards.md) · [Command Source Control](2-Command-Source-Control.md) · [HMI Integration →](4-HMI-Integration.md) · [Sequencing →](5-Sequencing.md) · [Architecture](7-Architecture.md) · [I/O Binding](8-IO-Binding.md)
 
@@ -25,23 +25,53 @@ The enum uses `{attribute 'to_string'}` so `TO_STRING(response)` returns the sym
 
 ### 3.1.1 Range Convention
 
-
-| Range | Category               |
-| ----- | ---------------------- |
-| 0     | Success                |
-| 10–19 | Source / Authorization |
-| 20–29 | State                  |
-| 50–59 | Permissive / Interlock |
-| 100   | Default                |
+The same numeric ranges used for persistent device faults ([§7.4.3](7-Architecture.md#743-fault-code-range-convention)) gate RPC rejections. Reading any code anywhere in the system immediately tells you the category:
 
 
-Ranges 30–39 (Manual Override), 40–49 (Configuration), 60–69 (Output/Hardware), 70–79 (Propagation), 80–89 (Redundancy) are reserved for future use.
+| Range  | Category               | RPC usage                              | Persistent-fault usage                         |
+| ------ | ---------------------- | -------------------------------------- | ---------------------------------------------- |
+| 0      | Success / None         | `ACCEPTED`                             | `None`                                         |
+| 1–9    | Timeouts               | *reserved*                             | `StepTimeout`, `AdvanceTimeout`, …             |
+| 10–19  | Source / Authorization | `REJECTED_SOURCE_NOT_ALLOWED`          | *reserved*                                     |
+| 10–19  | Feedback / Hardware    | *reserved*                             | `BothFeedbackOn`, `NoFeedback`                 |
+| 20–29  | State                  | `REJECTED_WRONG_STATE`, `REJECTED_FAULTED`, `REJECTED_ALREADY_AT_TARGET` | `UndefinedState`, `ConflictingCommands` |
+| 30–39  | Manual override        | *reserved*                             | *reserved*                                     |
+| 40–49  | Configuration          | *reserved*                             | *reserved*                                     |
+| 50–59  | Permissive / Interlock | `REJECTED_PERMISSIVE_NOT_MET`, `REJECTED_INTERLOCKED` | `PermissivesNotOK`, `RunningInterlockTripped` |
+| 60–69  | Output / Hardware      | *reserved*                             | *reserved*                                     |
+| 70–79  | Propagation            | *reserved*                             | `SubmoduleFaulted`                             |
+| 80–89  | Redundancy             | *reserved*                             | *reserved*                                     |
+| 100    | Default / Unknown      | `REJECTED_UNKNOWN`                     | *reserved*                                     |
+
+
+Range **10–19** is reused: RPC uses it for authorization, persistent faults use it for feedback / hardware. They never appear in the same namespace, so the overlap is harmless and keeps each enum small and memorable.
 
 ---
 
-## 3.2 Method Inventory
+## 3.2 RPC vs. Persistent Fault Decoupling
 
-### 3.2.1 FB_TwoPosActuator
+An RPC rejection is **not** a fault. They are two different things that share a numbering scheme:
+
+| Aspect        | `E_RpcMethodResponse`                          | `E_<Dev>_Fault` / fault state on `FB_DeviceBase`      |
+| ------------- | ---------------------------------------------- | ----------------------------------------------------- |
+| Lifetime      | One method call / one round-trip               | Persistent; survives `Reset` as `lastFaultCode`       |
+| Storage       | Return value only — never written to sts       | `_faultCode` + ring buffer owned by `FB_DeviceBase`   |
+| Trigger       | Caller asks, validation rejects synchronously  | Cyclic body detects an abnormal runtime condition     |
+| HMI surface   | Log line / toast on the calling client         | `Status.header.faultCode/String/Source/Reason`        |
+| Cleared by    | The caller moving on / retrying                | `Reset()` (clears current, preserves last + ring)     |
+
+Two implications:
+
+1. **Never call `_Raise()` from inside an RPC method.** Persistent faults come from the cyclic body only. A permissive that fails an `Advance()` call returns `REJECTED_PERMISSIVE_NOT_MET` — it does not also push a `PermissivesNotOK` entry onto the ring. If the same condition persists long enough to be worth alarming, the cyclic body will raise the corresponding persistent fault.
+2. **Never show an `E_RpcMethodResponse` as a fault on the main HMI.** RPC responses are feedback to the caller, not global state. A "REJECTED" popup next to the button is fine; turning the whole machine status red because of a rejected click is wrong.
+
+The numbering convention is what makes the split cheap: a central HMI helper can render "`REJECTED_PERMISSIVE_NOT_MET`" and "`PermissivesNotOK`" with the same icon and color because the category is the code's 10s digit, regardless of which side of the fence the value came from.
+
+---
+
+## 3.3 Method Inventory
+
+### 3.3.1 FB_TwoPosActuator
 
 
 | Method         | Validation                                                            | Possible Responses                                                                          |
@@ -53,7 +83,7 @@ Ranges 30–39 (Manual Override), 40–49 (Configuration), 60–69 (Output/Hardw
 | `LockSource()` | Always accepted                                                       | `ACCEPTED`                                                                                  |
 
 
-### 3.2.2 FB_StateMachine
+### 3.3.2 FB_StateMachine
 
 
 | Method         | Validation                                           | Possible Responses                                                                        |
@@ -68,6 +98,7 @@ Ranges 30–39 (Manual Override), 40–49 (Configuration), 60–69 (Output/Hardw
 | `Retry()`      | Always accepted                                      | `ACCEPTED`                                                                                |
 | `LockSource()` | Always accepted                                      | `ACCEPTED`                                                                                |
 
+
 `FB_StateMachine` also exposes two **non-RPC** reporter methods that do not return `E_RpcMethodResponse` — they simply record an OEE condition code (0 = clear, non-zero = active reason). See [§5.2.3 Sequencing](5-Sequencing.md#523-oee-conditions--reportblocked--reportstarved):
 
 - `ReportBlocked(code : DINT)` — downstream blocked reason
@@ -76,11 +107,11 @@ Ranges 30–39 (Manual Override), 40–49 (Configuration), 60–69 (Output/Hardw
 
 ---
 
-## 3.3 OPC UA Usage
+## 3.4 OPC UA Usage
 
 RPC methods are exposed via `{attribute 'TcRpcEnable' := '1'}`. An OPC UA client calls the method and receives the `E_RpcMethodResponse` return value in one round-trip.
 
-### 3.3.1 OPC UA Client Example (Pseudocode)
+### 3.4.1 OPC UA Client Example (Pseudocode)
 
 ```python
 result = call_method("PLC1.MAIN.fbCylinder01.Advance")
@@ -88,13 +119,13 @@ if result != 0:
     print(f"Command rejected: {result}")  # e.g. 50 = REJECTED_PERMISSIVE_NOT_MET
 ```
 
-### 3.3.2 PLC Caller Example
+### 3.4.2 PLC Caller Example
 
 ```iecst
 // From sequence code (eRequester defaults to PROG)
 eResult := fbCylinder.Advance();
 IF eResult <> E_RpcMethodResponse.ACCEPTED THEN
-    // Handle rejection — log, alarm, retry
+    // Handle rejection — log, alarm, retry. Do NOT also raise a persistent fault.
 END_IF;
 
 // With explicit source
@@ -103,10 +134,11 @@ eResult := fbStateMachine.Start(eRequester := E_Requester.PROG);
 
 ---
 
-## 3.4 Design Decisions
+## 3.5 Design Decisions
 
 - **Stop and Abort always accept** — safety-critical commands must never be blocked.
 - **Retry always accepts** — the retry mechanism handles its own edge detection internally.
 - **Advance/Retract pre-check permissives** — gives immediate feedback rather than accepting and then faulting.
 - **Methods execute immediately** — no scan-cycle delay between request and action.
-
+- **RPC responses never write the fault handler** — rejections are feedback to the caller, not system state. See §3.2.
+- **Numbering matches `E_<Dev>_Fault`** — a single 10s-digit lookup categorizes any code the operator sees.

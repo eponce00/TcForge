@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_AnalogInput_Fault" Id="{a1100003-0004-0000-0000-000000000001}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'to_string'}
+// Fault codes for FB_AnalogInput. Range convention matches the shared
+// device-fault convention (see docs/7-Architecture.md):
+//   0        No fault
+//   10-19    Feedback / hardware / signal
+//   40-49    Configuration
+//
+// FB_AnalogInput is conditioning-only — process-alarm codes (HH/HI/LO/LL)
+// live on FB_AlarmLimit, not here.
+TYPE E_AnalogInput_Fault :
+(
+    None       := 0,
+
+    BadQuality := 10,    // inpQuality latched to BAD past cfgQualityFaultAfter
+    ClampLow   := 11,    // raw reading below cfgRawMin (with cfgClampAsFault)
+    ClampHigh  := 12,    // raw reading above cfgRawMax (with cfgClampAsFault)
+
+    BadConfig  := 40     // cfgRawMin >= cfgRawMax, cfgEuMin > cfgEuMax, etc.
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

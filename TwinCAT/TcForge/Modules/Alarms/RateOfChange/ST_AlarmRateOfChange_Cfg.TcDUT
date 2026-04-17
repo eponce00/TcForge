@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_AlarmRateOfChange_Cfg" Id="{b0200005-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Config for FB_AlarmRateOfChange. Rate limit in engineering-units per second.
+// The check is symmetric — ABS(rate) > fRateLimit — so it catches runaway
+// both ways (sensor drop, control saturation, exothermic runaway…).
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_AlarmRateOfChange_Cfg :
+STRUCT
+    {attribute 'OPC.UA.DA.Description' := 'Shared alarm configuration'}
+    common     : ST_Alarm_Cfg;
+
+    {attribute 'OPC.UA.DA.Description' := 'Max allowable |rate of change| in units per second'}
+    fRateLimit : REAL := 0.0;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

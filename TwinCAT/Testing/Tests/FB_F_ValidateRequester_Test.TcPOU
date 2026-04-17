@@ -10,9 +10,7 @@ END_VAR
       <ST><![CDATA[AcceptsNormally();
 AcceptsProgramWhenLocked();
 RejectsOperatorWhenLocked();
-SkipSourceCheckAllowsOperator();
 RejectsWhenFaulted();
-AcceptsWhenFaultedButAllowed();
 ]]>
       </ST>
     </Implementation>
@@ -28,11 +26,9 @@ END_VAR
         <ST><![CDATA[TEST('AcceptsNormally');
 
 nActual := TcForge.F_ValidateRequester(
-    eRequester        := TcForge.E_Requester.OPERATOR,
-    bSourceLocked     := FALSE,
-    bFaulted          := FALSE,
-    bAllowWhenFaulted := FALSE,
-    bSkipSourceCheck  := FALSE);
+    eRequester    := TcForge.E_Requester.OPERATOR,
+    bSourceLocked := FALSE,
+    bFaulted      := FALSE);
 
 AssertEquals_DINT(
     Expected := nExpected,
@@ -56,11 +52,9 @@ END_VAR
         <ST><![CDATA[TEST('AcceptsProgramWhenLocked');
 
 nActual := TcForge.F_ValidateRequester(
-    eRequester        := TcForge.E_Requester.PROG,
-    bSourceLocked     := TRUE,
-    bFaulted          := FALSE,
-    bAllowWhenFaulted := FALSE,
-    bSkipSourceCheck  := FALSE);
+    eRequester    := TcForge.E_Requester.PROG,
+    bSourceLocked := TRUE,
+    bFaulted      := FALSE);
 
 AssertEquals_DINT(
     Expected := nExpected,
@@ -84,44 +78,14 @@ END_VAR
         <ST><![CDATA[TEST('RejectsOperatorWhenLocked');
 
 nActual := TcForge.F_ValidateRequester(
-    eRequester        := TcForge.E_Requester.OPERATOR,
-    bSourceLocked     := TRUE,
-    bFaulted          := FALSE,
-    bAllowWhenFaulted := FALSE,
-    bSkipSourceCheck  := FALSE);
+    eRequester    := TcForge.E_Requester.OPERATOR,
+    bSourceLocked := TRUE,
+    bFaulted      := FALSE);
 
 AssertEquals_DINT(
     Expected := nExpected,
     Actual   := nActual,
     Message  := 'OPERATOR must be rejected when source is locked');
-
-TEST_FINISHED();
-]]>
-        </ST>
-      </Implementation>
-    </Method>
-    <Method Name="SkipSourceCheckAllowsOperator" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560005}">
-      <Declaration><![CDATA[METHOD SkipSourceCheckAllowsOperator
-VAR
-    nExpected : DINT := TcForge.E_RpcMethodResponse.ACCEPTED;
-    nActual   : DINT;
-END_VAR
-]]>
-      </Declaration>
-      <Implementation>
-        <ST><![CDATA[TEST('SkipSourceCheckAllowsOperator');
-
-nActual := TcForge.F_ValidateRequester(
-    eRequester        := TcForge.E_Requester.OPERATOR,
-    bSourceLocked     := TRUE,
-    bFaulted          := FALSE,
-    bAllowWhenFaulted := FALSE,
-    bSkipSourceCheck  := TRUE);
-
-AssertEquals_DINT(
-    Expected := nExpected,
-    Actual   := nActual,
-    Message  := 'bSkipSourceCheck should bypass the lock and accept OPERATOR');
 
 TEST_FINISHED();
 ]]>
@@ -140,44 +104,14 @@ END_VAR
         <ST><![CDATA[TEST('RejectsWhenFaulted');
 
 nActual := TcForge.F_ValidateRequester(
-    eRequester        := TcForge.E_Requester.OPERATOR,
-    bSourceLocked     := FALSE,
-    bFaulted          := TRUE,
-    bAllowWhenFaulted := FALSE,
-    bSkipSourceCheck  := FALSE);
+    eRequester    := TcForge.E_Requester.OPERATOR,
+    bSourceLocked := FALSE,
+    bFaulted      := TRUE);
 
 AssertEquals_DINT(
     Expected := nExpected,
     Actual   := nActual,
-    Message  := 'Should reject when faulted and bAllowWhenFaulted is FALSE');
-
-TEST_FINISHED();
-]]>
-        </ST>
-      </Implementation>
-    </Method>
-    <Method Name="AcceptsWhenFaultedButAllowed" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560007}">
-      <Declaration><![CDATA[METHOD AcceptsWhenFaultedButAllowed
-VAR
-    nExpected : DINT := TcForge.E_RpcMethodResponse.ACCEPTED;
-    nActual   : DINT;
-END_VAR
-]]>
-      </Declaration>
-      <Implementation>
-        <ST><![CDATA[TEST('AcceptsWhenFaultedButAllowed');
-
-nActual := TcForge.F_ValidateRequester(
-    eRequester        := TcForge.E_Requester.OPERATOR,
-    bSourceLocked     := FALSE,
-    bFaulted          := TRUE,
-    bAllowWhenFaulted := TRUE,
-    bSkipSourceCheck  := FALSE);
-
-AssertEquals_DINT(
-    Expected := nExpected,
-    Actual   := nActual,
-    Message  := 'Should accept when faulted but bAllowWhenFaulted is TRUE');
+    Message  := 'Should reject when faulted');
 
 TEST_FINISHED();
 ]]>

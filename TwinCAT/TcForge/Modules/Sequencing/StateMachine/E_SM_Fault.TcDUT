@@ -3,14 +3,33 @@
   <DUT Name="E_SM_Fault" Id="{a1b2c3d4-0002-0001-0001-000000000001}">
     <Declaration><![CDATA[{attribute 'qualified_only'}
 {attribute 'to_string'}
-// Fault codes surfaced by FB_StateMachine via ST_DeviceHeader_Sts / FB_FaultHandler.
-// These are aggregated causes; step-level detail still lives in Step.Current.
+// Fault codes surfaced by FB_StateMachine through ST_DeviceHeader_Sts (the
+// fault book-keeping lives on FB_DeviceBase). Range convention mirrors
+// E_RpcMethodResponse so codes are self-documenting:
+//
+//   0        No fault
+//   1-9      Timeouts
+//   10-19    Feedback / hardware
+//   20-29    State violations
+//   30-39    Configuration
+//   50-59    Interlocks / permissives
+//   70-79    Submodule / propagation
+//   100+     Device / application custom
+//
+// HMI displays ResolveFaultString(code) for the stable title and faultReason
+// for the contextual detail (step number, step name, free-form operator
+// message). Both live in ST_DeviceHeader_Sts.
 TYPE E_SM_Fault :
 (
     None                    := 0,
-    OddStepFault            := 1,   // current step is odd (fault step by convention)
-    SubmoduleFaulted        := 2,   // external inpSubmoduleFaulted asserted
-    RunningInterlockTripped := 3    // intlkRunning forced an abort
+
+    StepTimeout             := 1,    // FB_Step.tonTimeout expired
+    OddStepReached          := 2,    // default fault when a step moves onto an odd step number
+    StepUserFault           := 3,    // user called step.RaiseFault(code, reason)
+
+    RunningInterlockTripped := 50,   // intlkRunning tripped, auto-aborted
+
+    SubmoduleFaulted        := 70    // external inpSubmoduleFaulted asserted
 );
 END_TYPE]]></Declaration>
   </DUT>

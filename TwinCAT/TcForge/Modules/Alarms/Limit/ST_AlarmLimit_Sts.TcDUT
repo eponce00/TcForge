@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_AlarmLimit_Sts" Id="{b0200003-0001-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Status for FB_AlarmLimit. Each level has its own raw ST_Alarm_Sts so the
+// HMI can show full forensics per tier. The top-level *Suppressed* flags apply
+// flooding suppression: HiHi suppresses Hi, LoLo suppresses Lo — so the HMI
+// can pick exactly one active level per direction.
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_AlarmLimit_Sts :
+STRUCT
+    {attribute 'OPC.UA.DA.Description' := 'HiHi sub-alarm status'}
+    HiHi : ST_Alarm_Sts;
+    {attribute 'OPC.UA.DA.Description' := 'Hi sub-alarm status'}
+    Hi   : ST_Alarm_Sts;
+    {attribute 'OPC.UA.DA.Description' := 'Lo sub-alarm status'}
+    Lo   : ST_Alarm_Sts;
+    {attribute 'OPC.UA.DA.Description' := 'LoLo sub-alarm status'}
+    LoLo : ST_Alarm_Sts;
+
+    {attribute 'OPC.UA.DA.Description' := 'HiHi active (rollup after suppression)'}
+    stsHiHiActive : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Hi active and not suppressed by HiHi'}
+    stsHiActive   : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Lo active and not suppressed by LoLo'}
+    stsLoActive   : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'LoLo active (rollup after suppression)'}
+    stsLoLoActive : BOOL;
+
+    {attribute 'OPC.UA.DA.Description' := 'Any of the four levels currently active'}
+    stsAnyActive  : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Highest severity across all active levels'}
+    eSeverity     : E_AlarmSeverity;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

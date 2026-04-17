@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_DigitalOutput_Fault" Id="{a1100002-0004-0000-0000-000000000001}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'to_string'}
+// Fault codes for FB_DigitalOutput. Range convention matches the shared
+// device-fault convention (see docs/7-Architecture.md):
+//   0        No fault
+//   1-9      Timeouts
+//   10-19    Feedback / hardware / signal
+//   20-29    State violations
+//   40-49    Configuration / process limits
+//   50-59    Interlocks / permissives
+TYPE E_DigitalOutput_Fault :
+(
+    None        := 0,
+
+    BadQuality  := 10     // outgoing signal not writable (quality latched BAD past cfg.tQualityFaultAfter)
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

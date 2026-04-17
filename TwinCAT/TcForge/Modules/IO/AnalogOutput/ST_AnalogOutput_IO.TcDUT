@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <DUT Name="ST_AnalogOutput_IO" Id="{b0100004-0003-0000-0000-000000000001}">
-    <Declaration><![CDATA[TYPE ST_AnalogOutput_IO :
+    <Declaration><![CDATA[// Hardware-linked primitives for FB_AnalogOutput. A 32-bit UNION covers
+// every common EL4xxx terminal — 4-20 mA, 0-10 V, 16-bit DAC, 32-bit
+// positioner, etc. Choose the numeric interpretation with cfg.cfgOutputType.
+//
+// Link at instance site via
+//     {attribute 'TcLinkTo' := '.io.outRaw.dw := TIID^...^Output'}
+//
+// See docs/8-IO-Binding.md for the full worked examples.
+TYPE ST_AnalogOutput_IO :
 STRUCT
-    outRaw : INT;
+    outRaw : U_IoRaw_Out;
 END_STRUCT
-END_TYPE
-]]></Declaration>
+END_TYPE]]></Declaration>
   </DUT>
 </TcPlcObject>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_AlarmDeviation_Cfg" Id="{b0200004-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Config for FB_AlarmDeviation. Two modes, selected by bUseSetpoint.
+//
+//   Absolute (bUseSetpoint = FALSE, default):
+//       trip = inpPv > fHighLimit OR inpPv < fLowLimit
+//       inpSetpoint is ignored
+//
+//   Setpoint deviation (bUseSetpoint = TRUE):
+//       trip = inpPv > (inpSetpoint + fHighLimit) OR inpPv < (inpSetpoint - fLowLimit)
+//       High/Low limits are asymmetric deviations from setpoint.
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_AlarmDeviation_Cfg :
+STRUCT
+    {attribute 'OPC.UA.DA.Description' := 'Shared alarm configuration'}
+    common       : ST_Alarm_Cfg;
+
+    {attribute 'OPC.UA.DA.Description' := 'Absolute high limit, or +deviation when bUseSetpoint = TRUE'}
+    fHighLimit   : REAL := 0.0;
+
+    {attribute 'OPC.UA.DA.Description' := 'Absolute low limit, or -deviation when bUseSetpoint = TRUE'}
+    fLowLimit    : REAL := 0.0;
+
+    {attribute 'OPC.UA.DA.Description' := 'TRUE = limits are relative to inpSetpoint'}
+    bUseSetpoint : BOOL := FALSE;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

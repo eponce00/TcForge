@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AlarmSimple" Id="{a0200001-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Debounced / latchable boolean mirror. Use to wrap any digital condition the
+// HMI should see through the standard alarm surface (severity, ack,
+// timestamps, message) — e.g. a device-fault rollup, a door-open switch, an
+// e-stop echo, or a plant-level boolean computed elsewhere.
+//
+// Usage:
+//   almDoorOpen.cfg.common.bEnable   := TRUE;
+//   almDoorOpen.cfg.common.eSeverity := E_AlarmSeverity.WARNING;
+//   almDoorOpen.cfg.common.tOnDelay  := T#2S;
+//   almDoorOpen.cfg.common.sMessage  := 'Cell door open';
+//   almDoorOpen(inpActive := GVL_HW.DOOR_SW.sts.stsValue);
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_AlarmSimple EXTENDS FB_AlarmBase
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg       : ST_AlarmSimple_Cfg;
+
+    {attribute 'OPC.UA.DA' := '0'}
+    inpActive : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[_Evaluate(cfgCommon := cfg.common, bRawCondition := inpActive);]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

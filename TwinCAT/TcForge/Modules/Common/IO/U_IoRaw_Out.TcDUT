@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="U_IoRaw_Out" Id="{c0000030-0000-0000-0000-000000000004}">
+    <Declaration><![CDATA[// 32-bit output UNION, mirror of U_IoRaw_In. Member `dw` carries the
+// `AT %Q*` pragma so the UNION can be linked via TcLinkTo to any EtherCAT
+// output channel up to 32 bits wide. The FB body writes the appropriate
+// member based on cfg.eOutputType.
+//
+// Supported linkages:
+//   - 16-bit INT / UINT / WORD terminals (e.g. EL4024 4-20 mA, EL4004 0-10 V)
+//   - 32-bit DINT / UDINT / DWORD terminals
+//   - 32-bit REAL terminals
+//
+// Usage pattern: inside FB_AnalogOutput declare `io : ST_AnalogOutput_IO`;
+// the sts struct exposes the raw terminal as `io.outRaw`. Link from GVL_HW
+// via
+//   {attribute 'TcLinkTo' := '.io.outRaw.dw := TIID^...^Output'}
+// then choose the matching interpretation with cfg.eOutputType.
+TYPE U_IoRaw_Out :
+UNION
+    dw  AT %Q* : DWORD;
+    r          : REAL;
+    w          : WORD;
+    i          : INT;
+    ui         : UINT;
+    di         : DINT;
+    udi        : UDINT;
+END_UNION
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

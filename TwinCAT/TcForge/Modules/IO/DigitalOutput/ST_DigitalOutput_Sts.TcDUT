@@ -1,15 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <DUT Name="ST_DigitalOutput_Sts" Id="{b0100002-0002-0000-0000-000000000001}">
-    <Declaration><![CDATA[{attribute 'OPC.UA.DA' := '1'}
+    <Declaration><![CDATA[// Status of FB_DigitalOutput. `header` is shared with every other device FB
+// (see ST_DeviceHeader_Sts); device-specific fields sit below.
+{attribute 'OPC.UA.DA' := '1'}
 {attribute 'OPC.UA.DA.Access' := '1'}
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_DigitalOutput_Sts :
 STRUCT
-    header   : ST_DeviceHeader_Sts;
-    stsValue : BOOL;
+    header        : ST_DeviceHeader_Sts;
+
+    {attribute 'OPC.UA.DA.Description' := 'Final physical output value (after mode + invert)'}
+    stsValue      : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Last commanded value (survives power cycle)'}
+    stsCommanded  : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Signal quality tag'}
+    stsQuality    : E_IO_Quality := E_IO_Quality.UNKNOWN;
+    {attribute 'OPC.UA.DA.Description' := 'One-scan pulse on physical output rising edge'}
+    stsRisingEdge : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'One-scan pulse on physical output falling edge'}
+    stsFallingEdge: BOOL;
 END_STRUCT
-END_TYPE
-]]></Declaration>
+END_TYPE]]></Declaration>
   </DUT>
 </TcPlcObject>

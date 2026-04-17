@@ -5,6 +5,14 @@
 // Populated by FB_DeviceBase each cycle from the composed fault handler and
 // source-lock flag; device-specific fields sit below the header in the child
 // sts struct.
+//
+// Fault surface:
+//   - faultCode / faultString : stable identifiers from the device's fault
+//     enum and ResolveFaultString().
+//   - faultSource / faultReason : contextual detail supplied by whoever
+//     raised the fault (step number, interlock, submodule, free-form text).
+//   HMI typically shows faultString as the title and faultReason as a detail
+//   line. Either may be empty — consumers should handle that gracefully.
 {attribute 'OPC.UA.DA' := '1'}
 {attribute 'OPC.UA.DA.Access' := '1'}
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
@@ -22,12 +30,20 @@ STRUCT
     stsSourceLocked : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'Current fault code (0 = no fault)'}
     faultCode       : DINT;
-    {attribute 'OPC.UA.DA.Description' := 'Current fault code as text'}
+    {attribute 'OPC.UA.DA.Description' := 'Current fault code as text (ResolveFaultString)'}
     faultString     : STRING(79);
+    {attribute 'OPC.UA.DA.Description' := 'Where the current fault was raised (step/interlock/submodule)'}
+    faultSource     : STRING(31);
+    {attribute 'OPC.UA.DA.Description' := 'Free-form human-readable detail about the current fault'}
+    faultReason     : STRING(79);
     {attribute 'OPC.UA.DA.Description' := 'Most recent fault code (survives Reset)'}
     lastFaultCode   : DINT;
     {attribute 'OPC.UA.DA.Description' := 'Most recent fault code as text'}
     lastFaultString : STRING(79);
+    {attribute 'OPC.UA.DA.Description' := 'Source of most recent fault'}
+    lastFaultSource : STRING(31);
+    {attribute 'OPC.UA.DA.Description' := 'Free-form detail of most recent fault'}
+    lastFaultReason : STRING(79);
     {attribute 'OPC.UA.DA.Description' := 'Who issued the last accepted command'}
     lastRequester   : E_Requester;
     {attribute 'OPC.UA.DA.Description' := 'Timestamp of last accepted command'}
