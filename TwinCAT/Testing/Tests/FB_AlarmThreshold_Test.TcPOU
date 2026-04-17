@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AlarmThreshold_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f00}" SpecialFunc="None">
+    <Declaration><![CDATA[// Tests for FB_AlarmThreshold. The FB itself is thin — it owns the
+// direction select (bFailHigh / bFailLow) and the raw comparator, then
+// forwards everything into FB_AlarmBase._Evaluate(). The shared alarm
+// contract (debounce, latch/ack state machine, severity, message echo,
+// source lock, disable gating) is already covered by FB_AlarmSimple_Test,
+// so this suite focuses on the threshold-specific logic plus a couple of
+// smoke tests that confirm the base pipeline is wired in.
+FUNCTION_BLOCK FB_AlarmThreshold_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[FailHighTripsStrictlyAboveThreshold();
+FailHighIgnoresAtOrBelowThreshold();
+FailLowTripsStrictlyBelowThreshold();
+FailLowIgnoresAtOrAboveThreshold();
+FailHighWinsWhenBothFlagsSet();
+NeitherFlagNeverTrips();
+DisabledSuppressesTripRegardlessOfValue();
+SeverityFlowsThroughBaseOnActive();
+LatchingHoldsAfterValueReturnsToSafe();
+MessageEchoedFromCommonCfg();]]></ST>
+    </Implementation>
+    <Method Name="FailHighTripsStrictlyAboveThreshold" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f01}">
+      <Declaration><![CDATA[METHOD FailHighTripsStrictlyAboveThreshold
+VAR
+    fb : TcForge.FB_AlarmThreshold;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FailHighTripsStrictlyAboveThreshold');
+
+// bFailHigh + inpValue > fThreshold must trip the alarm. Configured as
+// non-latching so we can observe the raw rollup directly.
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.fThreshold     := 80.0;
+fb.cfg.bFailHigh      := TRUE;
+
+fb(inpValue := 80.1);
+AssertTrue(
+    Condition := fb.sts.active,
+    Message   := 'Fail-high alarm must go active when inpValue exceeds fThreshold');
+AssertTrue(
+    Condition := fb.sts.raw,
+    Message   := 'Fail-high rollup must mirror the strict > comparison on sts.raw');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FailHighIgnoresAtOrBelowThreshold" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f02}">
+      <Declaration><![CDATA[METHOD FailHighIgnoresAtOrBelowThreshold
+VAR
+    fb : TcForge.FB_AlarmThreshold;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FailHighIgnoresAtOrBelowThreshold');
+
+// inpValue == fThreshold must NOT trip a fail-high alarm: the comparison
+// is a strict `>` so a reading that is exactly at the threshold is
+// considered still-safe. Any inequality in the other direction is also
+// ignored. Together these prevent jittery readings from chattering on
+// the threshold boundary.
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.fThreshold     := 80.0;
+fb.cfg.bFailHigh      := TRUE;
+
+fb(inpValue := 80.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Fail-high must not trip when inpValue equals fThreshold (strict >)');
+
+fb(inpValue := 10.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Fail-high must not trip when inpValue is well below fThreshold');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FailLowTripsStrictlyBelowThreshold" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f03}">
+      <Declaration><![CDATA[METHOD FailLowTripsStrictlyBelowThreshold
+VAR
+    fb : TcForge.FB_AlarmThreshold;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FailLowTripsStrictlyBelowThreshold');
+
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.fThreshold     := 10.0;
+fb.cfg.bFailLow       := TRUE;
+
+fb(inpValue := 9.9);
+AssertTrue(
+    Condition := fb.sts.active,
+    Message   := 'Fail-low alarm must go active when inpValue falls below fThreshold');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FailLowIgnoresAtOrAboveThreshold" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f04}">
+      <Declaration><![CDATA[METHOD FailLowIgnoresAtOrAboveThreshold
+VAR
+    fb : TcForge.FB_AlarmThreshold;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FailLowIgnoresAtOrAboveThreshold');
+
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.fThreshold     := 10.0;
+fb.cfg.bFailLow       := TRUE;
+
+fb(inpValue := 10.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Fail-low must not trip when inpValue equals fThreshold (strict <)');
+
+fb(inpValue := 50.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Fail-low must not trip when inpValue is well above fThreshold');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FailHighWinsWhenBothFlagsSet" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f05}">
+      <Declaration><![CDATA[METHOD FailHighWinsWhenBothFlagsSet
+VAR
+    fb : TcForge.FB_AlarmThreshold;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FailHighWinsWhenBothFlagsSet');
+
+// The FB contract says bFailHigh wins if both flags are (mis)configured.
+// A value below the threshold must NOT trip when bFailHigh=TRUE AND
+// bFailLow=TRUE, because fail-high ignores the low side entirely.
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.fThreshold     := 50.0;
+fb.cfg.bFailHigh      := TRUE;
+fb.cfg.bFailLow       := TRUE;
+
+fb(inpValue := 40.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'When both flags are set, fail-high wins so a low reading must not trip');
+
+fb(inpValue := 60.0);
+AssertTrue(
+    Condition := fb.sts.active,
+    Message   := 'When both flags are set, fail-high still trips on a high reading');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="NeitherFlagNeverTrips" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f06}">
+      <Declaration><![CDATA[METHOD NeitherFlagNeverTrips
+VAR
+    fb : TcForge.FB_AlarmThreshold;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('NeitherFlagNeverTrips');
+
+// No direction configured => the alarm must stay quiet regardless of
+// inpValue. This guards against "a Threshold FB was instantiated but
+// forgot its direction flag" silently tripping on the first scan.
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.fThreshold     := 50.0;
+fb.cfg.bFailHigh      := FALSE;
+fb.cfg.bFailLow       := FALSE;
+
+fb(inpValue := -100.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Alarm with neither direction flag must not trip on a low reading');
+
+fb(inpValue := 100.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Alarm with neither direction flag must not trip on a high reading');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DisabledSuppressesTripRegardlessOfValue" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f07}">
+      <Declaration><![CDATA[METHOD DisabledSuppressesTripRegardlessOfValue
+VAR
+    fb : TcForge.FB_AlarmThreshold;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('DisabledSuppressesTripRegardlessOfValue');
+
+// bEnable = FALSE shortcuts _Evaluate before the latch / severity logic
+// runs. Confirm the threshold FB inherits that behaviour even when the
+// raw comparison would otherwise fire.
+fb.cfg.common.bEnable := FALSE;
+fb.cfg.common.eSeverity := TcForge.E_AlarmSeverity.CRITICAL;
+fb.cfg.fThreshold       := 50.0;
+fb.cfg.bFailHigh        := TRUE;
+
+fb(inpValue := 999.0);
+
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Disabled threshold alarm must not trip even with inpValue way above fThreshold');
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.NONE,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Disabled alarm must report severity NONE regardless of value');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SeverityFlowsThroughBaseOnActive" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f08}">
+      <Declaration><![CDATA[METHOD SeverityFlowsThroughBaseOnActive
+VAR
+    fb : TcForge.FB_AlarmThreshold;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SeverityFlowsThroughBaseOnActive');
+
+// Smoke test: when the threshold condition trips, the base's severity
+// propagation still runs. This proves the threshold FB does call
+// _Evaluate() and does not short-circuit the pipeline.
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := FALSE;
+fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.WARNING;
+fb.cfg.fThreshold         := 50.0;
+fb.cfg.bFailHigh          := TRUE;
+
+fb(inpValue := 60.0);
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.WARNING,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Active threshold alarm must publish the configured severity');
+
+fb(inpValue := 40.0);
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.NONE,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Cleared threshold alarm must drop severity to NONE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LatchingHoldsAfterValueReturnsToSafe" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f09}">
+      <Declaration><![CDATA[METHOD LatchingHoldsAfterValueReturnsToSafe
+VAR
+    fb : TcForge.FB_AlarmThreshold;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('LatchingHoldsAfterValueReturnsToSafe');
+
+// Smoke test for the bRequireAck pathway through the threshold FB.
+// The base FB_AlarmSimple_Test already exercises the full latch/ack
+// state machine in isolation; here we just confirm the threshold FB
+// keeps the latch engaged after the process value returns below the
+// threshold (which is the whole reason to latch on a transient spike).
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := TRUE;
+fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
+fb.cfg.fThreshold         := 80.0;
+fb.cfg.bFailHigh          := TRUE;
+
+fb(inpValue := 90.0);
+AssertTrue(
+    Condition := fb.sts.active AND fb.sts.latched,
+    Message   := 'Latching threshold alarm must go active+latched on a trip');
+
+fb(inpValue := 50.0);
+AssertTrue(
+    Condition := fb.sts.active,
+    Message   := 'Latched threshold alarm must stay active after inpValue returns below fThreshold');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MessageEchoedFromCommonCfg" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f0a}">
+      <Declaration><![CDATA[METHOD MessageEchoedFromCommonCfg
+VAR
+    fb : TcForge.FB_AlarmThreshold;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('MessageEchoedFromCommonCfg');
+
+// Confirms that a threshold alarm hands the common cfg (including
+// sMessage) to the base unchanged. Regression guard against future
+// refactors of ST_AlarmThreshold_Cfg that might shadow `common`.
+fb.cfg.common.bEnable  := TRUE;
+fb.cfg.common.sMessage := 'Reactor temp > 80C';
+fb.cfg.fThreshold      := 80.0;
+fb.cfg.bFailHigh       := TRUE;
+
+fb(inpValue := 50.0);
+
+AssertEquals_STRING(
+    Expected := 'Reactor temp > 80C',
+    Actual   := fb.sts.sMessage,
+    Message  := 'sts.sMessage must echo cfg.common.sMessage verbatim');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

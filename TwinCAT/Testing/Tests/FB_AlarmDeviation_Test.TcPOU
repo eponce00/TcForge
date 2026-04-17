@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AlarmDeviation_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000001000}" SpecialFunc="None">
+    <Declaration><![CDATA[// Tests for FB_AlarmDeviation. The deviation FB owns two comparator
+// modes — absolute band (fLowLimit..fHighLimit) and asymmetric setpoint
+// deviation (inpSetpoint +/- limit) — and forwards the boolean rollup
+// into FB_AlarmBase._Evaluate(). The shared alarm contract (debounce,
+// latch/ack, severity, source lock) is already covered by
+// FB_AlarmSimple_Test, so this suite focuses on the deviation-specific
+// comparator logic plus a smoke test confirming the base pipeline runs.
+FUNCTION_BLOCK FB_AlarmDeviation_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[AbsoluteModeTripsAboveHighLimit();
+AbsoluteModeTripsBelowLowLimit();
+AbsoluteModeStaysQuietWithinBand();
+AbsoluteModeIgnoresInpSetpoint();
+SetpointModeTripsAbovePositiveDeviation();
+SetpointModeTripsBelowNegativeDeviation();
+SetpointModeTracksMovingSetpoint();
+SetpointModeAllowsAsymmetricLimits();
+DisabledSuppressesTripRegardlessOfValue();
+SeverityFlowsThroughBaseOnActive();]]></ST>
+    </Implementation>
+    <Method Name="AbsoluteModeTripsAboveHighLimit" Id="{b1c2d3e4-f5a6-7890-abcd-000000001001}">
+      <Declaration><![CDATA[METHOD AbsoluteModeTripsAboveHighLimit
+VAR
+    fb : TcForge.FB_AlarmDeviation;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AbsoluteModeTripsAboveHighLimit');
+
+// Absolute mode: limits are direct values on inpPv (inpSetpoint ignored).
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.bUseSetpoint   := FALSE;
+fb.cfg.fHighLimit     := 95.0;
+fb.cfg.fLowLimit      := 10.0;
+
+fb(inpPv := 96.0, inpSetpoint := 0.0);
+
+AssertTrue(
+    Condition := fb.sts.active,
+    Message   := 'Absolute mode must trip when inpPv is strictly above fHighLimit');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AbsoluteModeTripsBelowLowLimit" Id="{b1c2d3e4-f5a6-7890-abcd-000000001002}">
+      <Declaration><![CDATA[METHOD AbsoluteModeTripsBelowLowLimit
+VAR
+    fb : TcForge.FB_AlarmDeviation;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AbsoluteModeTripsBelowLowLimit');
+
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.bUseSetpoint   := FALSE;
+fb.cfg.fHighLimit     := 95.0;
+fb.cfg.fLowLimit      := 10.0;
+
+fb(inpPv := 9.0, inpSetpoint := 0.0);
+
+AssertTrue(
+    Condition := fb.sts.active,
+    Message   := 'Absolute mode must trip when inpPv is strictly below fLowLimit');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AbsoluteModeStaysQuietWithinBand" Id="{b1c2d3e4-f5a6-7890-abcd-000000001003}">
+      <Declaration><![CDATA[METHOD AbsoluteModeStaysQuietWithinBand
+VAR
+    fb : TcForge.FB_AlarmDeviation;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AbsoluteModeStaysQuietWithinBand');
+
+// Boundaries are inclusive (strict > and strict <), so exactly-at-limit
+// readings must not trip. Middle-of-band must also not trip.
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.bUseSetpoint   := FALSE;
+fb.cfg.fHighLimit     := 95.0;
+fb.cfg.fLowLimit      := 10.0;
+
+fb(inpPv := 10.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Absolute mode must not trip at the low boundary exactly (strict <)');
+
+fb(inpPv := 95.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Absolute mode must not trip at the high boundary exactly (strict >)');
+
+fb(inpPv := 50.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Absolute mode must not trip mid-band');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AbsoluteModeIgnoresInpSetpoint" Id="{b1c2d3e4-f5a6-7890-abcd-000000001004}">
+      <Declaration><![CDATA[METHOD AbsoluteModeIgnoresInpSetpoint
+VAR
+    fb : TcForge.FB_AlarmDeviation;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AbsoluteModeIgnoresInpSetpoint');
+
+// Absolute mode must not look at inpSetpoint at all — otherwise a drifting
+// setpoint could silently shift the safe band. Same PV, different SP,
+// same result.
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.bUseSetpoint   := FALSE;
+fb.cfg.fHighLimit     := 95.0;
+fb.cfg.fLowLimit      := 10.0;
+
+fb(inpPv := 50.0, inpSetpoint := 0.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Absolute mode with SP=0: mid-band must stay quiet');
+
+fb(inpPv := 50.0, inpSetpoint := 1000.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Absolute mode must ignore inpSetpoint: same PV stays quiet regardless of SP');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetpointModeTripsAbovePositiveDeviation" Id="{b1c2d3e4-f5a6-7890-abcd-000000001005}">
+      <Declaration><![CDATA[METHOD SetpointModeTripsAbovePositiveDeviation
+VAR
+    fb : TcForge.FB_AlarmDeviation;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetpointModeTripsAbovePositiveDeviation');
+
+// Setpoint mode: fHighLimit is a +deviation from inpSetpoint.
+// SP=100, +5 band => trip above 105.
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.bUseSetpoint   := TRUE;
+fb.cfg.fHighLimit     := 5.0;
+fb.cfg.fLowLimit      := 5.0;
+
+fb(inpPv := 106.0, inpSetpoint := 100.0);
+
+AssertTrue(
+    Condition := fb.sts.active,
+    Message   := 'Setpoint mode must trip when inpPv exceeds inpSetpoint + fHighLimit');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetpointModeTripsBelowNegativeDeviation" Id="{b1c2d3e4-f5a6-7890-abcd-000000001006}">
+      <Declaration><![CDATA[METHOD SetpointModeTripsBelowNegativeDeviation
+VAR
+    fb : TcForge.FB_AlarmDeviation;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetpointModeTripsBelowNegativeDeviation');
+
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.bUseSetpoint   := TRUE;
+fb.cfg.fHighLimit     := 5.0;
+fb.cfg.fLowLimit      := 5.0;
+
+fb(inpPv := 94.0, inpSetpoint := 100.0);
+
+AssertTrue(
+    Condition := fb.sts.active,
+    Message   := 'Setpoint mode must trip when inpPv falls below inpSetpoint - fLowLimit');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetpointModeTracksMovingSetpoint" Id="{b1c2d3e4-f5a6-7890-abcd-000000001007}">
+      <Declaration><![CDATA[METHOD SetpointModeTracksMovingSetpoint
+VAR
+    fb : TcForge.FB_AlarmDeviation;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetpointModeTracksMovingSetpoint');
+
+// Whole point of setpoint mode: the safe band follows the setpoint.
+// A PV that was in-band at SP=100 must be out-of-band once SP=200 if the
+// deviations are small — and back in-band when SP catches up.
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := FALSE;
+fb.cfg.bUseSetpoint       := TRUE;
+fb.cfg.fHighLimit         := 5.0;
+fb.cfg.fLowLimit          := 5.0;
+
+// PV=100 is dead on SP=100 => safe.
+fb(inpPv := 100.0, inpSetpoint := 100.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'PV at SP is always safe');
+
+// SP jumps to 200 before PV catches up => PV=100 is now 100 units low
+// (well below SP-5 = 195) => trip.
+fb(inpPv := 100.0, inpSetpoint := 200.0);
+AssertTrue(
+    Condition := fb.sts.active,
+    Message   := 'SP jump away from PV must flip the deviation alarm active');
+
+// PV catches up. Alarm clears next cycle since bRequireAck=FALSE.
+fb(inpPv := 200.0, inpSetpoint := 200.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'PV catching up to SP must clear the deviation alarm');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetpointModeAllowsAsymmetricLimits" Id="{b1c2d3e4-f5a6-7890-abcd-000000001008}">
+      <Declaration><![CDATA[METHOD SetpointModeAllowsAsymmetricLimits
+VAR
+    fb : TcForge.FB_AlarmDeviation;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetpointModeAllowsAsymmetricLimits');
+
+// Different tolerances above vs below the setpoint. Useful for processes
+// where overshoot is dangerous but undershoot is fine (or vice versa).
+// +10 allowed above, only -1 below.
+fb.cfg.common.bEnable := TRUE;
+fb.cfg.bUseSetpoint   := TRUE;
+fb.cfg.fHighLimit     := 10.0;
+fb.cfg.fLowLimit      := 1.0;
+
+// SP=50, PV=58 is +8 => inside +10 band, no trip.
+fb(inpPv := 58.0, inpSetpoint := 50.0);
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'PV within the asymmetric high band (+8 of +10) must not trip');
+
+// SP=50, PV=48 is -2 => below -1 band, trip.
+fb(inpPv := 48.0, inpSetpoint := 50.0);
+AssertTrue(
+    Condition := fb.sts.active,
+    Message   := 'PV outside the tight low band (-2 vs -1) must trip');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DisabledSuppressesTripRegardlessOfValue" Id="{b1c2d3e4-f5a6-7890-abcd-000000001009}">
+      <Declaration><![CDATA[METHOD DisabledSuppressesTripRegardlessOfValue
+VAR
+    fb : TcForge.FB_AlarmDeviation;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('DisabledSuppressesTripRegardlessOfValue');
+
+fb.cfg.common.bEnable   := FALSE;
+fb.cfg.common.eSeverity := TcForge.E_AlarmSeverity.CRITICAL;
+fb.cfg.bUseSetpoint     := TRUE;
+fb.cfg.fHighLimit       := 5.0;
+fb.cfg.fLowLimit        := 5.0;
+
+fb(inpPv := 1000.0, inpSetpoint := 0.0);
+
+AssertFalse(
+    Condition := fb.sts.active,
+    Message   := 'Disabled deviation alarm must not trip even with extreme PV');
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.NONE,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Disabled alarm must report severity NONE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SeverityFlowsThroughBaseOnActive" Id="{b1c2d3e4-f5a6-7890-abcd-00000000100a}">
+      <Declaration><![CDATA[METHOD SeverityFlowsThroughBaseOnActive
+VAR
+    fb : TcForge.FB_AlarmDeviation;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SeverityFlowsThroughBaseOnActive');
+
+// Smoke test: proves the deviation FB calls _Evaluate() so severity
+// propagation works through the base pipeline.
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := FALSE;
+fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.WARNING;
+fb.cfg.bUseSetpoint       := FALSE;
+fb.cfg.fHighLimit         := 50.0;
+fb.cfg.fLowLimit          := 0.0;
+
+fb(inpPv := 60.0);
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.WARNING,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Active deviation alarm must publish the configured severity');
+
+fb(inpPv := 25.0);
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.NONE,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Cleared deviation alarm must drop severity to NONE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

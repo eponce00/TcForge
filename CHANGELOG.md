@@ -116,8 +116,18 @@ changes are called out explicitly under each release.
   skipping the UNION write (verified through the DWORD view),
   quality-tag echo, and source-lock arbitration rejecting OPERATOR
   while still accepting PROG.
+- **`FB_AlarmThreshold_Test`** (10 cases) — single-side threshold
+  trip logic: `bFailHigh` / `bFailLow` strict > / < comparisons,
+  priority when both flags are set, no-op when neither flag is set,
+  `bEnable` suppression, `eSeverity` propagation into status, and
+  latching behaviour.
+- **`FB_AlarmDeviation_Test`** (10 cases) — deviation tripping in
+  both absolute and setpoint-relative modes: above / below /
+  inside-band, setpoint tracked in relative mode and ignored in
+  absolute mode, asymmetric limits, `bEnable` suppression, and
+  `eSeverity` propagation.
 
-Full suite: 132 tests across 13 suites, green on the remote runtime
+Full suite: 152 tests across 15 suites, green on the remote runtime
 (`172.18.236.100.1.1`).
 
 ## [2026-04-16] — Alarms + architecture simplification
