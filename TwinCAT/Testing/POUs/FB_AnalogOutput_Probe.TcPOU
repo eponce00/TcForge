@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AnalogOutput_Probe" Id="{c1c2d3e4-f5a6-7890-abcd-000000000d00}" SpecialFunc="None">
+    <Declaration><![CDATA[// Test-only child of FB_AnalogOutput. The production FB keeps its
+// hardware-linked `io` UNION in a private VAR section, so tests use
+// this probe to *read back* whichever UNION member the FB wrote into
+// (nInt, fReal, dw, ...). We don't need a writer here because the
+// production FB drives the write side via SetValue and the scaling
+// pipeline — the tests only need to verify that the correct UNION
+// alias actually got the expected bytes.
+//
+// The probe delegates the cyclic body back to the parent via SUPER^()
+// so the inherited pipeline runs. Without that call the child's empty
+// body would replace the parent logic and every assertion would see
+// zeroed I/O.
+//
+// Lives in the Testing project only — not part of TcForge's public API.
+FUNCTION_BLOCK FB_AnalogOutput_Probe EXTENDS TcForge.FB_AnalogOutput]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();]]></ST>
+    </Implementation>
+    <Method Name="GetRawInt" Id="{c1c2d3e4-f5a6-7890-abcd-000000000d01}">
+      <Declaration><![CDATA[// Read back what the FB last wrote to the INT alias of the UNION.
+// Pair with cfg.outputType := __SYSTEM.TYPE_CLASS.TYPE_INT.
+METHOD PUBLIC GetRawInt : INT]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetRawInt := io.outRaw.nInt;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetRawReal" Id="{c1c2d3e4-f5a6-7890-abcd-000000000d02}">
+      <Declaration><![CDATA[// Read back what the FB last wrote to the REAL alias of the UNION.
+// Pair with cfg.outputType := __SYSTEM.TYPE_CLASS.TYPE_REAL.
+METHOD PUBLIC GetRawReal : REAL]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetRawReal := io.outRaw.fReal;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetRawDWord" Id="{c1c2d3e4-f5a6-7890-abcd-000000000d03}">
+      <Declaration><![CDATA[// Read back the raw DWORD view of the UNION. Handy for verifying that
+// a skipped write (e.g. under BAD quality) really left the previous
+// bytes untouched, independent of which alias was last active.
+METHOD PUBLIC GetRawDWord : DWORD]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetRawDWord := io.outRaw.dw;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

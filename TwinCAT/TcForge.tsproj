@@ -8,8 +8,8 @@
 			</Settings>
 			<Licenses>
 				<Target>
-					<ManualSelect>{BDCC0070-42D5-49AE-ABF1-1D4434813D60}</ManualSelect>
 					<ManualSelect Instances="1">{87DBEEFC-A548-4B37-9797-C9521D3A43A2}</ManualSelect>
+					<ManualSelect>{BDCC0070-42D5-49AE-ABF1-1D4434813D60}</ManualSelect>
 				</Target>
 			</Licenses>
 			<Tasks>
@@ -79,7 +79,7 @@
 				</Instance>
 			</Project>
 			<Project GUID="{4C5489A9-B7F5-4985-B678-81475A8FC2DB}" Name="Testing" PrjFilePath="Testing\Testing.plcproj" TmcFilePath="Testing\Testing.tmc" ReloadTmc="true" AmsPort="853" FileArchiveSettings="#x000e" CopyTmcToTarget="true" CopyTpyToTarget="false" SymbolicMapping="true">
-				<Instance Id="#x08502080" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{5229D6B5-E647-E667-680D-8DD93E51AD1D}" TmcPath="Testing\Testing.tmc">
+				<Instance Id="#x08502080" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{807035E7-F0FB-8903-F34A-AACF2BB6EF18}" TmcPath="Testing\Testing.tmc">
 					<Name>Testing Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Contexts>

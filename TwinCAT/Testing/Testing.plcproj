@@ -33,6 +33,9 @@
     <Compile Include="POUs\FB_AnalogInput_Probe.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="POUs\FB_AnalogOutput_Probe.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Testing.TcTTO">
       <SubType>Code</SubType>
     </Compile>
@@ -70,6 +73,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Tests\FB_AnalogInput_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Tests\FB_AnalogOutput_Test.TcPOU">
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>

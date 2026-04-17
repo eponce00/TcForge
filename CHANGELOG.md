@@ -105,8 +105,19 @@ changes are called out explicitly under each release.
   first scan, BAD-quality last-known-good hold, `TYPE_REAL` UNION
   member selection, and quality-tag propagation. Unblocked by the
   `U_IoRaw_In` rename above.
+- **`FB_AnalogOutput_Test`** (14 cases) via `FB_AnalogOutput_Probe` —
+  command pipeline end-to-end: initial status, linear scaling
+  endpoints + midpoint (verifies both `sts.rawReal` and the INT
+  UNION alias `io.outRaw.nInt`), clamp-high / clamp-low with
+  `clamped*` reporting, `sts.commanded` preserving the unclamped
+  request, raw bypass, `clampAsFault` promoting clamps to
+  `ClampLow` / `ClampHigh` faults, `BadConfig` on first scan,
+  `TYPE_REAL` UNION alias write via `io.outRaw.fReal`, BAD-quality
+  skipping the UNION write (verified through the DWORD view),
+  quality-tag echo, and source-lock arbitration rejecting OPERATOR
+  while still accepting PROG.
 
-Full suite: 118 tests across 12 suites, green on the remote runtime
+Full suite: 132 tests across 13 suites, green on the remote runtime
 (`172.18.236.100.1.1`).
 
 ## [2026-04-16] — Alarms + architecture simplification
