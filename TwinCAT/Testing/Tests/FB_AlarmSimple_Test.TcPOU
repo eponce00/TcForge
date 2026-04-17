@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AlarmSimple_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000300}" SpecialFunc="None">
+    <Declaration><![CDATA[// FB_AlarmSimple is the thinnest concrete child of FB_AlarmBase, so this
+// suite doubles as the test harness for the shared alarm contract:
+// enable gating, raw -> active rollup, latch + ack state machine, severity
+// propagation, message echo, source-lock gating on Ack().
+//
+// Debounce (TON/TOF) is intentionally exercised with T#0MS delays; the
+// debounce primitive itself is IEC standard and testing its timing under
+// TcUnit is awkward because a suite body runs once per task cycle. Every
+// test below therefore lets tOnDelay / tOffDelay stay at zero and focuses
+// on the alarm logic that sits on top of the debounced signal.
+FUNCTION_BLOCK FB_AlarmSimple_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[DisabledSuppressesEverything();
+SelfClearingTracksInput();
+LatchingHoldsAfterClearWithoutAck();
+AckAfterClearReleasesLatch();
+AckWhileActiveFlipsAckedButNotLatch();
+SeverityFollowsActiveState();
+MessageEchoedFromCfg();
+DisableClearsActiveLatch();
+LockedSourceRejectsOperatorAck();
+AckWithNoLatchIsNoOp();]]></ST>
+    </Implementation>
+    <Method Name="DisabledSuppressesEverything" Id="{b1c2d3e4-f5a6-7890-abcd-000000000301}">
+      <Declaration><![CDATA[METHOD DisabledSuppressesEverything
+VAR
+    fb : TcForge.FB_AlarmSimple;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('DisabledSuppressesEverything');
+
+// cfg.bEnable defaults to FALSE; even with the input firing, the alarm
+// must stay inert and report severity NONE.
+fb.cfg.common.eSeverity := TcForge.E_AlarmSeverity.CRITICAL;
+
+fb(inpActive := TRUE);
+
+AssertFalse(
+    Condition := fb.sts.stsActive,
+    Message   := 'Disabled alarm must not go active');
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.NONE,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Disabled alarm must report severity NONE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SelfClearingTracksInput" Id="{b1c2d3e4-f5a6-7890-abcd-000000000302}">
+      <Declaration><![CDATA[METHOD SelfClearingTracksInput
+VAR
+    fb : TcForge.FB_AlarmSimple;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SelfClearingTracksInput');
+
+// bRequireAck = FALSE => no latch. stsActive follows the debounced input
+// in both directions.
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := FALSE;
+fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.WARNING;
+
+fb(inpActive := TRUE);
+AssertTrue(
+    Condition := fb.sts.stsActive,
+    Message   := 'Non-latching alarm should go active when the input is TRUE');
+
+fb(inpActive := FALSE);
+AssertFalse(
+    Condition := fb.sts.stsActive,
+    Message   := 'Non-latching alarm should clear the same cycle the input clears');
+AssertFalse(
+    Condition := fb.sts.stsLatched,
+    Message   := 'Non-latching alarm must never expose stsLatched');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LatchingHoldsAfterClearWithoutAck" Id="{b1c2d3e4-f5a6-7890-abcd-000000000303}">
+      <Declaration><![CDATA[METHOD LatchingHoldsAfterClearWithoutAck
+VAR
+    fb : TcForge.FB_AlarmSimple;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('LatchingHoldsAfterClearWithoutAck');
+
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := TRUE;
+fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
+
+fb(inpActive := TRUE);
+AssertTrue(
+    Condition := fb.sts.stsActive,
+    Message   := 'Latching alarm should go active when the input fires');
+AssertTrue(
+    Condition := fb.sts.stsLatched,
+    Message   := 'stsLatched should indicate an un-acked latch');
+
+fb(inpActive := FALSE);
+AssertTrue(
+    Condition := fb.sts.stsActive,
+    Message   := 'Latching alarm must stay active after the input clears until Ack()');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AckAfterClearReleasesLatch" Id="{b1c2d3e4-f5a6-7890-abcd-000000000304}">
+      <Declaration><![CDATA[METHOD AckAfterClearReleasesLatch
+VAR
+    fb       : TcForge.FB_AlarmSimple;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AckAfterClearReleasesLatch');
+
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := TRUE;
+fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.WARNING;
+
+// Trip, clear the condition, then ack — latch should release next cycle.
+fb(inpActive := TRUE);
+fb(inpActive := FALSE);
+
+response := fb.Ack(eRequester := TcForge.E_Requester.OPERATOR);
+fb(inpActive := FALSE);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := response,
+    Message  := 'Ack() with no source lock should be accepted');
+AssertFalse(
+    Condition := fb.sts.stsActive,
+    Message   := 'Latch must release once condition has cleared AND Ack() has been called');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AckWhileActiveFlipsAckedButNotLatch" Id="{b1c2d3e4-f5a6-7890-abcd-000000000305}">
+      <Declaration><![CDATA[METHOD AckWhileActiveFlipsAckedButNotLatch
+VAR
+    fb : TcForge.FB_AlarmSimple;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AckWhileActiveFlipsAckedButNotLatch');
+
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := TRUE;
+fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
+
+// Condition still firing when the operator acks — valid middle state:
+// stsActive stays TRUE, stsAcked becomes TRUE, stsLatched becomes FALSE
+// (operator has seen it but the process is still in the bad state).
+fb(inpActive := TRUE);
+fb.Ack(eRequester := TcForge.E_Requester.OPERATOR);
+fb(inpActive := TRUE);
+
+AssertTrue(
+    Condition := fb.sts.stsActive,
+    Message   := 'stsActive should remain TRUE while the condition is still firing');
+AssertTrue(
+    Condition := fb.sts.stsAcked,
+    Message   := 'stsAcked should be TRUE after an accepted Ack()');
+AssertFalse(
+    Condition := fb.sts.stsLatched,
+    Message   := 'stsLatched should drop once the latch has been acknowledged');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SeverityFollowsActiveState" Id="{b1c2d3e4-f5a6-7890-abcd-000000000306}">
+      <Declaration><![CDATA[METHOD SeverityFollowsActiveState
+VAR
+    fb : TcForge.FB_AlarmSimple;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SeverityFollowsActiveState');
+
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := FALSE;
+fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
+
+fb(inpActive := TRUE);
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.CRITICAL,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Active alarm must publish the configured severity');
+
+fb(inpActive := FALSE);
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.NONE,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Inactive alarm must publish severity NONE (aggregators MAX() across alarms)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MessageEchoedFromCfg" Id="{b1c2d3e4-f5a6-7890-abcd-000000000307}">
+      <Declaration><![CDATA[METHOD MessageEchoedFromCfg
+VAR
+    fb : TcForge.FB_AlarmSimple;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('MessageEchoedFromCfg');
+
+fb.cfg.common.bEnable  := TRUE;
+fb.cfg.common.sMessage := 'Cell door open';
+
+fb(inpActive := FALSE);
+
+AssertEquals_STRING(
+    Expected := 'Cell door open',
+    Actual   := fb.sts.sMessage,
+    Message  := 'sts.sMessage must echo cfg.common.sMessage');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DisableClearsActiveLatch" Id="{b1c2d3e4-f5a6-7890-abcd-000000000308}">
+      <Declaration><![CDATA[METHOD DisableClearsActiveLatch
+VAR
+    fb : TcForge.FB_AlarmSimple;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('DisableClearsActiveLatch');
+
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := TRUE;
+fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
+
+// Latch, then disable. Flipping bEnable FALSE must force the alarm inert
+// immediately — operator disables dominate any held latch.
+fb(inpActive := TRUE);
+AssertTrue(
+    Condition := fb.sts.stsActive,
+    Message   := 'Precondition: latch should be active before disable');
+
+fb.cfg.common.bEnable := FALSE;
+fb(inpActive := TRUE);
+
+AssertFalse(
+    Condition := fb.sts.stsActive,
+    Message   := 'Disable must drop stsActive even while the input is still firing');
+AssertFalse(
+    Condition := fb.sts.stsLatched,
+    Message   := 'Disable must clear stsLatched');
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.NONE,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Disable must drop severity back to NONE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LockedSourceRejectsOperatorAck" Id="{b1c2d3e4-f5a6-7890-abcd-000000000309}">
+      <Declaration><![CDATA[METHOD LockedSourceRejectsOperatorAck
+VAR
+    fb        : TcForge.FB_AlarmSimple;
+    opResp    : TcForge.E_RpcMethodResponse;
+    progResp  : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('LockedSourceRejectsOperatorAck');
+
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := TRUE;
+fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
+
+fb.LockSource(bLock := TRUE);
+fb(inpActive := TRUE);
+
+opResp   := fb.Ack(eRequester := TcForge.E_Requester.OPERATOR);
+progResp := fb.Ack(eRequester := TcForge.E_Requester.PROG);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED,
+    Actual   := opResp,
+    Message  := 'Source-locked alarm must reject OPERATOR Ack()');
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := progResp,
+    Message  := 'Source-locked alarm must still accept PROG Ack()');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AckWithNoLatchIsNoOp" Id="{b1c2d3e4-f5a6-7890-abcd-00000000030a}">
+      <Declaration><![CDATA[METHOD AckWithNoLatchIsNoOp
+VAR
+    fb       : TcForge.FB_AlarmSimple;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AckWithNoLatchIsNoOp');
+
+fb.cfg.common.bEnable     := TRUE;
+fb.cfg.common.bRequireAck := TRUE;
+
+// Ack() before any latch exists is accepted (the requester validation
+// passes) but must leave stsAcked FALSE — there is nothing to mark acked.
+fb(inpActive := FALSE);
+response := fb.Ack(eRequester := TcForge.E_Requester.OPERATOR);
+fb(inpActive := FALSE);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := response,
+    Message  := 'Ack() with no latch returns ACCEPTED (validation passes)');
+AssertFalse(
+    Condition := fb.sts.stsAcked,
+    Message   := 'Ack() with no latch must NOT flip stsAcked — there is no latch to ack');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

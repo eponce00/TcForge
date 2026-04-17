@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AlarmLimit_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000400}" SpecialFunc="None">
+    <Declaration><![CDATA[// Tests for FB_AlarmLimit — four-level (HiHi/Hi/Lo/LoLo) ladder built by
+// composing FB_AlarmThreshold. FB_AlarmSimple_Test already covers the
+// shared FB_AlarmBase contract, so this suite focuses on the composite
+// behaviour that lives only here:
+//   - per-direction threshold evaluation via bFailHigh / bFailLow
+//   - flood suppression (HiHi hides Hi, LoLo hides Lo) on the rollup flags
+//     while keeping the raw sub-statuses available
+//   - severity aggregation (highest-active wins)
+//   - stsAnyActive is the OR of all four rollup flags
+//   - Ack() cascades to every level
+FUNCTION_BLOCK FB_AlarmLimit_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[AllDisabledStaysSilent();
+HiTripsAboveThreshold();
+HiHiSuppressesHiOnRollup();
+LoTripsBelowThreshold();
+LoLoSuppressesLoOnRollup();
+SeverityIsHighestActiveLevel();
+AnyActiveReflectsRollup();
+AckCascadesToEveryLevel();]]></ST>
+    </Implementation>
+    <Method Name="_ConfigureHiHi" Id="{b1c2d3e4-f5a6-7890-abcd-000000000480}">
+      <Declaration><![CDATA[// Helper: configure HiHi and Hi as a typical upper ladder. Keeps each
+// test method short and consistent with the example PRG_Alarms wiring.
+METHOD PRIVATE _ConfigureHiHi
+VAR_IN_OUT
+    fb : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fb.cfg.HiHi.common.bEnable     := TRUE;
+fb.cfg.HiHi.common.bRequireAck := FALSE;
+fb.cfg.HiHi.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
+fb.cfg.HiHi.fThreshold         := 110.0;
+fb.cfg.HiHi.bFailHigh          := TRUE;
+
+fb.cfg.Hi.common.bEnable     := TRUE;
+fb.cfg.Hi.common.bRequireAck := FALSE;
+fb.cfg.Hi.common.eSeverity   := TcForge.E_AlarmSeverity.WARNING;
+fb.cfg.Hi.fThreshold         := 100.0;
+fb.cfg.Hi.bFailHigh          := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_ConfigureLoLo" Id="{b1c2d3e4-f5a6-7890-abcd-000000000481}">
+      <Declaration><![CDATA[// Helper: configure Lo and LoLo as a typical lower ladder.
+METHOD PRIVATE _ConfigureLoLo
+VAR_IN_OUT
+    fb : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fb.cfg.Lo.common.bEnable     := TRUE;
+fb.cfg.Lo.common.bRequireAck := FALSE;
+fb.cfg.Lo.common.eSeverity   := TcForge.E_AlarmSeverity.WARNING;
+fb.cfg.Lo.fThreshold         := 20.0;
+fb.cfg.Lo.bFailLow           := TRUE;
+
+fb.cfg.LoLo.common.bEnable     := TRUE;
+fb.cfg.LoLo.common.bRequireAck := FALSE;
+fb.cfg.LoLo.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
+fb.cfg.LoLo.fThreshold         := 10.0;
+fb.cfg.LoLo.bFailLow           := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AllDisabledStaysSilent" Id="{b1c2d3e4-f5a6-7890-abcd-000000000401}">
+      <Declaration><![CDATA[METHOD AllDisabledStaysSilent
+VAR
+    fb : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AllDisabledStaysSilent');
+
+// Every level disabled; rollup flags and severity must stay quiet even
+// when the process value is far outside every sensible band.
+fb(inpPv := 500.0);
+
+AssertFalse(
+    Condition := fb.sts.stsAnyActive,
+    Message   := 'stsAnyActive must be FALSE when every level is disabled');
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.NONE,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'eSeverity must be NONE when every level is disabled');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HiTripsAboveThreshold" Id="{b1c2d3e4-f5a6-7890-abcd-000000000402}">
+      <Declaration><![CDATA[METHOD HiTripsAboveThreshold
+VAR
+    fb : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HiTripsAboveThreshold');
+
+_ConfigureHiHi(fb := fb);
+
+fb(inpPv := 105.0);  // above Hi (100), below HiHi (110)
+
+AssertTrue(
+    Condition := fb.sts.stsHiActive,
+    Message   := 'Hi should trip when PV crosses its threshold');
+AssertFalse(
+    Condition := fb.sts.stsHiHiActive,
+    Message   := 'HiHi should stay inactive while PV is below the HiHi threshold');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HiHiSuppressesHiOnRollup" Id="{b1c2d3e4-f5a6-7890-abcd-000000000403}">
+      <Declaration><![CDATA[METHOD HiHiSuppressesHiOnRollup
+VAR
+    fb : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HiHiSuppressesHiOnRollup');
+
+_ConfigureHiHi(fb := fb);
+
+fb(inpPv := 115.0);  // above both Hi and HiHi
+
+AssertTrue(
+    Condition := fb.sts.stsHiHiActive,
+    Message   := 'HiHi should trip when PV crosses its threshold');
+AssertFalse(
+    Condition := fb.sts.stsHiActive,
+    Message   := 'Hi must be suppressed on the rollup while HiHi is active');
+AssertTrue(
+    Condition := fb.sts.Hi.stsActive,
+    Message   := 'Raw Hi sub-status must still expose the trip (forensics channel)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LoTripsBelowThreshold" Id="{b1c2d3e4-f5a6-7890-abcd-000000000404}">
+      <Declaration><![CDATA[METHOD LoTripsBelowThreshold
+VAR
+    fb : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('LoTripsBelowThreshold');
+
+_ConfigureLoLo(fb := fb);
+
+fb(inpPv := 15.0);  // below Lo (20), above LoLo (10)
+
+AssertTrue(
+    Condition := fb.sts.stsLoActive,
+    Message   := 'Lo should trip when PV drops below its threshold');
+AssertFalse(
+    Condition := fb.sts.stsLoLoActive,
+    Message   := 'LoLo should stay inactive while PV is above the LoLo threshold');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LoLoSuppressesLoOnRollup" Id="{b1c2d3e4-f5a6-7890-abcd-000000000405}">
+      <Declaration><![CDATA[METHOD LoLoSuppressesLoOnRollup
+VAR
+    fb : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('LoLoSuppressesLoOnRollup');
+
+_ConfigureLoLo(fb := fb);
+
+fb(inpPv := 5.0);  // below both Lo and LoLo
+
+AssertTrue(
+    Condition := fb.sts.stsLoLoActive,
+    Message   := 'LoLo should trip when PV drops below its threshold');
+AssertFalse(
+    Condition := fb.sts.stsLoActive,
+    Message   := 'Lo must be suppressed on the rollup while LoLo is active');
+AssertTrue(
+    Condition := fb.sts.Lo.stsActive,
+    Message   := 'Raw Lo sub-status must still expose the trip (forensics channel)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SeverityIsHighestActiveLevel" Id="{b1c2d3e4-f5a6-7890-abcd-000000000406}">
+      <Declaration><![CDATA[METHOD SeverityIsHighestActiveLevel
+VAR
+    fb : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SeverityIsHighestActiveLevel');
+
+_ConfigureHiHi(fb := fb);
+
+// PV between Hi and HiHi → only Hi active → severity = WARNING.
+fb(inpPv := 105.0);
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.WARNING,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Severity should be WARNING when only Hi is active');
+
+// PV above HiHi → HiHi (CRITICAL) wins even though raw Hi still fires.
+fb(inpPv := 115.0);
+AssertEquals_USINT(
+    Expected := TcForge.E_AlarmSeverity.CRITICAL,
+    Actual   := fb.sts.eSeverity,
+    Message  := 'Severity should be CRITICAL once HiHi engages');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AnyActiveReflectsRollup" Id="{b1c2d3e4-f5a6-7890-abcd-000000000407}">
+      <Declaration><![CDATA[METHOD AnyActiveReflectsRollup
+VAR
+    fb : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AnyActiveReflectsRollup');
+
+_ConfigureHiHi(fb := fb);
+_ConfigureLoLo(fb := fb);
+
+fb(inpPv := 50.0);  // in the good band
+AssertFalse(
+    Condition := fb.sts.stsAnyActive,
+    Message   := 'stsAnyActive should be FALSE while PV sits in the good band');
+
+fb(inpPv := 115.0);
+AssertTrue(
+    Condition := fb.sts.stsAnyActive,
+    Message   := 'stsAnyActive should be TRUE once any level trips');
+
+fb(inpPv := 50.0);
+AssertFalse(
+    Condition := fb.sts.stsAnyActive,
+    Message   := 'stsAnyActive should go back FALSE when PV returns to the good band (non-latching cfg)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AckCascadesToEveryLevel" Id="{b1c2d3e4-f5a6-7890-abcd-000000000408}">
+      <Declaration><![CDATA[METHOD AckCascadesToEveryLevel
+VAR
+    fb       : TcForge.FB_AlarmLimit;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AckCascadesToEveryLevel');
+
+// Both Hi and HiHi latching — a PV spike into HiHi latches both raw
+// sub-alarms. Ack() must cascade so every level releases on the next
+// post-clear cycle.
+fb.cfg.HiHi.common.bEnable     := TRUE;
+fb.cfg.HiHi.common.bRequireAck := TRUE;
+fb.cfg.HiHi.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
+fb.cfg.HiHi.fThreshold         := 110.0;
+fb.cfg.HiHi.bFailHigh          := TRUE;
+
+fb.cfg.Hi.common.bEnable     := TRUE;
+fb.cfg.Hi.common.bRequireAck := TRUE;
+fb.cfg.Hi.common.eSeverity   := TcForge.E_AlarmSeverity.WARNING;
+fb.cfg.Hi.fThreshold         := 100.0;
+fb.cfg.Hi.bFailHigh          := TRUE;
+
+// Spike then recover.
+fb(inpPv := 115.0);
+fb(inpPv := 50.0);
+
+AssertTrue(
+    Condition := fb.sts.HiHi.stsActive AND fb.sts.Hi.stsActive,
+    Message   := 'Precondition: both raw sub-alarms should be latched after the spike');
+
+response := fb.Ack(eRequester := TcForge.E_Requester.OPERATOR);
+fb(inpPv := 50.0);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := response,
+    Message  := 'Composite Ack() should be accepted when at least one level accepts');
+AssertFalse(
+    Condition := fb.sts.HiHi.stsActive,
+    Message   := 'HiHi latch must release after cascaded Ack() + clear');
+AssertFalse(
+    Condition := fb.sts.Hi.stsActive,
+    Message   := 'Hi latch must release after cascaded Ack() + clear');
+AssertFalse(
+    Condition := fb.sts.stsAnyActive,
+    Message   := 'stsAnyActive should return FALSE once every level releases');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
