@@ -15,7 +15,7 @@
 // Usage pattern: inside FB_AnalogInput declare `io : ST_AnalogInput_IO`; the
 // sts struct exposes the raw terminal as `io.inRaw`. Link from GVL_HW via
 //   {attribute 'TcLinkTo' := '.io.inRaw.dw := TIID^...^Input'}
-// then choose the matching interpretation with cfg.cfgInputType.
+// then choose the matching interpretation with cfg.inputType.
 //
 // Member naming: use multi-character identifiers only (fReal, nInt, ...).
 // TwinCAT's compiler mis-parses 1-character UNION members (e.g. `r`) when

@@ -11,7 +11,7 @@
 //   almDoorOpen.cfg.common.eSeverity := E_AlarmSeverity.WARNING;
 //   almDoorOpen.cfg.common.tOnDelay  := T#2S;
 //   almDoorOpen.cfg.common.sMessage  := 'Cell door open';
-//   almDoorOpen(inpActive := GVL_HW.DOOR_SW.sts.stsValue);
+//   almDoorOpen(inpActive := GVL_HW.DOOR_SW.sts.value);
 {attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_AlarmSimple EXTENDS FB_AlarmBase
 VAR_INPUT

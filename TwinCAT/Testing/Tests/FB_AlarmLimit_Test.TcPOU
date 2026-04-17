@@ -9,7 +9,7 @@
 //   - flood suppression (HiHi hides Hi, LoLo hides Lo) on the rollup flags
 //     while keeping the raw sub-statuses available
 //   - severity aggregation (highest-active wins)
-//   - stsAnyActive is the OR of all four rollup flags
+//   - anyActive is the OR of all four rollup flags
 //   - Ack() cascades to every level
 FUNCTION_BLOCK FB_AlarmLimit_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
     <Implementation>
@@ -76,8 +76,8 @@ END_VAR]]></Declaration>
 fb(inpPv := 500.0);
 
 AssertFalse(
-    Condition := fb.sts.stsAnyActive,
-    Message   := 'stsAnyActive must be FALSE when every level is disabled');
+    Condition := fb.sts.anyActive,
+    Message   := 'anyActive must be FALSE when every level is disabled');
 AssertEquals_USINT(
     Expected := TcForge.E_AlarmSeverity.NONE,
     Actual   := fb.sts.eSeverity,
@@ -99,10 +99,10 @@ _ConfigureHiHi(fb := fb);
 fb(inpPv := 105.0);  // above Hi (100), below HiHi (110)
 
 AssertTrue(
-    Condition := fb.sts.stsHiActive,
+    Condition := fb.sts.hiActive,
     Message   := 'Hi should trip when PV crosses its threshold');
 AssertFalse(
-    Condition := fb.sts.stsHiHiActive,
+    Condition := fb.sts.hiHiActive,
     Message   := 'HiHi should stay inactive while PV is below the HiHi threshold');
 
 TEST_FINISHED();]]></ST>
@@ -121,13 +121,13 @@ _ConfigureHiHi(fb := fb);
 fb(inpPv := 115.0);  // above both Hi and HiHi
 
 AssertTrue(
-    Condition := fb.sts.stsHiHiActive,
+    Condition := fb.sts.hiHiActive,
     Message   := 'HiHi should trip when PV crosses its threshold');
 AssertFalse(
-    Condition := fb.sts.stsHiActive,
+    Condition := fb.sts.hiActive,
     Message   := 'Hi must be suppressed on the rollup while HiHi is active');
 AssertTrue(
-    Condition := fb.sts.Hi.stsActive,
+    Condition := fb.sts.Hi.active,
     Message   := 'Raw Hi sub-status must still expose the trip (forensics channel)');
 
 TEST_FINISHED();]]></ST>
@@ -146,10 +146,10 @@ _ConfigureLoLo(fb := fb);
 fb(inpPv := 15.0);  // below Lo (20), above LoLo (10)
 
 AssertTrue(
-    Condition := fb.sts.stsLoActive,
+    Condition := fb.sts.loActive,
     Message   := 'Lo should trip when PV drops below its threshold');
 AssertFalse(
-    Condition := fb.sts.stsLoLoActive,
+    Condition := fb.sts.loLoActive,
     Message   := 'LoLo should stay inactive while PV is above the LoLo threshold');
 
 TEST_FINISHED();]]></ST>
@@ -168,13 +168,13 @@ _ConfigureLoLo(fb := fb);
 fb(inpPv := 5.0);  // below both Lo and LoLo
 
 AssertTrue(
-    Condition := fb.sts.stsLoLoActive,
+    Condition := fb.sts.loLoActive,
     Message   := 'LoLo should trip when PV drops below its threshold');
 AssertFalse(
-    Condition := fb.sts.stsLoActive,
+    Condition := fb.sts.loActive,
     Message   := 'Lo must be suppressed on the rollup while LoLo is active');
 AssertTrue(
-    Condition := fb.sts.Lo.stsActive,
+    Condition := fb.sts.Lo.active,
     Message   := 'Raw Lo sub-status must still expose the trip (forensics channel)');
 
 TEST_FINISHED();]]></ST>
@@ -220,18 +220,18 @@ _ConfigureLoLo(fb := fb);
 
 fb(inpPv := 50.0);  // in the good band
 AssertFalse(
-    Condition := fb.sts.stsAnyActive,
-    Message   := 'stsAnyActive should be FALSE while PV sits in the good band');
+    Condition := fb.sts.anyActive,
+    Message   := 'anyActive should be FALSE while PV sits in the good band');
 
 fb(inpPv := 115.0);
 AssertTrue(
-    Condition := fb.sts.stsAnyActive,
-    Message   := 'stsAnyActive should be TRUE once any level trips');
+    Condition := fb.sts.anyActive,
+    Message   := 'anyActive should be TRUE once any level trips');
 
 fb(inpPv := 50.0);
 AssertFalse(
-    Condition := fb.sts.stsAnyActive,
-    Message   := 'stsAnyActive should go back FALSE when PV returns to the good band (non-latching cfg)');
+    Condition := fb.sts.anyActive,
+    Message   := 'anyActive should go back FALSE when PV returns to the good band (non-latching cfg)');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -265,7 +265,7 @@ fb(inpPv := 115.0);
 fb(inpPv := 50.0);
 
 AssertTrue(
-    Condition := fb.sts.HiHi.stsActive AND fb.sts.Hi.stsActive,
+    Condition := fb.sts.HiHi.active AND fb.sts.Hi.active,
     Message   := 'Precondition: both raw sub-alarms should be latched after the spike');
 
 response := fb.Ack(eRequester := TcForge.E_Requester.OPERATOR);
@@ -276,14 +276,14 @@ AssertEquals_DINT(
     Actual   := response,
     Message  := 'Composite Ack() should be accepted when at least one level accepts');
 AssertFalse(
-    Condition := fb.sts.HiHi.stsActive,
+    Condition := fb.sts.HiHi.active,
     Message   := 'HiHi latch must release after cascaded Ack() + clear');
 AssertFalse(
-    Condition := fb.sts.Hi.stsActive,
+    Condition := fb.sts.Hi.active,
     Message   := 'Hi latch must release after cascaded Ack() + clear');
 AssertFalse(
-    Condition := fb.sts.stsAnyActive,
-    Message   := 'stsAnyActive should return FALSE once every level releases');
+    Condition := fb.sts.anyActive,
+    Message   := 'anyActive should return FALSE once every level releases');
 
 TEST_FINISHED();]]></ST>
       </Implementation>

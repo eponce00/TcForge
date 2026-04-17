@@ -175,13 +175,13 @@ These two concepts are often confused but have distinct roles:
 - Check `sts.bOK` for the aggregate result.
 - Configuration: `ST_Permissive_Config` (bypassable mask, names).
 - Status: `ST_Permissive_Status` (bOK, nPermissives, nBypassMask, aFaceplates).
-- Per-bit HMI data: `ST_Permissive_Faceplate` (name, stsOK, stsMapped, stsBypassed, cfgBypassable).
+- Per-bit HMI data: `ST_Permissive_Faceplate` (name, ok, mapped, bypassed, bypassable).
 - Bypass control via `SetBypass(bitIndex, bEnable)` — only bits marked in `cfg.nBypassable` can be bypassed.
 - Permissive instances live on the FB that owns the condition. See [§7 Sequencing](7-Sequencing.md#75-permissives) for the state-machine wiring pattern.
 
 ### 1.5.2 Using FB_Interlock
 
-`FB_Interlock` has the same mapping / bypass / faceplate API as `FB_Permissives`, but every mapped bit **latches** when it goes bad and stays bad until `Reset()` is called — even after the real-world condition has recovered. Additional status fields: `nLatched` (per-bit latch state) and `stsLive` / `stsLatched` on each faceplate. Bits that were bad at the moment their mapping stopped are remembered and block `sts.bOK` until `Reset()` is called.
+`FB_Interlock` has the same mapping / bypass / faceplate API as `FB_Permissives`, but every mapped bit **latches** when it goes bad and stays bad until `Reset()` is called — even after the real-world condition has recovered. Additional status fields: `nLatched` (per-bit latch state) and `live` / `latched` on each faceplate. Bits that were bad at the moment their mapping stopped are remembered and block `sts.bOK` until `Reset()` is called.
 
 Choose per use case:
 - Real-time readiness that should clear itself → `FB_Permissives`

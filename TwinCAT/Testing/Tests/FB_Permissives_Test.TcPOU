@@ -225,14 +225,14 @@ AssertEquals_STRING(
     Actual   := fb.sts.aFaceplates[4].name,
     Message  := 'Faceplate should mirror cfg.aNames[i]');
 AssertFalse(
-    Condition := fb.sts.aFaceplates[4].stsOK,
-    Message   := 'Faceplate stsOK should mirror the rollup for that bit');
+    Condition := fb.sts.aFaceplates[4].ok,
+    Message   := 'Faceplate ok should mirror the rollup for that bit');
 AssertTrue(
-    Condition := fb.sts.aFaceplates[4].stsMapped,
-    Message   := 'Faceplate stsMapped should mirror nActiveMask for that bit');
+    Condition := fb.sts.aFaceplates[4].mapped,
+    Message   := 'Faceplate mapped should mirror nActiveMask for that bit');
 AssertTrue(
-    Condition := fb.sts.aFaceplates[4].cfgBypassable,
-    Message   := 'Faceplate cfgBypassable should mirror cfg.nBypassable for that bit');
+    Condition := fb.sts.aFaceplates[4].bypassable,
+    Message   := 'Faceplate bypassable should mirror cfg.nBypassable for that bit');
 
 TEST_FINISHED();]]></ST>
       </Implementation>

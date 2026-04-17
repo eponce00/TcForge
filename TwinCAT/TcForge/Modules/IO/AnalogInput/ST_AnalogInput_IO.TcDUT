@@ -3,7 +3,7 @@
   <DUT Name="ST_AnalogInput_IO" Id="{b0100003-0003-0000-0000-000000000001}">
     <Declaration><![CDATA[// Hardware-linked primitives for FB_AnalogInput. One 32-bit UNION is enough
 // to support every common EL3xxx terminal — 4-20 mA, 0-10 V, thermocouple,
-// counter, etc. Choose the numeric interpretation with cfg.cfgInputType.
+// counter, etc. Choose the numeric interpretation with cfg.inputType.
 //
 // `AT %I*` is attached here (on the UNION variable), not inside U_IoRaw_In.
 // That follows the DMC-documented hardware-linking pattern and keeps the

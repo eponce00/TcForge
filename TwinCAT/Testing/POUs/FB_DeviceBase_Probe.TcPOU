@@ -47,13 +47,13 @@ END_VAR]]></Declaration>
 METHOD PUBLIC Refresh
 VAR_INPUT
     stateString : STRING(31);
-    stsBusy     : BOOL;
+    busy     : BOOL;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[_UpdateHeader(
     header      := header,
     stateString := stateString,
-    stsBusy     := stsBusy);]]></ST>
+    busy     := busy);]]></ST>
       </Implementation>
     </Method>
     <Method Name="ResolveFaultString" Id="{b1c2d3e4-f5a6-7890-abcd-000000000505}">

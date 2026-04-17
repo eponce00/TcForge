@@ -45,16 +45,16 @@ VAR_GLOBAL
     //
     // Analog IO uses a 32-bit UNION (U_IoRaw_In / U_IoRaw_Out). Link the
     // .dw member regardless of the terminal's native type — the FB picks the
-    // correct reinterpretation from cfg.cfgInputType / cfg.cfgOutputType.
+    // correct reinterpretation from cfg.inputType / cfg.outputType.
     //
     // Examples by terminal family:
-    //   EL3068 (INT):     cfgInputType  := TYPE_INT
-    //   EL3062 (INT):     cfgInputType  := TYPE_INT
-    //   EL3751 (REAL):    cfgInputType  := TYPE_REAL
-    //   EL3104 (INT):     cfgInputType  := TYPE_INT
-    //   EL4132 (INT):     cfgOutputType := TYPE_INT
-    //   EL4102 (INT):     cfgOutputType := TYPE_INT
-    //   EL4134 (INT):     cfgOutputType := TYPE_INT
+    //   EL3068 (INT):     inputType  := TYPE_INT
+    //   EL3062 (INT):     inputType  := TYPE_INT
+    //   EL3751 (REAL):    inputType  := TYPE_REAL
+    //   EL3104 (INT):     inputType  := TYPE_INT
+    //   EL4132 (INT):     outputType := TYPE_INT
+    //   EL4102 (INT):     outputType := TYPE_INT
+    //   EL4134 (INT):     outputType := TYPE_INT
     // -----------------------------------------------------------------------
     // {attribute 'TcLinkTo' :=
     //  '.io.inRaw.dw := TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 4 (EL3068)^AI Standard Channel 1^Value'}

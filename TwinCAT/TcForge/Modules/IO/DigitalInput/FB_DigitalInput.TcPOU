@@ -5,11 +5,11 @@
 //
 // Pipeline:
 //   terminal bit (io.inSignal) -> quality gate -> invert -> asymmetric
-//   debounce -> edge detection -> sts.stsValue / stsRisingEdge / stsFallingEdge
+//   debounce -> edge detection -> sts.value / risingEdge / fallingEdge
 //
 // Quality handling: while inpQuality is BAD the raw reading is ignored and
-// the previous stsRawValue is held. If the input stays BAD longer than
-// cfg.cfgQualityFaultAfter the FB raises E_DigitalInput_Fault.BadQuality
+// the previous rawValue is held. If the input stays BAD longer than
+// cfg.qualityFaultAfter the FB raises E_DigitalInput_Fault.BadQuality
 // through the fault book-keeping inherited from FB_DeviceBase.
 //
 // Debounce is asymmetric on purpose: many sensors need a short ON-delay to
@@ -60,16 +60,16 @@ END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[// 1. Quality-gated read. BAD quality holds the previous raw value so
 //    downstream logic does not see glitches while a wire break persists.
-sts.stsQuality := inpQuality;
+sts.quality := inpQuality;
 
 IF inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED THEN
     _rawBool := io.inSignal;
 ELSE
-    _rawBool := sts.stsRawValue;
+    _rawBool := sts.rawValue;
 END_IF;
 
 // 2. Invert if the sensor is active-low.
-IF cfg.cfgInvert THEN
+IF cfg.invert THEN
     _invertedBool := NOT _rawBool;
 ELSE
     _invertedBool := _rawBool;
@@ -77,8 +77,8 @@ END_IF;
 
 // 3. Asymmetric debounce. TON confirms rising edges; TOF confirms falling
 //    edges. Q on either timer encodes "input has held that state long enough".
-_tonOn(IN := _invertedBool, PT := cfg.cfgDebounceOn);
-_tofOff(IN := _invertedBool, PT := cfg.cfgDebounceOff);
+_tonOn(IN := _invertedBool, PT := cfg.debounceOn);
+_tofOff(IN := _invertedBool, PT := cfg.debounceOff);
 
 IF _invertedBool AND _tonOn.Q THEN
     _debouncedBool := TRUE;
@@ -87,30 +87,30 @@ ELSIF NOT _invertedBool AND NOT _tofOff.Q THEN
 END_IF;
 
 // 4. Edge pulses are one-scan wide and fire on the debounced value.
-sts.stsRisingEdge  :=      _debouncedBool AND NOT _prevDebounced;
-sts.stsFallingEdge := NOT _debouncedBool AND     _prevDebounced;
+sts.risingEdge  :=      _debouncedBool AND NOT _prevDebounced;
+sts.fallingEdge := NOT _debouncedBool AND     _prevDebounced;
 _prevDebounced     := _debouncedBool;
 
 // 5. Publish processed + raw values.
-sts.stsValue    := _debouncedBool;
-sts.stsRawValue := _rawBool;
+sts.value    := _debouncedBool;
+sts.rawValue := _rawBool;
 
-// 6. Quality watchdog. Enabled only when cfgQualityFaultAfter > 0.
+// 6. Quality watchdog. Enabled only when qualityFaultAfter > 0.
 _tonBadQuality(
-    IN := inpQuality = E_IO_Quality.BAD AND cfg.cfgQualityFaultAfter > T#0MS,
-    PT := cfg.cfgQualityFaultAfter
+    IN := inpQuality = E_IO_Quality.BAD AND cfg.qualityFaultAfter > T#0MS,
+    PT := cfg.qualityFaultAfter
 );
 
 IF _tonBadQuality.Q THEN
     _Raise(
         code   := E_DigitalInput_Fault.BadQuality,
         source := 'QUALITY',
-        reason := 'inpQuality stayed BAD past cfgQualityFaultAfter'
+        reason := 'inpQuality stayed BAD past qualityFaultAfter'
     );
 END_IF;
 
 // 7. Refresh shared header (fault surface, ready flags, timestamps).
-_UpdateHeader(header := sts.header, stateString := '', stsBusy := FALSE);]]></ST>
+_UpdateHeader(header := sts.header, stateString := '', busy := FALSE);]]></ST>
     </Implementation>
     <Folder Name="Protected" Id="{a0100001-0000-0000-f000-000000000001}" />
     <Method Name="ResolveFaultString" Id="{a0100001-0000-0000-1000-000000000001}" FolderPath="Protected\">

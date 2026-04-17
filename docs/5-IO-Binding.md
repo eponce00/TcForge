@@ -60,7 +60,7 @@ END_UNION
 END_TYPE
 ```
 
-`FB_AnalogInput` holds its raw input as `U_IoRaw_In`; `FB_AnalogOutput` holds `U_IoRaw_Out` (same shape, `AT %Q*`). The project links the `**.dw` member** of that UNION to the terminal, regardless of the terminal's native type, and the FB picks the correct reinterpretation via `cfg.cfgInputType` / `cfg.cfgOutputType` (a `__SYSTEM.TYPE_CLASS` enum).
+`FB_AnalogInput` holds its raw input as `U_IoRaw_In`; `FB_AnalogOutput` holds `U_IoRaw_Out` (same shape, `AT %Q*`). The project links the `**.dw` member** of that UNION to the terminal, regardless of the terminal's native type, and the FB picks the correct reinterpretation via `cfg.inputType` / `cfg.outputType` (a `__SYSTEM.TYPE_CLASS` enum).
 
 ```iecst
 {attribute 'TcLinkTo' :=
@@ -68,18 +68,18 @@ END_TYPE
 PRESSURE_TRANSDUCER : FB_AnalogInput;
 
 // In the consuming program:
-cfgPressure.cfgInputType := __SYSTEM.TYPE_CLASS.TYPE_INT;   // EL3068 is INT
-cfgPressure.cfgRawMin    := 0.0;
-cfgPressure.cfgRawMax    := 32767.0;
-cfgPressure.cfgEuMin     := 0.0;
-cfgPressure.cfgEuMax     := 10.0;        // bar
-cfgPressure.cfgUnit      := E_Unit.BAR;
+cfgPressure.inputType := __SYSTEM.TYPE_CLASS.TYPE_INT;   // EL3068 is INT
+cfgPressure.rawMin    := 0.0;
+cfgPressure.rawMax    := 32767.0;
+cfgPressure.euMin     := 0.0;
+cfgPressure.euMax     := 10.0;        // bar
+cfgPressure.unit      := E_Unit.BAR;
 ```
 
 Common selections:
 
 
-| Terminal family             | `cfgInputType` / `cfgOutputType` |
+| Terminal family             | `inputType` / `outputType` |
 | --------------------------- | -------------------------------- |
 | EL3061 / 3062 / 3064 / 3068 | `TYPE_INT`                       |
 | EL3104 / 3124               | `TYPE_INT`                       |
@@ -89,7 +89,7 @@ Common selections:
 | EL4112 (0-20 mA)            | `TYPE_INT`                       |
 
 
-If the user leaves `cfgInputType` at default (`TYPE_INT`), a standard 0-10 V or 4-20 mA terminal works out of the box.
+If the user leaves `inputType` at default (`TYPE_INT`), a standard 0-10 V or 4-20 mA terminal works out of the box.
 
 ---
 
@@ -244,8 +244,8 @@ The four generic I/O blocks that ship with the library. Each one extends `FB_Dev
 Signal conditioning for a single `BOOL` field input.
 
 - **Link:** `.io.inSignal` → `EL1xxx` channel
-- **Cfg:** `cfgInvert`, `cfgDebounceOn`, `cfgDebounceOff`, `cfgQualityFaultAfter`
-- **Sts:** `stsValue` (conditioned), `stsRawValue`, `stsQuality`, `stsRisingEdge`, `stsFallingEdge`
+- **Cfg:** `invert`, `debounceOn`, `debounceOff`, `qualityFaultAfter`
+- **Sts:** `value` (conditioned), `rawValue`, `quality`, `risingEdge`, `fallingEdge`
 - **Behaviour:** quality-gated read → optional inversion → asymmetric debounce (`TON` on-delay, `TOF` off-delay) → edge detection on the debounced value
 - **Fault codes (`E_DigitalInput_Fault`):** `BadQuality` (quality watchdog)
 
@@ -255,18 +255,18 @@ Driver for a single `BOOL` field output with pulse-train options.
 
 - **Link:** `.io.outSignal` → `EL2xxx` channel
 - **Commands:** `SetOn(eRequester)`, `SetOff(eRequester)` — both gated by `F_ValidateRequester`
-- **Cfg:** `cfgInvert` (Regular mode only), `cfgDebounceOn`, `cfgDebounceOff`, `cfgMode` (`Regular` / `SinglePulse` / `ContinuousPulse`), `cfgPulseOn`, `cfgPulseOff`, `cfgQualityFaultAfter`
-- **Sts:** `stsValue` (physical output), `stsCommanded` (persistent request), `stsQuality`, `stsRisingEdge`, `stsFallingEdge`
+- **Cfg:** `invert` (Regular mode only), `debounceOn`, `debounceOff`, `mode` (`Regular` / `SinglePulse` / `ContinuousPulse`), `pulseOn`, `pulseOff`, `qualityFaultAfter`
+- **Sts:** `value` (physical output), `commanded` (persistent request), `quality`, `risingEdge`, `fallingEdge`
 - **Behaviour:** `VAR PERSISTENT _requestSync` → asymmetric debounce on the commanded value → mode shaping (pulse timers or passthrough) → quality-gated hardware write. Inversion applies only in `Regular` mode (pulse trains shouldn't be inverted).
 - **Fault codes (`E_DigitalOutput_Fault`):** `BadQuality`
 
 ### 5.8.3 `FB_AnalogInput`
 
-Signal-conditioning pipeline for any 32-bit analog terminal. Conditioning-only — process-limit alarms (HH / HI / LO / LL) live on `FB_AlarmLimit` composed with the published `stsValue` (see [§8 Alarms](8-Alarms.md)).
+Signal-conditioning pipeline for any 32-bit analog terminal. Conditioning-only — process-limit alarms (HH / HI / LO / LL) live on `FB_AlarmLimit` composed with the published `value` (see [§8 Alarms](8-Alarms.md)).
 
 - **Link:** `.io.inRaw.dw` → `EL3xxx` channel (see §5.1.1 for the UNION and type selection)
-- **Cfg:** `cfgInputType` (UNION member select), `cfgUseRawValue` (bypass scaling), `cfgRawMin/Max`, `cfgEuMin/Max`, `cfgUnit`, `cfgClampAsFault`, `cfgFilterTau` (IIR), `cfgQualityFaultAfter`
-- **Sts:** `stsValue` (final EU), `stsScaled` (pre-filter EU), `stsRawReal`, `stsUnit`, `stsQuality` (promotes to `CLAMPED` automatically), `stsClampedLow/High/Active`
+- **Cfg:** `inputType` (UNION member select), `useRawValue` (bypass scaling), `rawMin/Max`, `euMin/Max`, `unit`, `clampAsFault`, `filterTau` (IIR), `qualityFaultAfter`
+- **Sts:** `value` (final EU), `scaled` (pre-filter EU), `rawReal`, `unit`, `quality` (promotes to `CLAMPED` automatically), `clampedLow/High/Active`
 - **Behaviour:** first-scan config validation + task-dt cache → type-selected UNION read → quality-gated hold → clamp → optional clamp-as-fault → linear scale → optional first-order IIR low-pass
 - **Fault codes (`E_AnalogInput_Fault`):** `BadQuality`, `ClampLow`, `ClampHigh`, `BadConfig`
 
@@ -276,8 +276,8 @@ Driver for any 32-bit analog terminal with persistent setpoint.
 
 - **Link:** `.io.outRaw.dw` → `EL4xxx` channel
 - **Commands:** `SetValue(rValue, eRequester)` — gated by `F_ValidateRequester`
-- **Cfg:** `cfgOutputType` (UNION member select), `cfgUseRawValue`, `cfgMinCv`, `cfgMaxCv`, `cfgEuMin/Max`, `cfgRawMin/Max`, `cfgUnit`, `cfgClampAsFault`, `cfgQualityFaultAfter`
-- **Sts:** `stsValue` (clamped EU actually written), `stsCommanded` (persistent, survives power cycle), `stsRawReal`, `stsUnit`, `stsQuality`, `stsClampedLow/High/Active`
+- **Cfg:** `outputType` (UNION member select), `useRawValue`, `minCv`, `maxCv`, `euMin/Max`, `rawMin/Max`, `unit`, `clampAsFault`, `qualityFaultAfter`
+- **Sts:** `value` (clamped EU actually written), `commanded` (persistent, survives power cycle), `rawReal`, `unit`, `quality`, `clampedLow/High/Active`
 - **Behaviour:** `VAR PERSISTENT _requestSync` → first-scan config validation → clamp to `MinCv/MaxCv` → EU-to-raw linear scale → UNION write of the selected primitive → `BAD` quality holds last good value
 - **Fault codes (`E_AnalogOutput_Fault`):** `BadQuality`, `ClampLow`, `ClampHigh`, `BadConfig`
 
@@ -285,8 +285,8 @@ Driver for any 32-bit analog terminal with persistent setpoint.
 
 All four I/O FBs rely on:
 
-- `E_IO_Quality` — `UNKNOWN / BAD / GOOD / CLAMPED`; `stsQuality` carries this tag so downstream aggregators can filter bad data.
-- `E_Unit` — engineering-unit tag for the HMI (`BAR`, `DEGREE_CELSIUS`, `PERCENT`, …). Copied into `stsUnit` every cycle.
+- `E_IO_Quality` — `UNKNOWN / BAD / GOOD / CLAMPED`; `quality` carries this tag so downstream aggregators can filter bad data.
+- `E_Unit` — engineering-unit tag for the HMI (`BAR`, `DEGREE_CELSIUS`, `PERCENT`, …). Copied into `unit` every cycle.
 - `U_IoRaw_In` / `U_IoRaw_Out` — 32-bit UNION exposed only on analog blocks, described in §5.1.1.
 - `F_GetTaskCycleTime` — returns the task dt; used by `FB_AnalogInput` to initialise its filter on first scan.
-- `FB_LPF_FirstOrder_IIR` — exponential low-pass filter; tunable by `cfgFilterTau`.
+- `FB_LPF_FirstOrder_IIR` — exponential low-pass filter; tunable by `filterTau`.

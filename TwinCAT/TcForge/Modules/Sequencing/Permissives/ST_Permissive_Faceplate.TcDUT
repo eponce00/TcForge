@@ -14,13 +14,13 @@ STRUCT
 	{attribute 'OPC.UA.DA.Description' := 'Human readable name of the permissive'}
 	name : STRING(50);
 	{attribute 'OPC.UA.DA.Description' := 'Real-time status of this permissive bit (TRUE=good, FALSE=bad)'}
-	stsOK : BOOL;
+	ok : BOOL;
 	{attribute 'OPC.UA.DA.Description' := 'TRUE if this bit is actively mapped via MapInput'}
-	stsMapped : BOOL;
+	mapped : BOOL;
 	{attribute 'OPC.UA.DA.Description' := 'TRUE if this bit is currently bypassed'}
-	stsBypassed : BOOL;
+	bypassed : BOOL;
 	{attribute 'OPC.UA.DA.Description' := 'TRUE if this bit is configured as bypassable'}
-	cfgBypassable : BOOL;
+	bypassable : BOOL;
 END_STRUCT
 END_TYPE
 ]]></Declaration>

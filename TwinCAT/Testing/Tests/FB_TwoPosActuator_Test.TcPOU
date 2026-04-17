@@ -55,7 +55,7 @@ AssertFalse(
     Condition := fb.GetValveRetract(),
     Message   := 'Undefined state must de-energize outValveRetract');
 AssertFalse(
-    Condition := fb.sts.header.stsFaulted,
+    Condition := fb.sts.header.faulted,
     Message   := 'Fresh instance must not be faulted');
 
 TEST_FINISHED();]]></ST>
@@ -78,11 +78,11 @@ AssertEquals_DINT(
     Actual   := fb.sts.state,
     Message  := 'Undefined must latch to Advanced when only inFbkAdvanced is TRUE');
 AssertTrue(
-    Condition := fb.sts.stsAdvanced,
-    Message   := 'stsAdvanced must follow the resolved state');
+    Condition := fb.sts.advanced,
+    Message   := 'advanced must follow the resolved state');
 AssertFalse(
-    Condition := fb.sts.stsRetracted,
-    Message   := 'stsRetracted must be FALSE when Advanced');
+    Condition := fb.sts.retracted,
+    Message   := 'retracted must be FALSE when Advanced');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -103,11 +103,11 @@ AssertEquals_DINT(
     Actual   := fb.sts.state,
     Message  := 'Undefined must latch to Retracted when only inFbkRetracted is TRUE');
 AssertTrue(
-    Condition := fb.sts.stsRetracted,
-    Message   := 'stsRetracted must follow the resolved state');
+    Condition := fb.sts.retracted,
+    Message   := 'retracted must follow the resolved state');
 AssertFalse(
-    Condition := fb.sts.stsAdvanced,
-    Message   := 'stsAdvanced must be FALSE when Retracted');
+    Condition := fb.sts.advanced,
+    Message   := 'advanced must be FALSE when Retracted');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -132,7 +132,7 @@ AssertEquals_DINT(
     Actual   := fb.sts.state,
     Message  := 'Both feedbacks simultaneously must drive state to Fault');
 AssertTrue(
-    Condition := fb.sts.header.stsFaulted,
+    Condition := fb.sts.header.faulted,
     Message   := 'header must report faulted when both feedbacks assert');
 AssertEquals_DINT(
     Expected := TcForge.E_TwoPosActuator_Fault.BothFeedbackOn,
@@ -188,8 +188,8 @@ AssertFalse(
     Condition := fb.GetValveRetract(),
     Message   := 'Advancing state must NOT energize outValveRetract');
 AssertTrue(
-    Condition := fb.sts.stsMoving,
-    Message   := 'stsMoving must flag the Advancing transit');
+    Condition := fb.sts.moving,
+    Message   := 'moving must flag the Advancing transit');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -293,8 +293,8 @@ AssertEquals_DINT(
     Actual   := fb.sts.state,
     Message  := 'Advancing must complete to Advanced when inFbkAdvanced asserts');
 AssertFalse(
-    Condition := fb.sts.stsMoving,
-    Message   := 'stsMoving must clear once the motion completes');
+    Condition := fb.sts.moving,
+    Message   := 'moving must clear once the motion completes');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -454,7 +454,7 @@ fb.SetAdvancedFeedback(bValue := TRUE);
 fb.SetRetractedFeedback(bValue := TRUE);
 fb();
 AssertTrue(
-    Condition := fb.sts.header.stsFaulted,
+    Condition := fb.sts.header.faulted,
     Message   := 'Precondition: must be faulted before Reset');
 
 // Drop the conflicting feedback so Reset can actually settle.
@@ -469,7 +469,7 @@ AssertEquals_DINT(
     Actual   := resp,
     Message  := 'Reset must always be accepted (safety invariant inherited from FB_DeviceBase)');
 AssertFalse(
-    Condition := fb.sts.header.stsFaulted,
+    Condition := fb.sts.header.faulted,
     Message   := 'Reset must clear the active fault');
 AssertEquals_DINT(
     Expected := TcForge.E_TwoPosActuator_State.Undefined,
@@ -496,14 +496,14 @@ fb.Advance(eRequester := TcForge.E_Requester.PROG);
 fb();
 
 AssertTrue(
-    Condition := fb.sts.stsMoving,
-    Message   := 'Advancing must set stsMoving');
+    Condition := fb.sts.moving,
+    Message   := 'Advancing must set moving');
 AssertTrue(
-    Condition := fb.sts.header.stsBusy,
-    Message   := 'header.stsBusy must mirror stsMoving so generic HMIs can show motion');
+    Condition := fb.sts.header.busy,
+    Message   := 'header.busy must mirror moving so generic HMIs can show motion');
 AssertFalse(
-    Condition := fb.sts.header.stsReady,
-    Message   := 'stsReady must be FALSE while the actuator is in motion');
+    Condition := fb.sts.header.ready,
+    Message   := 'ready must be FALSE while the actuator is in motion');
 
 TEST_FINISHED();]]></ST>
       </Implementation>

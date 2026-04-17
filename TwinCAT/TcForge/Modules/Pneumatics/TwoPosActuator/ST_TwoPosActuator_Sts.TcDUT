@@ -14,11 +14,11 @@ STRUCT
     {attribute 'OPC.UA.DA.Description' := 'Current state of actuator'}
     state : E_TwoPosActuator_State;
     {attribute 'OPC.UA.DA.Description' := 'TRUE when actuator is advanced'}
-    stsAdvanced : BOOL;
+    advanced : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'TRUE when actuator is retracted'}
-    stsRetracted : BOOL;
+    retracted : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'TRUE when actuator is in motion'}
-    stsMoving : BOOL;
+    moving : BOOL;
     {attribute 'OPC.UA.DA' := '0'}
     osAdvanced : BOOL;
     {attribute 'OPC.UA.DA' := '0'}

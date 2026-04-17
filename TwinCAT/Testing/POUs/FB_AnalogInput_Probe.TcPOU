@@ -4,7 +4,7 @@
     <Declaration><![CDATA[// Test-only child of FB_AnalogInput. The production FB keeps its
 // hardware-linked `io` UNION in a private VAR section, so tests use this
 // probe to inject raw terminal bytes via the UNION alias that matches
-// the cfgInputType under test (nInt, fReal, di, ...).
+// the inputType under test (nInt, fReal, di, ...).
 //
 // The probe delegates the cyclic body back to the parent via SUPER^()
 // so the inherited conditioning pipeline runs against the injected raw
@@ -18,7 +18,7 @@ FUNCTION_BLOCK FB_AnalogInput_Probe EXTENDS TcForge.FB_AnalogInput]]></Declarati
     </Implementation>
     <Method Name="SetRawInt" Id="{b1c2d3e4-f5a6-7890-abcd-000000000d01}">
       <Declaration><![CDATA[// Inject the raw terminal value via the INT alias of the UNION.
-// Pair with cfg.cfgInputType := __SYSTEM.TYPE_CLASS.TYPE_INT.
+// Pair with cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_INT.
 METHOD PUBLIC SetRawInt
 VAR_INPUT
     nValue : INT;
@@ -29,7 +29,7 @@ END_VAR]]></Declaration>
     </Method>
     <Method Name="SetRawReal" Id="{b1c2d3e4-f5a6-7890-abcd-000000000d02}">
       <Declaration><![CDATA[// Inject the raw terminal value via the REAL alias of the UNION.
-// Pair with cfg.cfgInputType := __SYSTEM.TYPE_CLASS.TYPE_REAL.
+// Pair with cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL.
 METHOD PUBLIC SetRawReal
 VAR_INPUT
     fValue : REAL;
@@ -40,7 +40,7 @@ END_VAR]]></Declaration>
     </Method>
     <Method Name="SetRawDInt" Id="{b1c2d3e4-f5a6-7890-abcd-000000000d03}">
       <Declaration><![CDATA[// Inject the raw terminal value via the DINT alias of the UNION.
-// Pair with cfg.cfgInputType := __SYSTEM.TYPE_CLASS.TYPE_DINT.
+// Pair with cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_DINT.
 METHOD PUBLIC SetRawDInt
 VAR_INPUT
     nValue : DINT;

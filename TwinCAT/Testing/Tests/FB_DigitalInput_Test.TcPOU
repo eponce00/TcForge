@@ -39,19 +39,19 @@ END_VAR]]></Declaration>
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertFalse(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'Fresh instance must read LOW when the physical input is LOW');
 AssertFalse(
-    Condition := fb.sts.stsRawValue,
+    Condition := fb.sts.rawValue,
     Message   := 'Fresh instance must report the raw input LOW');
 AssertFalse(
-    Condition := fb.sts.stsRisingEdge,
+    Condition := fb.sts.risingEdge,
     Message   := 'Fresh instance must not emit a spurious rising edge');
 AssertFalse(
-    Condition := fb.sts.stsFallingEdge,
+    Condition := fb.sts.fallingEdge,
     Message   := 'Fresh instance must not emit a spurious falling edge');
 AssertFalse(
-    Condition := fb.sts.header.stsFaulted,
+    Condition := fb.sts.header.faulted,
     Message   := 'Fresh instance must not be faulted');
 
 TEST_FINISHED();]]></ST>
@@ -66,15 +66,15 @@ END_VAR]]></Declaration>
         <ST><![CDATA[TEST('RawSignalPassthroughWithNoDebounce');
 
 // Default cfg: no debounce, no invert. Raw hardware bit flushes through
-// to stsValue in one cycle.
+// to value in one cycle.
 fb.SetRawInput(bValue := TRUE);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.stsRawValue,
-    Message   := 'stsRawValue must echo the hardware bit under GOOD quality');
+    Condition := fb.sts.rawValue,
+    Message   := 'rawValue must echo the hardware bit under GOOD quality');
 AssertTrue(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'With no debounce and no invert the conditioned value must match the raw bit');
 
 TEST_FINISHED();]]></ST>
@@ -91,16 +91,16 @@ END_VAR]]></Declaration>
 // Invert must apply to the debounced / published value but the raw
 // reading should stay true-to-the-wire so troubleshooters can see what
 // the hardware is actually doing.
-fb.cfg.cfgInvert := TRUE;
+fb.cfg.invert := TRUE;
 fb.SetRawInput(bValue := TRUE);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.stsRawValue,
-    Message   := 'stsRawValue must echo the wire value independent of cfgInvert');
+    Condition := fb.sts.rawValue,
+    Message   := 'rawValue must echo the wire value independent of invert');
 AssertFalse(
-    Condition := fb.sts.stsValue,
-    Message   := 'cfgInvert must flip the conditioned value (active-low sensor semantics)');
+    Condition := fb.sts.value,
+    Message   := 'invert must flip the conditioned value (active-low sensor semantics)');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -119,13 +119,13 @@ fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 fb.SetRawInput(bValue := TRUE);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
-    Condition := fb.sts.stsRisingEdge,
-    Message   := 'stsRisingEdge must fire on the cycle the debounced value goes HIGH');
+    Condition := fb.sts.risingEdge,
+    Message   := 'risingEdge must fire on the cycle the debounced value goes HIGH');
 
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertFalse(
-    Condition := fb.sts.stsRisingEdge,
-    Message   := 'stsRisingEdge must clear the very next cycle — edges are one-scan pulses');
+    Condition := fb.sts.risingEdge,
+    Message   := 'risingEdge must clear the very next cycle — edges are one-scan pulses');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -144,13 +144,13 @@ fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 fb.SetRawInput(bValue := FALSE);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
-    Condition := fb.sts.stsFallingEdge,
-    Message   := 'stsFallingEdge must fire on the cycle the debounced value goes LOW');
+    Condition := fb.sts.fallingEdge,
+    Message   := 'fallingEdge must fire on the cycle the debounced value goes LOW');
 
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertFalse(
-    Condition := fb.sts.stsFallingEdge,
-    Message   := 'stsFallingEdge must clear the very next cycle');
+    Condition := fb.sts.fallingEdge,
+    Message   := 'fallingEdge must clear the very next cycle');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -163,19 +163,19 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('DebounceOnBlocksRisingEdgeUntilElapsed');
 
-// cfgDebounceOn = T#1S — the _tonOn.Q won't fire inside this test frame.
-fb.cfg.cfgDebounceOn := T#1S;
+// debounceOn = T#1S — the _tonOn.Q won't fire inside this test frame.
+fb.cfg.debounceOn := T#1S;
 fb.SetRawInput(bValue := TRUE);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.stsRawValue,
-    Message   := 'stsRawValue must still show the raw bit — debounce gates the conditioned value, not the raw view');
+    Condition := fb.sts.rawValue,
+    Message   := 'rawValue must still show the raw bit — debounce gates the conditioned value, not the raw view');
 AssertFalse(
-    Condition := fb.sts.stsValue,
-    Message   := 'cfgDebounceOn must hold stsValue LOW until the TON elapses');
+    Condition := fb.sts.value,
+    Message   := 'debounceOn must hold value LOW until the TON elapses');
 AssertFalse(
-    Condition := fb.sts.stsRisingEdge,
+    Condition := fb.sts.risingEdge,
     Message   := 'No rising edge must be emitted while debounce is pending');
 
 TEST_FINISHED();]]></ST>
@@ -189,27 +189,27 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('DebounceOffHoldsSignalHighAfterRawGoesLow');
 
-// cfgDebounceOff = T#1S. With cfgDebounceOn still 0 we latch the
+// debounceOff = T#1S. With debounceOn still 0 we latch the
 // debounced signal HIGH immediately, then flip the raw bit LOW and
 // expect the TOF to hold the debounced value HIGH.
-fb.cfg.cfgDebounceOff := T#1S;
+fb.cfg.debounceOff := T#1S;
 fb.SetRawInput(bValue := TRUE);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'Precondition: raw HIGH with zero ON-debounce must latch the debounced value HIGH');
 
 fb.SetRawInput(bValue := FALSE);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertFalse(
-    Condition := fb.sts.stsRawValue,
-    Message   := 'stsRawValue must immediately mirror the wire going LOW');
+    Condition := fb.sts.rawValue,
+    Message   := 'rawValue must immediately mirror the wire going LOW');
 AssertTrue(
-    Condition := fb.sts.stsValue,
-    Message   := 'cfgDebounceOff must hold the debounced value HIGH until the TOF expires');
+    Condition := fb.sts.value,
+    Message   := 'debounceOff must hold the debounced value HIGH until the TOF expires');
 AssertFalse(
-    Condition := fb.sts.stsFallingEdge,
+    Condition := fb.sts.fallingEdge,
     Message   := 'No falling edge must be emitted while the OFF-debounce is pending');
 
 TEST_FINISHED();]]></ST>
@@ -227,8 +227,8 @@ END_VAR]]></Declaration>
 fb.SetRawInput(bValue := TRUE);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
-    Condition := fb.sts.stsRawValue,
-    Message   := 'Precondition: under GOOD quality stsRawValue mirrors the wire');
+    Condition := fb.sts.rawValue,
+    Message   := 'Precondition: under GOOD quality rawValue mirrors the wire');
 
 // Simulate wire break: the underlying bit flips FALSE but quality is BAD.
 // The FB must ignore the glitchy reading and hold the last-known-good raw.
@@ -236,12 +236,12 @@ fb.SetRawInput(bValue := FALSE);
 fb(inpQuality := TcForge.E_IO_Quality.BAD);
 
 AssertTrue(
-    Condition := fb.sts.stsRawValue,
-    Message   := 'BAD quality must freeze stsRawValue at the last known-good reading');
+    Condition := fb.sts.rawValue,
+    Message   := 'BAD quality must freeze rawValue at the last known-good reading');
 AssertEquals_USINT(
     Expected := TcForge.E_IO_Quality.BAD,
-    Actual   := fb.sts.stsQuality,
-    Message  := 'stsQuality must surface the BAD tag so downstream consumers can react');
+    Actual   := fb.sts.quality,
+    Message  := 'quality must surface the BAD tag so downstream consumers can react');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -254,25 +254,25 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('QualityTagSurfacesInStatus');
 
-// UNKNOWN -> BAD -> GOOD must each land in sts.stsQuality unchanged so
+// UNKNOWN -> BAD -> GOOD must each land in sts.quality unchanged so
 // the HMI can display the exact tag the caller supplied.
 fb(inpQuality := TcForge.E_IO_Quality.UNKNOWN);
 AssertEquals_USINT(
     Expected := TcForge.E_IO_Quality.UNKNOWN,
-    Actual   := fb.sts.stsQuality,
-    Message  := 'stsQuality must surface UNKNOWN unchanged');
+    Actual   := fb.sts.quality,
+    Message  := 'quality must surface UNKNOWN unchanged');
 
 fb(inpQuality := TcForge.E_IO_Quality.BAD);
 AssertEquals_USINT(
     Expected := TcForge.E_IO_Quality.BAD,
-    Actual   := fb.sts.stsQuality,
-    Message  := 'stsQuality must surface BAD unchanged');
+    Actual   := fb.sts.quality,
+    Message  := 'quality must surface BAD unchanged');
 
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertEquals_USINT(
     Expected := TcForge.E_IO_Quality.GOOD,
-    Actual   := fb.sts.stsQuality,
-    Message  := 'stsQuality must surface GOOD unchanged');
+    Actual   := fb.sts.quality,
+    Message  := 'quality must surface GOOD unchanged');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -293,15 +293,15 @@ fb.SetRawInput(bValue := TRUE);
 fb(inpQuality := TcForge.E_IO_Quality.CLAMPED);
 
 AssertTrue(
-    Condition := fb.sts.stsRawValue,
+    Condition := fb.sts.rawValue,
     Message   := 'CLAMPED quality must be treated like GOOD for raw readings');
 AssertTrue(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'CLAMPED quality must not freeze the conditioned value');
 AssertEquals_USINT(
     Expected := TcForge.E_IO_Quality.CLAMPED,
-    Actual   := fb.sts.stsQuality,
-    Message  := 'stsQuality must still surface CLAMPED so consumers know the raw came from a clamped source');
+    Actual   := fb.sts.quality,
+    Message  := 'quality must still surface CLAMPED so consumers know the raw came from a clamped source');
 
 TEST_FINISHED();]]></ST>
       </Implementation>

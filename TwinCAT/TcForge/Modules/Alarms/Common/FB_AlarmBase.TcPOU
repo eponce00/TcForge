@@ -101,60 +101,60 @@ IF NOT cfgCommon.bEnable THEN
     _latchedSync        := FALSE;
     _ackedSync          := FALSE;
     _prevDebounced      := FALSE;
-    sts.stsEnabled      := FALSE;
-    sts.stsRaw          := FALSE;
-    sts.stsDebounced    := FALSE;
-    sts.stsActive       := FALSE;
-    sts.stsLatched      := FALSE;
-    sts.stsAcked        := FALSE;
+    sts.enabled      := FALSE;
+    sts.raw          := FALSE;
+    sts.debounced    := FALSE;
+    sts.active       := FALSE;
+    sts.latched      := FALSE;
+    sts.acked        := FALSE;
     sts.eSeverity       := E_AlarmSeverity.NONE;
     sts.sMessage        := cfgCommon.sMessage;
     RETURN;
 END_IF;
 
-sts.stsEnabled := TRUE;
-sts.stsRaw     := bRawCondition;
+sts.enabled := TRUE;
+sts.raw     := bRawCondition;
 sts.sMessage   := cfgCommon.sMessage;
 
 // Asymmetric debounce: raw → TON (arm delay) → TOF (release hysteresis)
 _ton(IN := bRawCondition, PT := cfgCommon.tOnDelay);
 _tof(IN := _ton.Q,        PT := cfgCommon.tOffDelay);
-sts.stsDebounced := _tof.Q;
+sts.debounced := _tof.Q;
 
 // Edge-triggered timestamps
-IF sts.stsDebounced AND NOT _prevDebounced THEN
+IF sts.debounced AND NOT _prevDebounced THEN
     sts.tsTripped := F_Now();
-ELSIF NOT sts.stsDebounced AND _prevDebounced THEN
+ELSIF NOT sts.debounced AND _prevDebounced THEN
     sts.tsCleared := F_Now();
 END_IF;
-_prevDebounced := sts.stsDebounced;
+_prevDebounced := sts.debounced;
 
 // Latch / ack state machine
 IF cfgCommon.bRequireAck THEN
     // Rising edge of debounced → fresh latch
-    IF sts.stsDebounced AND NOT _latchedSync THEN
+    IF sts.debounced AND NOT _latchedSync THEN
         _latchedSync := TRUE;
         _ackedSync   := FALSE;
     END_IF;
     // Release only after operator ack AND condition cleared
-    IF NOT sts.stsDebounced AND _latchedSync AND _ackedSync THEN
+    IF NOT sts.debounced AND _latchedSync AND _ackedSync THEN
         _latchedSync := FALSE;
         _ackedSync   := FALSE;
     END_IF;
-    sts.stsActive  := _latchedSync;
-    sts.stsLatched := _latchedSync AND NOT _ackedSync;
-    sts.stsAcked   := _ackedSync;
+    sts.active  := _latchedSync;
+    sts.latched := _latchedSync AND NOT _ackedSync;
+    sts.acked   := _ackedSync;
 ELSE
     // Self-clearing, no latch
     _latchedSync   := FALSE;
     _ackedSync     := FALSE;
-    sts.stsActive  := sts.stsDebounced;
-    sts.stsLatched := FALSE;
-    sts.stsAcked   := FALSE;
+    sts.active  := sts.debounced;
+    sts.latched := FALSE;
+    sts.acked   := FALSE;
 END_IF;
 
 // Severity follows active state so aggregators can MAX() blindly.
-IF sts.stsActive THEN
+IF sts.active THEN
     sts.eSeverity := cfgCommon.eSeverity;
 ELSE
     sts.eSeverity := E_AlarmSeverity.NONE;

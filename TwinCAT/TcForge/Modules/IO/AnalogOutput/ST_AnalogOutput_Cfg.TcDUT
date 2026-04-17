@@ -11,38 +11,38 @@ STRUCT
     // Which UNION member to write. Supported values:
     //   TYPE_REAL, TYPE_INT, TYPE_UINT, TYPE_WORD, TYPE_DWORD, TYPE_UDINT, TYPE_DINT
     {attribute 'OPC.UA.DA.Description' := 'Terminal numeric type (selects UNION member)'}
-    cfgOutputType         : __SYSTEM.TYPE_CLASS := __SYSTEM.TYPE_CLASS.TYPE_INT;
+    outputType         : __SYSTEM.TYPE_CLASS := __SYSTEM.TYPE_CLASS.TYPE_INT;
 
     // When TRUE, the FB writes the command REAL directly into the UNION
     // without clamping or scaling. Handy for soft signals / diagnostics.
     {attribute 'OPC.UA.DA.Description' := 'Write commanded value directly; skip clamp + scale'}
-    cfgUseRawValue        : BOOL := FALSE;
+    useRawValue        : BOOL := FALSE;
 
     // Command limits in engineering units.
     {attribute 'OPC.UA.DA.Description' := 'Minimum allowed command (EU)'}
-    cfgMinCv              : REAL := 0.0;
+    minCv              : REAL := 0.0;
     {attribute 'OPC.UA.DA.Description' := 'Maximum allowed command (EU)'}
-    cfgMaxCv              : REAL := 100.0;
+    maxCv              : REAL := 100.0;
 
     // EU <-> raw linear scaling.
     {attribute 'OPC.UA.DA.Description' := 'Engineering value at fRawMin'}
-    cfgEuMin              : REAL := 0.0;
+    euMin              : REAL := 0.0;
     {attribute 'OPC.UA.DA.Description' := 'Engineering value at fRawMax'}
-    cfgEuMax              : REAL := 100.0;
+    euMax              : REAL := 100.0;
     {attribute 'OPC.UA.DA.Description' := 'Raw value at fEuMin'}
-    cfgRawMin             : REAL := 0.0;
+    rawMin             : REAL := 0.0;
     {attribute 'OPC.UA.DA.Description' := 'Raw value at fEuMax'}
-    cfgRawMax             : REAL := 32767.0;
+    rawMax             : REAL := 32767.0;
     {attribute 'OPC.UA.DA.Description' := 'Engineering unit for the HMI'}
-    cfgUnit               : E_Unit := E_Unit.PERCENT;
+    unit               : E_Unit := E_Unit.PERCENT;
 
     // Clamp alarm behaviour.
     {attribute 'OPC.UA.DA.Description' := 'Promote clamping to a device fault (ClampLow / ClampHigh)'}
-    cfgClampAsFault       : BOOL := FALSE;
+    clampAsFault       : BOOL := FALSE;
 
     // Quality watchdog.
     {attribute 'OPC.UA.DA.Description' := 'Raise BadQuality fault after this long in BAD quality (T#0MS = disabled)'}
-    cfgQualityFaultAfter  : TIME := T#0MS;
+    qualityFaultAfter  : TIME := T#0MS;
 END_STRUCT
 END_TYPE]]></Declaration>
   </DUT>

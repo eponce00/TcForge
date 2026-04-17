@@ -15,11 +15,11 @@ TYPE E_AnalogOutput_Fault :
 (
     None          := 0,
 
-    BadQuality    := 10,    // inpQuality latched to BAD past cfgQualityFaultAfter
-    ClampLow      := 11,    // commanded EU below cfgMinCv (raises when cfgClampAsFault)
-    ClampHigh     := 12,    // commanded EU above cfgMaxCv (raises when cfgClampAsFault)
+    BadQuality    := 10,    // inpQuality latched to BAD past qualityFaultAfter
+    ClampLow      := 11,    // commanded EU below minCv (raises when clampAsFault)
+    ClampHigh     := 12,    // commanded EU above maxCv (raises when clampAsFault)
 
-    BadConfig     := 40     // cfgRawMin > cfgRawMax, cfgEuMin >= cfgEuMax, etc.
+    BadConfig     := 40     // rawMin > rawMax, euMin >= euMax, etc.
 );
 END_TYPE]]></Declaration>
   </DUT>

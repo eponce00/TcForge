@@ -20,7 +20,7 @@ VAR
     bInit : BOOL := TRUE;
 
     // Simulated process value for the tank-pressure demo. In real deployments
-    // replace this with GVL_HW.PRESSURE_TRANSDUCER.sts.stsValue once the
+    // replace this with GVL_HW.PRESSURE_TRANSDUCER.sts.value once the
     // analog input is wired in GVL_HW. The test signal ramps between 0 and
     // 120 so the Lo / Hi / HiHi thresholds all trip in turn.
     fSimPressure : REAL;
@@ -69,7 +69,7 @@ IF bInit THEN
     GVL_ALARMS.almTankPressure.cfg.LoLo.fThreshold         := 10.0;
     GVL_ALARMS.almTankPressure.cfg.LoLo.bFailLow           := TRUE;
 
-    // --- almSequenceFaulted : boolean mirror over stsFaulted ---------------
+    // --- almSequenceFaulted : boolean mirror over faulted ---------------
     GVL_ALARMS.almSequenceFaulted.cfg.common.bEnable     := TRUE;
     GVL_ALARMS.almSequenceFaulted.cfg.common.bRequireAck := TRUE;
     GVL_ALARMS.almSequenceFaulted.cfg.common.eSeverity   := E_AlarmSeverity.CRITICAL;
@@ -79,7 +79,7 @@ END_IF;
 
 // ---------------------------------------------------------------------------
 // Simulated process value — triangle wave 0..120..0 over ~24 s at T#100MS
-// tick. Replace with a real FB_AnalogInput.sts.stsValue once hardware exists.
+// tick. Replace with a real FB_AnalogInput.sts.value once hardware exists.
 // ---------------------------------------------------------------------------
 tonSim(IN := NOT tonSim.Q, PT := T#100MS);
 IF tonSim.Q THEN
@@ -96,7 +96,7 @@ END_IF;
 // Cyclic calls — the alarms do the rest (debounce, latch, severity rollup).
 // ---------------------------------------------------------------------------
 GVL_ALARMS.almTankPressure(inpPv := fSimPressure);
-GVL_ALARMS.almSequenceFaulted(inpActive := sm.Status.header.stsFaulted);
+GVL_ALARMS.almSequenceFaulted(inpActive := sm.Status.header.faulted);
 ]]></ST>
     </Implementation>
     <LineIds Name="PRG_Alarms">

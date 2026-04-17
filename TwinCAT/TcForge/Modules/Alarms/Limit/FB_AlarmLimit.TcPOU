@@ -60,12 +60,12 @@ sts.Lo   := _lo.sts;
 sts.LoLo := _loLo.sts;
 
 // Rollup with suppression (higher priority hides lower on same direction)
-sts.stsHiHiActive := _hiHi.sts.stsActive;
-sts.stsHiActive   := _hi.sts.stsActive   AND NOT sts.stsHiHiActive;
-sts.stsLoLoActive := _loLo.sts.stsActive;
-sts.stsLoActive   := _lo.sts.stsActive   AND NOT sts.stsLoLoActive;
+sts.hiHiActive := _hiHi.sts.active;
+sts.hiActive   := _hi.sts.active   AND NOT sts.hiHiActive;
+sts.loLoActive := _loLo.sts.active;
+sts.loActive   := _lo.sts.active   AND NOT sts.loLoActive;
 
-sts.stsAnyActive := sts.stsHiHiActive OR sts.stsHiActive OR sts.stsLoActive OR sts.stsLoLoActive;
+sts.anyActive := sts.hiHiActive OR sts.hiActive OR sts.loActive OR sts.loLoActive;
 
 // Aggregate severity — highest currently-active level wins.
 sts.eSeverity := E_AlarmSeverity.NONE;

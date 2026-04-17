@@ -11,15 +11,15 @@ STRUCT
     header        : ST_DeviceHeader_Sts;
 
     {attribute 'OPC.UA.DA.Description' := 'Final processed value (after invert + debounce)'}
-    stsValue      : BOOL;
+    value      : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'Raw terminal reading (before invert / debounce)'}
-    stsRawValue   : BOOL;
+    rawValue   : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'Signal quality tag'}
-    stsQuality    : E_IO_Quality := E_IO_Quality.UNKNOWN;
+    quality    : E_IO_Quality := E_IO_Quality.UNKNOWN;
     {attribute 'OPC.UA.DA.Description' := 'One-scan pulse on debounced rising edge'}
-    stsRisingEdge : BOOL;
+    risingEdge : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'One-scan pulse on debounced falling edge'}
-    stsFallingEdge: BOOL;
+    fallingEdge: BOOL;
 END_STRUCT
 END_TYPE]]></Declaration>
   </DUT>

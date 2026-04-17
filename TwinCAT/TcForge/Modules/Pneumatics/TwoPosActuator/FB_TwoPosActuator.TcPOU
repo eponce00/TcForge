@@ -81,7 +81,7 @@ CASE currentState OF
         END_IF;
 
     E_TwoPosActuator_State.Retracted:
-        IF cfg.cfgHoldAtRetracted THEN
+        IF cfg.holdAtRetracted THEN
             io.outValveRetract := TRUE;
         ELSE
             io.outValveRetract := FALSE;
@@ -107,7 +107,7 @@ CASE currentState OF
     E_TwoPosActuator_State.Advancing:
         io.outValveAdvance := TRUE;
         io.outValveRetract := FALSE;
-        advanceTimer(IN := TRUE, PT := DINT_TO_TIME(cfg.cfgAdvTimeoutS * 1000));
+        advanceTimer(IN := TRUE, PT := DINT_TO_TIME(cfg.advTimeoutS * 1000));
 
         IF io.inFbkAdvanced AND NOT io.inFbkRetracted THEN
             currentState := E_TwoPosActuator_State.Advanced;
@@ -117,7 +117,7 @@ CASE currentState OF
             _Raise(
                 code   := E_TwoPosActuator_Fault.AdvanceTimeout,
                 source := 'MOTION',
-                reason := 'inFbkAdvanced did not assert within cfgAdvTimeoutS'
+                reason := 'inFbkAdvanced did not assert within advTimeoutS'
             );
             advanceTimer(IN := FALSE);
         ELSIF bothFeedbackActive THEN
@@ -139,7 +139,7 @@ CASE currentState OF
         END_IF;
 
     E_TwoPosActuator_State.Advanced:
-        IF cfg.cfgHoldAtAdvanced THEN
+        IF cfg.holdAtAdvanced THEN
             io.outValveAdvance := TRUE;
         ELSE
             io.outValveAdvance := FALSE;
@@ -165,7 +165,7 @@ CASE currentState OF
     E_TwoPosActuator_State.Retracting:
         io.outValveRetract := TRUE;
         io.outValveAdvance := FALSE;
-        retractTimer(IN := TRUE, PT := DINT_TO_TIME(cfg.cfgRetTimeoutS * 1000));
+        retractTimer(IN := TRUE, PT := DINT_TO_TIME(cfg.retTimeoutS * 1000));
 
         IF io.inFbkRetracted AND NOT io.inFbkAdvanced THEN
             currentState := E_TwoPosActuator_State.Retracted;
@@ -175,7 +175,7 @@ CASE currentState OF
             _Raise(
                 code   := E_TwoPosActuator_Fault.RetractTimeout,
                 source := 'MOTION',
-                reason := 'inFbkRetracted did not assert within cfgRetTimeoutS'
+                reason := 'inFbkRetracted did not assert within retTimeoutS'
             );
             retractTimer(IN := FALSE);
         ELSIF bothFeedbackActive THEN
@@ -207,25 +207,25 @@ END_CASE;
 // Device-specific status
 //-------------------------------------------------------------------------
 sts.state        := currentState;
-sts.stsAdvanced  := (currentState = E_TwoPosActuator_State.Advanced);
-sts.stsRetracted := (currentState = E_TwoPosActuator_State.Retracted);
-sts.stsMoving    := (currentState = E_TwoPosActuator_State.Advancing) OR
+sts.advanced  := (currentState = E_TwoPosActuator_State.Advanced);
+sts.retracted := (currentState = E_TwoPosActuator_State.Retracted);
+sts.moving    := (currentState = E_TwoPosActuator_State.Advancing) OR
                     (currentState = E_TwoPosActuator_State.Retracting);
 
-rTrigAdvanced(CLK := sts.stsAdvanced);
+rTrigAdvanced(CLK := sts.advanced);
 sts.osAdvanced := rTrigAdvanced.Q;
 
-rTrigRetracted(CLK := sts.stsRetracted);
+rTrigRetracted(CLK := sts.retracted);
 sts.osRetracted := rTrigRetracted.Q;
 
 //-------------------------------------------------------------------------
 // Common header — delegated to the base; fault/source/timestamps filled from
-// the inherited fault book-keeping and source lock. stsBusy mirrors sts.stsMoving.
+// the inherited fault book-keeping and source lock. busy mirrors sts.moving.
 //-------------------------------------------------------------------------
 _UpdateHeader(
     header      := sts.header,
     stateString := _StateToString(state := currentState),
-    stsBusy     := sts.stsMoving
+    busy     := sts.moving
 );]]></ST>
     </Implementation>
     <Folder Name="Public" Id="{f0a10001-0001-0001-0001-000000000001}" />

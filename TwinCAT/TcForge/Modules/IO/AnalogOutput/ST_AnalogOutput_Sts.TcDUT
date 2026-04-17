@@ -11,22 +11,22 @@ STRUCT
     header        : ST_DeviceHeader_Sts;
 
     {attribute 'OPC.UA.DA.Description' := 'Clamped command actually written (EU)'}
-    stsValue      : REAL;
+    value      : REAL;
     {attribute 'OPC.UA.DA.Description' := 'Last commanded value before clamping (EU, survives power cycle)'}
-    stsCommanded  : REAL;
+    commanded  : REAL;
     {attribute 'OPC.UA.DA.Description' := 'Raw value written to the terminal (REAL view of the UNION)'}
-    stsRawReal    : REAL;
-    {attribute 'OPC.UA.DA.Description' := 'Echo of cfg.cfgUnit for HMI consumption'}
-    stsUnit       : E_Unit := E_Unit.PERCENT;
+    rawReal    : REAL;
+    {attribute 'OPC.UA.DA.Description' := 'Echo of cfg.unit for HMI consumption'}
+    unit       : E_Unit := E_Unit.PERCENT;
     {attribute 'OPC.UA.DA.Description' := 'Signal quality tag'}
-    stsQuality    : E_IO_Quality := E_IO_Quality.UNKNOWN;
+    quality    : E_IO_Quality := E_IO_Quality.UNKNOWN;
 
     {attribute 'OPC.UA.DA.Description' := 'Command clamped at MinCv'}
-    stsClampedLow : BOOL;
+    clampedLow : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'Command clamped at MaxCv'}
-    stsClampedHigh: BOOL;
+    clampedHigh: BOOL;
     {attribute 'OPC.UA.DA.Description' := 'Either clamp direction active'}
-    stsClampActive: BOOL;
+    clampActive: BOOL;
 END_STRUCT
 END_TYPE]]></Declaration>
   </DUT>

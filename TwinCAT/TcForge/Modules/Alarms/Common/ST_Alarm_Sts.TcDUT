@@ -9,22 +9,22 @@
 TYPE ST_Alarm_Sts :
 STRUCT
     {attribute 'OPC.UA.DA.Description' := 'Echo of cfg.bEnable'}
-    stsEnabled    : BOOL;
+    enabled    : BOOL;
 
     {attribute 'OPC.UA.DA.Description' := 'Instantaneous condition before debounce'}
-    stsRaw        : BOOL;
+    raw        : BOOL;
 
     {attribute 'OPC.UA.DA.Description' := 'After tOnDelay / tOffDelay'}
-    stsDebounced  : BOOL;
+    debounced  : BOOL;
 
     {attribute 'OPC.UA.DA.Description' := 'Public is-it-firing bit (latch when bRequireAck)'}
-    stsActive     : BOOL;
+    active     : BOOL;
 
     {attribute 'OPC.UA.DA.Description' := 'TRUE while latch is awaiting Ack()'}
-    stsLatched    : BOOL;
+    latched    : BOOL;
 
     {attribute 'OPC.UA.DA.Description' := 'TRUE once the current latch has been acknowledged'}
-    stsAcked      : BOOL;
+    acked      : BOOL;
 
     {attribute 'OPC.UA.DA.Description' := 'Severity while active; NONE while inactive'}
     eSeverity     : E_AlarmSeverity := E_AlarmSeverity.NONE;
@@ -35,10 +35,10 @@ STRUCT
     {attribute 'OPC.UA.DA.Description' := 'Who acknowledged the current latch'}
     ackRequester  : E_Requester;
 
-    {attribute 'OPC.UA.DA.Description' := 'Last rising edge of stsDebounced (LTIME)'}
+    {attribute 'OPC.UA.DA.Description' := 'Last rising edge of debounced (LTIME)'}
     tsTripped     : LTIME;
 
-    {attribute 'OPC.UA.DA.Description' := 'Last falling edge of stsDebounced (LTIME)'}
+    {attribute 'OPC.UA.DA.Description' := 'Last falling edge of debounced (LTIME)'}
     tsCleared     : LTIME;
 
     {attribute 'OPC.UA.DA.Description' := 'Last accepted Ack() timestamp (LTIME)'}

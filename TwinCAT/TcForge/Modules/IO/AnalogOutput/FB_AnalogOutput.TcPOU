@@ -5,7 +5,7 @@
 //
 // Pipeline:
 //   SetValue -> persistent command -> clamp to MinCv/MaxCv -> EU-to-raw
-//   linear scaling -> UNION write (type chosen by cfg.cfgOutputType)
+//   linear scaling -> UNION write (type chosen by cfg.outputType)
 //
 // Command is persisted so an unexpected PLC restart resumes the last
 // requested setpoint rather than quietly writing 0 to the field device.
@@ -58,47 +58,47 @@ END_VAR]]></Declaration>
       <ST><![CDATA[// 1. First-scan config validation.
 IF _firstScan THEN
     _firstScan := FALSE;
-    _configBad := (NOT cfg.cfgUseRawValue)
-                  AND (cfg.cfgEuMax - cfg.cfgEuMin = 0.0 OR cfg.cfgRawMin > cfg.cfgRawMax);
+    _configBad := (NOT cfg.useRawValue)
+                  AND (cfg.euMax - cfg.euMin = 0.0 OR cfg.rawMin > cfg.rawMax);
 END_IF;
 
-sts.stsUnit       := cfg.cfgUnit;
-sts.stsQuality    := inpQuality;
-sts.stsCommanded  := _requestSync;
+sts.unit       := cfg.unit;
+sts.quality    := inpQuality;
+sts.commanded  := _requestSync;
 
 // 2. Clamp the command in EU space.
-sts.stsClampedLow  := FALSE;
-sts.stsClampedHigh := FALSE;
+sts.clampedLow  := FALSE;
+sts.clampedHigh := FALSE;
 _clampedEu         := _requestSync;
 
-IF NOT cfg.cfgUseRawValue THEN
-    IF _clampedEu < cfg.cfgMinCv THEN
-        _clampedEu        := cfg.cfgMinCv;
-        sts.stsClampedLow := TRUE;
-    ELSIF _clampedEu > cfg.cfgMaxCv THEN
-        _clampedEu         := cfg.cfgMaxCv;
-        sts.stsClampedHigh := TRUE;
+IF NOT cfg.useRawValue THEN
+    IF _clampedEu < cfg.minCv THEN
+        _clampedEu        := cfg.minCv;
+        sts.clampedLow := TRUE;
+    ELSIF _clampedEu > cfg.maxCv THEN
+        _clampedEu         := cfg.maxCv;
+        sts.clampedHigh := TRUE;
     END_IF;
 END_IF;
-sts.stsClampActive := sts.stsClampedLow OR sts.stsClampedHigh;
-sts.stsValue       := _clampedEu;
+sts.clampActive := sts.clampedLow OR sts.clampedHigh;
+sts.value       := _clampedEu;
 
-// 3. Scale EU -> raw (or pass through if cfgUseRawValue).
-IF cfg.cfgUseRawValue THEN
+// 3. Scale EU -> raw (or pass through if useRawValue).
+IF cfg.useRawValue THEN
     _rawReal := _clampedEu;
-ELSIF (cfg.cfgEuMax - cfg.cfgEuMin) <> 0.0 THEN
-    _rawReal := cfg.cfgRawMin
-              + (cfg.cfgRawMax - cfg.cfgRawMin)
-                * ((_clampedEu - cfg.cfgEuMin) / (cfg.cfgEuMax - cfg.cfgEuMin));
+ELSIF (cfg.euMax - cfg.euMin) <> 0.0 THEN
+    _rawReal := cfg.rawMin
+              + (cfg.rawMax - cfg.rawMin)
+                * ((_clampedEu - cfg.euMin) / (cfg.euMax - cfg.euMin));
 ELSE
     _rawReal := 0.0;
 END_IF;
-sts.stsRawReal := _rawReal;
+sts.rawReal := _rawReal;
 
-// 4. Write the UNION member matching cfg.cfgOutputType. BAD quality holds
+// 4. Write the UNION member matching cfg.outputType. BAD quality holds
 //    the previously-written value by simply skipping the write.
 IF inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED THEN
-    CASE cfg.cfgOutputType OF
+    CASE cfg.outputType OF
         __SYSTEM.TYPE_CLASS.TYPE_INT:   io.outRaw.nInt := REAL_TO_INT(_rawReal);
         __SYSTEM.TYPE_CLASS.TYPE_UINT:  io.outRaw.ui   := REAL_TO_UINT(_rawReal);
         __SYSTEM.TYPE_CLASS.TYPE_WORD:  io.outRaw.w    := REAL_TO_WORD(_rawReal);
@@ -112,15 +112,15 @@ END_IF;
 
 // 5. Quality watchdog.
 _tonBadQuality(
-    IN := inpQuality = E_IO_Quality.BAD AND cfg.cfgQualityFaultAfter > T#0MS,
-    PT := cfg.cfgQualityFaultAfter
+    IN := inpQuality = E_IO_Quality.BAD AND cfg.qualityFaultAfter > T#0MS,
+    PT := cfg.qualityFaultAfter
 );
 
 // 6. Single-source-of-truth fault raise.
 _RaiseActiveFault();
 
 // 7. Refresh shared header.
-_UpdateHeader(header := sts.header, stateString := '', stsBusy := FALSE);]]></ST>
+_UpdateHeader(header := sts.header, stateString := '', busy := FALSE);]]></ST>
     </Implementation>
     <Folder Name="Public" Id="{a0100004-0000-0000-f000-000000000001}" />
     <Folder Name="Protected" Id="{a0100004-0000-0000-f000-000000000002}" />
@@ -161,19 +161,19 @@ END_VAR]]></Declaration>
 IF _configBad THEN
     code   := E_AnalogOutput_Fault.BadConfig;
     source := 'CONFIG';
-    reason := 'cfgEuMin >= cfgEuMax or cfgRawMin > cfgRawMax';
+    reason := 'euMin >= euMax or rawMin > rawMax';
 ELSIF _tonBadQuality.Q THEN
     code   := E_AnalogOutput_Fault.BadQuality;
     source := 'QUALITY';
-    reason := 'inpQuality stayed BAD past cfgQualityFaultAfter';
-ELSIF cfg.cfgClampAsFault AND sts.stsClampedHigh THEN
+    reason := 'inpQuality stayed BAD past qualityFaultAfter';
+ELSIF cfg.clampAsFault AND sts.clampedHigh THEN
     code   := E_AnalogOutput_Fault.ClampHigh;
     source := 'CLAMP_H';
-    reason := CONCAT('Command clamped at MaxCv=', REAL_TO_STRING(cfg.cfgMaxCv));
-ELSIF cfg.cfgClampAsFault AND sts.stsClampedLow THEN
+    reason := CONCAT('Command clamped at MaxCv=', REAL_TO_STRING(cfg.maxCv));
+ELSIF cfg.clampAsFault AND sts.clampedLow THEN
     code   := E_AnalogOutput_Fault.ClampLow;
     source := 'CLAMP_L';
-    reason := CONCAT('Command clamped at MinCv=', REAL_TO_STRING(cfg.cfgMinCv));
+    reason := CONCAT('Command clamped at MinCv=', REAL_TO_STRING(cfg.minCv));
 END_IF;
 
 IF code = 0 THEN

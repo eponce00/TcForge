@@ -16,7 +16,7 @@
 //      signal-conditioning pipeline and limit alarms compose on top.
 //
 //   2. almSequenceFaulted — FB_AlarmSimple promoting the state machine's
-//      stsFaulted header bit into the alarm display without writing any logic.
+//      faulted header bit into the alarm display without writing any logic.
 //
 // Instances live here so anything in the program (MAIN, step PRGs, HMI) can
 // read / Ack() them by a stable qualified name. Config and cyclic invocation
@@ -28,7 +28,7 @@ VAR_GLOBAL
     // until a real PRESSURE_TRANSDUCER exists on GVL_HW).
     almTankPressure    : FB_AlarmLimit;
 
-    // Promotes fbStateMachine.Status.header.stsFaulted into the alarm list.
+    // Promotes fbStateMachine.Status.header.faulted into the alarm list.
     almSequenceFaulted : FB_AlarmSimple;
 END_VAR]]></Declaration>
   </GVL>

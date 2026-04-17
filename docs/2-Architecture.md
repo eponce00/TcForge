@@ -21,7 +21,7 @@ FB_DeviceBase (ABSTRACT)
 │     ├── _Raise(code, source, reason)   -- idempotent-on-code fault raise
 │     ├── _ClearFault()                  -- clears active fault, keeps history
 │     ├── _AcceptCommand(eRequester)
-│     └── _UpdateHeader(header, stateString, stsBusy)
+│     └── _UpdateHeader(header, stateString, busy)
 └── Internal state
       ├── VAR            _faultCode / _faultTs / _faultSource / _faultReason
       └── VAR PERSISTENT _lastFault* + _faultRing[0..7] OF ST_FaultEntry
@@ -194,7 +194,7 @@ Every device sts struct embeds `header : ST_DeviceHeader_Sts` as its first field
 _UpdateHeader(
     header      := sts.header,
     stateString := _StateToString(state := currentState),
-    stsBusy     := sts.stsMoving
+    busy     := sts.moving
 );
 ```
 
@@ -204,10 +204,10 @@ _UpdateHeader(
 | Header field                                   | Meaning                                               |
 | ---------------------------------------------- | ----------------------------------------------------- |
 | `stateString`                                  | Human-readable state name (device-specific)           |
-| `stsReady`                                     | Not faulted, not busy, source unlocked                |
-| `stsBusy`                                      | Transitioning / moving (device-specific)              |
-| `stsFaulted`                                   | `IsFaulted()`                                         |
-| `stsSourceLocked`                              | `bSourceLockedToProg`                                 |
+| `ready`                                     | Not faulted, not busy, source unlocked                |
+| `busy`                                      | Transitioning / moving (device-specific)              |
+| `faulted`                                   | `IsFaulted()`                                         |
+| `sourceLocked`                              | `bSourceLockedToProg`                                 |
 | `faultCode` / `faultString`                    | Current fault code + resolved string                  |
 | `faultSource` / `faultReason`                  | Current fault context (where / why)                   |
 | `lastFaultCode` / `lastFaultString`            | Most recent fault (survives Reset)                    |

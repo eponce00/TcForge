@@ -15,7 +15,7 @@ TcForge draws a clean line between the two concepts:
 | **Fault** (`E_<Dev>_Fault`) | `FB_DeviceBase` fault state / `ST_DeviceHeader_Sts` | The device itself, via the inherited `_Raise(code, source, reason)` helper. The device is broken, hung, or misconfigured. | Persists until `Reset()` on the device. | Reset the device after fixing the underlying issue. |
 | **Alarm** (`FB_Alarm*`) | Standalone alarm instance or `ST_*_Sts` on a device | A separate detector watching a signal or value. The signal condition is outside the expected range. | Follows the condition, optionally latches for ack. | Acknowledge; condition clears when the signal returns. |
 
-Both can promote into each other — a device can read `alarm.sts.stsActive` and call its own `_Raise(...)`, or an alarm can monitor a device's header (`stsFaulted`). They share the same HMI vocabulary (active / acked / severity / timestamps) but keep distinct storage so diagnostic queries stay unambiguous.
+Both can promote into each other — a device can read `alarm.sts.active` and call its own `_Raise(...)`, or an alarm can monitor a device's header (`faulted`). They share the same HMI vocabulary (active / acked / severity / timestamps) but keep distinct storage so diagnostic queries stay unambiguous.
 
 This also means: alarms **do not live in the device fault ring buffer**. If you need an alarm-history ring, run the alarm through the device's fault pipeline by promoting it to an `E_<Dev>_Fault` code — that's a deliberate authoring decision, not automatic.
 
@@ -46,24 +46,24 @@ Every alarm block fills the same status struct (analogous to `ST_DeviceHeader_St
 
 | Field | Type | Meaning |
 | ----- | ---- | ------- |
-| `stsEnabled` | `BOOL` | Echo of `cfg.bEnable`. Disabled alarms always report all flags FALSE. |
-| `stsRaw` | `BOOL` | Instantaneous condition, *before* debounce. Useful for waveforms / diagnostics. |
-| `stsDebounced` | `BOOL` | After `tOnDelay` / `tOffDelay`. This is what actually trips the alarm. |
-| `stsActive` | `BOOL` | The alarm's public "is it firing?" bit. With ack required, this is the **latch**; without, it mirrors `stsDebounced`. |
-| `stsLatched` | `BOOL` | TRUE while the alarm is latched awaiting ack. Always FALSE when `cfg.bRequireAck = FALSE`. |
-| `stsAcked` | `BOOL` | TRUE once an operator has acknowledged the current latch. Cleared when the alarm re-latches. |
+| `enabled` | `BOOL` | Echo of `cfg.bEnable`. Disabled alarms always report all flags FALSE. |
+| `raw` | `BOOL` | Instantaneous condition, *before* debounce. Useful for waveforms / diagnostics. |
+| `debounced` | `BOOL` | After `tOnDelay` / `tOffDelay`. This is what actually trips the alarm. |
+| `active` | `BOOL` | The alarm's public "is it firing?" bit. With ack required, this is the **latch**; without, it mirrors `debounced`. |
+| `latched` | `BOOL` | TRUE while the alarm is latched awaiting ack. Always FALSE when `cfg.bRequireAck = FALSE`. |
+| `acked` | `BOOL` | TRUE once an operator has acknowledged the current latch. Cleared when the alarm re-latches. |
 | `eSeverity` | `E_AlarmSeverity` | Echo of `cfg.eSeverity` while active; `NONE` when inactive. HMIs read this directly. |
 | `sMessage` | `STRING(79)` | Echo of `cfg.sMessage` — the operator-facing one-liner for this alarm. |
 | `ackRequester` | `E_Requester` | Who acknowledged the current latch (`PROG` / `OPERATOR`). |
-| `tsTripped` | `LTIME` | Timestamp of the most recent rising edge of `stsDebounced`. |
-| `tsCleared` | `LTIME` | Timestamp of the most recent falling edge of `stsDebounced`. |
+| `tsTripped` | `LTIME` | Timestamp of the most recent rising edge of `debounced`. |
+| `tsCleared` | `LTIME` | Timestamp of the most recent falling edge of `debounced`. |
 | `tsAcked` | `LTIME` | Timestamp of the most recent accepted `Ack` call. |
 
 Rules:
 
 - The alarm owns `sts`. A consumer never writes into it.
-- `stsActive` is the only field most HMI pages need. Everything else is there for forensics.
-- `eSeverity` reports `NONE` while `stsActive = FALSE` so aggregators can naïvely sum or `MAX` without special-casing.
+- `active` is the only field most HMI pages need. Everything else is there for forensics.
+- `eSeverity` reports `NONE` while `active = FALSE` so aggregators can naïvely sum or `MAX` without special-casing.
 
 ---
 
@@ -88,22 +88,22 @@ Alarms **default disabled** (`bEnable = FALSE`). Explicit enable at commissionin
 
 ```
            (condition holds tOnDelay)          (condition clears tOffDelay)
-stsRaw   ─┘┐ ┌──────────────────────────────┐   ┌──────────────────┐
+raw   ─┘┐ ┌──────────────────────────────┐   ┌──────────────────┐
            └─┘                              └───┘                  └──
-stsDebounced ──────────────┌──────────────────┐   ┌───────────────────
+debounced ──────────────┌──────────────────┐   ┌───────────────────
                            │                  │   │
-stsActive (no ack)         │                  │   │
+active (no ack)         │                  │   │
                         ───┘                  └───┘...
 
-stsActive (with ack)     ──┘                                     (until Ack())
-stsLatched (with ack)    ──┘                                     (until Ack())
-stsAcked                 ────────────────────────▲───────────────
+active (with ack)     ──┘                                     (until Ack())
+latched (with ack)    ──┘                                     (until Ack())
+acked                 ────────────────────────▲───────────────
                                                  │
                                            Ack(OPERATOR)
 ```
 
-- **Without `bRequireAck`:** `stsActive` follows `stsDebounced` directly. Self-clearing. `stsLatched` is always FALSE.
-- **With `bRequireAck`:** `stsActive` goes TRUE on the rising edge of `stsDebounced` and stays TRUE until `Ack()` is called *and* `stsDebounced` is FALSE. If the operator acks while the condition still holds, `stsAcked` goes TRUE but `stsActive` remains — this lets the HMI stop flashing while clearly showing the condition is still present.
+- **Without `bRequireAck`:** `active` follows `debounced` directly. Self-clearing. `latched` is always FALSE.
+- **With `bRequireAck`:** `active` goes TRUE on the rising edge of `debounced` and stays TRUE until `Ack()` is called *and* `debounced` is FALSE. If the operator acks while the condition still holds, `acked` goes TRUE but `active` remains — this lets the HMI stop flashing while clearly showing the condition is still present.
 
 ---
 
@@ -149,7 +149,7 @@ Debounced / lat-chable boolean mirror. Use to wrap any digital condition the HMI
 - **Outputs:** `sts : ST_Alarm_Sts`
 - **Extra cfg:** *none* (just the common fields)
 
-Typical use: promote a device header flag (`dev.sts.header.stsFaulted`) or a plant condition (`door.sts.stsOpen`) into the alarm display vocabulary without writing any logic.
+Typical use: promote a device header flag (`dev.sts.header.faulted`) or a plant condition (`door.sts.stsOpen`) into the alarm display vocabulary without writing any logic.
 
 ### 8.7.2 `FB_AlarmThreshold`
 
@@ -229,7 +229,7 @@ Two common patterns:
 
 ### 8.9.1 Device composes alarms internally
 
-The device owns several alarm FB instances, reads `alarm.sts.stsActive`, and promotes selected ones to its own fault codes. Used when the alarm is a device-specific concern (a clamp's position-deviation alarm, a pump's pressure Hi).
+The device owns several alarm FB instances, reads `alarm.sts.active`, and promotes selected ones to its own fault codes. Used when the alarm is a device-specific concern (a clamp's position-deviation alarm, a pump's pressure Hi).
 
 ```iecst
 FUNCTION_BLOCK FB_Pump EXTENDS FB_DeviceBase
@@ -238,7 +238,7 @@ VAR
 END_VAR
 // body:
 almHighTemp(cfg := cfg.almHighTemp, inpValue := sts.stsMotorTempC);
-IF almHighTemp.sts.stsActive AND cfg.bPromoteHighTempToFault THEN
+IF almHighTemp.sts.active AND cfg.bPromoteHighTempToFault THEN
     _Raise(
         code   := E_Pump_Fault.MotorOverTemp,
         source := 'ALM_TEMP',
@@ -257,10 +257,10 @@ GVL_ALARMS.almTankOverfill.cfg.fThreshold := 95.0;
 GVL_ALARMS.almTankOverfill.cfg.bFailHigh  := TRUE;
 GVL_ALARMS.almTankOverfill.cfg.eSeverity  := E_AlarmSeverity.CRITICAL;
 GVL_ALARMS.almTankOverfill.cfg.sMessage   := 'Tank 1 level > 95%';
-GVL_ALARMS.almTankOverfill(inpValue := GVL_HW.LEVEL_SENSOR_1.sts.stsValue);
+GVL_ALARMS.almTankOverfill(inpValue := GVL_HW.LEVEL_SENSOR_1.sts.value);
 ```
 
-The HMI binds to `GVL_ALARMS.almTankOverfill.sts.stsActive`, `.eSeverity`, `.sMessage`, `.tsTripped` — and can call `.Ack()` over OPC UA because all alarm FBs expose that method as an RPC.
+The HMI binds to `GVL_ALARMS.almTankOverfill.sts.active`, `.eSeverity`, `.sMessage`, `.tsTripped` — and can call `.Ack()` over OPC UA because all alarm FBs expose that method as an RPC.
 
 ---
 

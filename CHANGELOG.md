@@ -20,6 +20,20 @@ changes are called out explicitly under each release.
 
 ### Changed
 
+- **DUT member prefixes dropped — BREAKING** — the redundant `cfg` / `sts`
+  prefixes on members of every `ST_*_Cfg` and `ST_*_Sts` struct (plus
+  `ST_DeviceHeader_Sts`, `ST_Permissive_Faceplate`, `ST_Interlock_Faceplate`)
+  were removed. Reading `dev.cfg.cfgInputType` or `dev.sts.stsValue` was
+  noisy — the container already says the role. Members now read cleanly:
+  `dev.cfg.inputType`, `dev.sts.value`, `dev.sts.header.faulted`,
+  `faceplate.ok`, `faceplate.bypassable`, etc. Unprefixed fields
+  (e.g. `faultCode`, `lastFaultString`, `tsLastCommand`) were already in
+  the target style and are unchanged. FB-level identifier prefixes (`inp*`
+  on VAR_INPUT, `_private` on internals) are unrelated and kept — they
+  signal *visibility*, not *role*. Every call site in the library, the
+  `TcForgeExample` project, the unit-test suite, and the docs was updated
+  by word-boundary rename. Existing application code referencing the old
+  names must rename their accessors.
 - **`FB_StateMachine`** streamlined — a new private `_ClearCommandFlags`
   helper collapses the seven-line command-flag boilerplate that appeared
   inside `Abort`/`Home`/`Pause`/`Proceed`/`Start`/`Stop`. Method-local temps
@@ -71,7 +85,7 @@ changes are called out explicitly under each release.
   `fDt` / `fTau`, first-sample seeding, convergence, and error-flag
   bookkeeping.
 - **`FB_DigitalOutput_Test`** (12 cases) — command routing through
-  `F_ValidateRequester` (source lock), debounce on/off, `cfgInvert` in
+  `F_ValidateRequester` (source lock), debounce on/off, `invert` in
   Regular mode, bad-quality last-known-good hold, one-scan edge pulses,
   and SinglePulse arm/cancel.
 - **`FB_DigitalInput_Test`** (10 cases) via `FB_DigitalInput_Probe` —
@@ -81,12 +95,12 @@ changes are called out explicitly under each release.
   — state machine (Undefined / Advancing / Advanced / Retracting /
   Retracted / Faulted), permissive gating, source-locked arbitration,
   both-feedback and lost-feedback faults, `Abort` always accepted, and
-  `header.stsBusy` mirroring `stsMoving`. Time-dependent timeout paths
+  `header.busy` mirroring `moving`. Time-dependent timeout paths
   deferred to integration testing.
 - **`FB_AnalogInput_Test`** (12 cases) via `FB_AnalogInput_Probe` —
   conditioning pipeline end-to-end: initial status, linear scaling
   endpoints + midpoint, raw bypass, clamp-low / clamp-high with
-  stsClamped* reporting, `CLAMPED` quality promotion, `cfgClampAsFault`
+  `clamped*` reporting, `CLAMPED` quality promotion, `clampAsFault`
   promoting clamps to `ClampLow` / `ClampHigh` faults, `BadConfig` on
   first scan, BAD-quality last-known-good hold, `TYPE_REAL` UNION
   member selection, and quality-tag propagation. Unblocked by the
@@ -116,7 +130,7 @@ Full suite: 118 tests across 12 suites, green on the remote runtime
   episode; `_ClearFault()` preserves history.
 - **`FB_AnalogInput`** simplified — embedded HH/HI/LO/LL process-alarm
   logic and clamp-threshold handling removed. Alarms compose externally
-  via `FB_AlarmLimit` watching `stsValue`. The analog block is now a pure
+  via `FB_AlarmLimit` watching `value`. The analog block is now a pure
   signal-conditioning pipeline.
 - **`F_ValidateRequester`** signature collapsed to three parameters
   (`eRequester`, `bSourceLocked`, `bFaulted`) — the `bAllowWhenFaulted`

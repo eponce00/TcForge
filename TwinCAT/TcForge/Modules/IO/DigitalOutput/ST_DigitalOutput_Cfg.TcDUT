@@ -9,26 +9,26 @@ TYPE ST_DigitalOutput_Cfg :
 STRUCT
     // Signal conditioning
     {attribute 'OPC.UA.DA.Description' := 'Invert output signal (active-low actuators). Regular mode only.'}
-    cfgInvert            : BOOL := FALSE;
+    invert            : BOOL := FALSE;
 
     // Asymmetric debounce of the commanded value (not the physical output).
     // Useful for suppressing chatter from the commander. T#0MS disables.
     {attribute 'OPC.UA.DA.Description' := 'OFF->ON debounce delay on commanded value'}
-    cfgDebounceOn        : TIME := T#0MS;
+    debounceOn        : TIME := T#0MS;
     {attribute 'OPC.UA.DA.Description' := 'ON->OFF debounce delay on commanded value'}
-    cfgDebounceOff       : TIME := T#0MS;
+    debounceOff       : TIME := T#0MS;
 
     // Output mode
     {attribute 'OPC.UA.DA.Description' := 'Regular, SinglePulse, or ContinuousPulse'}
-    cfgMode              : E_DigitalOutput_Mode := E_DigitalOutput_Mode.Regular;
+    mode              : E_DigitalOutput_Mode := E_DigitalOutput_Mode.Regular;
     {attribute 'OPC.UA.DA.Description' := 'ON duration for pulse modes'}
-    cfgPulseOn           : TIME := T#100MS;
+    pulseOn           : TIME := T#100MS;
     {attribute 'OPC.UA.DA.Description' := 'OFF duration for ContinuousPulse mode'}
-    cfgPulseOff          : TIME := T#100MS;
+    pulseOff          : TIME := T#100MS;
 
     // Quality watchdog
     {attribute 'OPC.UA.DA.Description' := 'Raise BadQuality fault after this long in BAD quality (T#0MS = disabled)'}
-    cfgQualityFaultAfter : TIME := T#0MS;
+    qualityFaultAfter : TIME := T#0MS;
 END_STRUCT
 END_TYPE]]></Declaration>
   </DUT>

@@ -13,7 +13,7 @@
 //
 // Inversion deliberately only applies in Regular mode — inverting a pulse
 // train just phase-shifts it, which is rarely what the author means. Pulse
-// behaviour should be shaped through cfg.cfgPulseOn / cfg.cfgPulseOff.
+// behaviour should be shaped through cfg.pulseOn / cfg.pulseOff.
 {attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_DigitalOutput EXTENDS FB_DeviceBase
 VAR_INPUT
@@ -72,13 +72,13 @@ VAR
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[// 1. Publish quality + commanded value before any gating.
-sts.stsQuality   := inpQuality;
-sts.stsCommanded := _requestSync;
+sts.quality   := inpQuality;
+sts.commanded := _requestSync;
 
 // 2. Asymmetric debounce on commanded value. Keeps pulse timers in sync
 //    with the debounced edge, not the raw request.
-_tonOn (IN := _requestSync, PT := cfg.cfgDebounceOn);
-_tofOff(IN := _requestSync, PT := cfg.cfgDebounceOff);
+_tonOn (IN := _requestSync, PT := cfg.debounceOn);
+_tofOff(IN := _requestSync, PT := cfg.debounceOff);
 
 IF _requestSync AND _tonOn.Q THEN
     _debouncedCmd := TRUE;
@@ -87,12 +87,12 @@ ELSIF NOT _requestSync AND NOT _tofOff.Q THEN
 END_IF;
 
 // 3. Mode shaping.
-CASE cfg.cfgMode OF
+CASE cfg.mode OF
     E_DigitalOutput_Mode.Regular:
         _tonPulseOn (IN := FALSE);
         _tonPulseOff(IN := FALSE);
         _pulseActive := FALSE;
-        IF cfg.cfgInvert THEN
+        IF cfg.invert THEN
             _finalOutput := NOT _debouncedCmd;
         ELSE
             _finalOutput := _debouncedCmd;
@@ -106,7 +106,7 @@ CASE cfg.cfgMode OF
         END_IF;
 
         IF _pulseActive THEN
-            _tonPulseOn(IN := TRUE, PT := cfg.cfgPulseOn);
+            _tonPulseOn(IN := TRUE, PT := cfg.pulseOn);
             IF _tonPulseOn.Q THEN
                 _pulseActive := FALSE;
             END_IF;
@@ -126,14 +126,14 @@ CASE cfg.cfgMode OF
         // pulse timers as a simple state machine.
         IF _debouncedCmd THEN
             IF _pulseActive THEN
-                _tonPulseOn (IN := TRUE, PT := cfg.cfgPulseOn);
+                _tonPulseOn (IN := TRUE, PT := cfg.pulseOn);
                 _tonPulseOff(IN := FALSE);
                 IF _tonPulseOn.Q THEN
                     _pulseActive := FALSE;
                     _tonPulseOn(IN := FALSE);
                 END_IF;
             ELSE
-                _tonPulseOff(IN := TRUE, PT := cfg.cfgPulseOff);
+                _tonPulseOff(IN := TRUE, PT := cfg.pulseOff);
                 _tonPulseOn (IN := FALSE);
                 IF _tonPulseOff.Q THEN
                     _pulseActive := TRUE;
@@ -156,29 +156,29 @@ IF inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED THEN
 END_IF;
 
 // 5. Edge pulses reflect the *physical* output, not the command.
-sts.stsRisingEdge  :=      io.outSignal AND NOT _prevPhysical;
-sts.stsFallingEdge := NOT io.outSignal AND     _prevPhysical;
+sts.risingEdge  :=      io.outSignal AND NOT _prevPhysical;
+sts.fallingEdge := NOT io.outSignal AND     _prevPhysical;
 _prevPhysical := io.outSignal;
 _prevDebounced := _debouncedCmd;
 
-sts.stsValue := io.outSignal;
+sts.value := io.outSignal;
 
 // 6. Quality watchdog.
 _tonBadQuality(
-    IN := inpQuality = E_IO_Quality.BAD AND cfg.cfgQualityFaultAfter > T#0MS,
-    PT := cfg.cfgQualityFaultAfter
+    IN := inpQuality = E_IO_Quality.BAD AND cfg.qualityFaultAfter > T#0MS,
+    PT := cfg.qualityFaultAfter
 );
 
 IF _tonBadQuality.Q THEN
     _Raise(
         code   := E_DigitalOutput_Fault.BadQuality,
         source := 'QUALITY',
-        reason := 'inpQuality stayed BAD past cfgQualityFaultAfter'
+        reason := 'inpQuality stayed BAD past qualityFaultAfter'
     );
 END_IF;
 
 // 7. Refresh shared header.
-_UpdateHeader(header := sts.header, stateString := '', stsBusy := FALSE);]]></ST>
+_UpdateHeader(header := sts.header, stateString := '', busy := FALSE);]]></ST>
     </Implementation>
     <Folder Name="Public" Id="{a0100002-0000-0000-f000-000000000001}" />
     <Folder Name="Protected" Id="{a0100002-0000-0000-f000-000000000002}" />

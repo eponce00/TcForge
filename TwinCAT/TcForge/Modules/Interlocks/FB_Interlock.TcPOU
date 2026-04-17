@@ -128,12 +128,12 @@ END_VAR]]></Declaration>
         <ST><![CDATA[FOR i := 0 TO 63 DO
     bitMask := SHL(ULINT#1, i);
     sts.aFaceplates[i].name          := cfg.aNames[i];
-    sts.aFaceplates[i].stsOK         := (sts.nInterlocks AND bitMask) <> 0;
-    sts.aFaceplates[i].stsLive       := (_core.nLiveBits  AND bitMask) <> 0;
-    sts.aFaceplates[i].stsLatched    := ((_core.nActiveMask AND bitMask) <> 0) AND ((_latchedBits AND bitMask) = 0);
-    sts.aFaceplates[i].stsMapped     := (_core.nActiveMask AND bitMask) <> 0;
-    sts.aFaceplates[i].stsBypassed   := (_core.nBypassMask AND bitMask) <> 0;
-    sts.aFaceplates[i].cfgBypassable := (cfg.nBypassable   AND bitMask) <> 0;
+    sts.aFaceplates[i].ok         := (sts.nInterlocks AND bitMask) <> 0;
+    sts.aFaceplates[i].live       := (_core.nLiveBits  AND bitMask) <> 0;
+    sts.aFaceplates[i].latched    := ((_core.nActiveMask AND bitMask) <> 0) AND ((_latchedBits AND bitMask) = 0);
+    sts.aFaceplates[i].mapped     := (_core.nActiveMask AND bitMask) <> 0;
+    sts.aFaceplates[i].bypassed   := (_core.nBypassMask AND bitMask) <> 0;
+    sts.aFaceplates[i].bypassable := (cfg.nBypassable   AND bitMask) <> 0;
 END_FOR;]]></ST>
       </Implementation>
     </Method>

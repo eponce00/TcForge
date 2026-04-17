@@ -15,7 +15,7 @@
 //   - Reset() is always accepted from any requester — safety invariant
 //   - _UpdateHeader() mirrors the active/last fault, source-lock, busy,
 //     and ready state into ST_DeviceHeader_Sts
-//   - LockSource() makes stsSourceLocked and forces stsReady FALSE
+//   - LockSource() makes sourceLocked and forces ready FALSE
 FUNCTION_BLOCK FB_DeviceBase_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
     <Implementation>
       <ST><![CDATA[FreshInstanceNotFaulted();
@@ -185,7 +185,7 @@ AssertEquals_DINT(
 
 // Header must still preserve last-fault fields so the HMI can render
 // "last fault: motion timeout".
-fb.Refresh(stateString := 'IDLE', stsBusy := FALSE);
+fb.Refresh(stateString := 'IDLE', busy := FALSE);
 
 AssertEquals_DINT(
     Expected := 42,
@@ -235,14 +235,14 @@ END_VAR]]></Declaration>
         <ST><![CDATA[TEST('HeaderMirrorsActiveFault');
 
 fb.ProbeRaise(code := 99, source := 'limit_sw', reason := 'upper limit hit');
-fb.Refresh(stateString := 'FAULTED', stsBusy := FALSE);
+fb.Refresh(stateString := 'FAULTED', busy := FALSE);
 
 AssertTrue(
-    Condition := fb.header.stsFaulted,
-    Message   := 'header.stsFaulted must be TRUE while a fault is active');
+    Condition := fb.header.faulted,
+    Message   := 'header.faulted must be TRUE while a fault is active');
 AssertFalse(
-    Condition := fb.header.stsReady,
-    Message   := 'header.stsReady must be FALSE while faulted');
+    Condition := fb.header.ready,
+    Message   := 'header.ready must be FALSE while faulted');
 AssertEquals_DINT(
     Expected := 99,
     Actual   := fb.header.faultCode,
@@ -275,20 +275,20 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('HeaderReadyGoesFalseOnSourceLock');
 
-fb.Refresh(stateString := 'IDLE', stsBusy := FALSE);
+fb.Refresh(stateString := 'IDLE', busy := FALSE);
 AssertTrue(
-    Condition := fb.header.stsReady,
+    Condition := fb.header.ready,
     Message   := 'Precondition: an idle / unlocked / unfaulted device must be ready');
 
 fb.LockSource(bLock := TRUE);
-fb.Refresh(stateString := 'IDLE', stsBusy := FALSE);
+fb.Refresh(stateString := 'IDLE', busy := FALSE);
 
 AssertTrue(
-    Condition := fb.header.stsSourceLocked,
-    Message   := 'header.stsSourceLocked must mirror LockSource(TRUE)');
+    Condition := fb.header.sourceLocked,
+    Message   := 'header.sourceLocked must mirror LockSource(TRUE)');
 AssertFalse(
-    Condition := fb.header.stsReady,
-    Message   := 'header.stsReady must be FALSE while source is locked');
+    Condition := fb.header.ready,
+    Message   := 'header.ready must be FALSE while source is locked');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -301,14 +301,14 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('HeaderReadyGoesFalseOnBusy');
 
-fb.Refresh(stateString := 'MOVING', stsBusy := TRUE);
+fb.Refresh(stateString := 'MOVING', busy := TRUE);
 
 AssertTrue(
-    Condition := fb.header.stsBusy,
-    Message   := 'header.stsBusy must mirror the busy flag passed to _UpdateHeader');
+    Condition := fb.header.busy,
+    Message   := 'header.busy must mirror the busy flag passed to _UpdateHeader');
 AssertFalse(
-    Condition := fb.header.stsReady,
-    Message   := 'header.stsReady must be FALSE while busy');
+    Condition := fb.header.ready,
+    Message   := 'header.ready must be FALSE while busy');
 
 TEST_FINISHED();]]></ST>
       </Implementation>

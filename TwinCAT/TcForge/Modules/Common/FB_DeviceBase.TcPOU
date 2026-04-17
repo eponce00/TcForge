@@ -204,21 +204,21 @@ _faultReason := '';]]></ST>
     <Method Name="_UpdateHeader" Id="{c0000001-0000-0000-1000-00000000000a}" FolderPath="Protected\">
       <Declaration><![CDATA[// Refreshes the common header a child embeds as `header` in its sts struct.
 // Call once per cycle from the child's cyclic body. Device-specific fields
-// (stsAdvanced, stsValue, etc.) stay in the child sts alongside `header`.
+// (advanced, value, etc.) stay in the child sts alongside `header`.
 METHOD PROTECTED _UpdateHeader
 VAR_IN_OUT
     header : ST_DeviceHeader_Sts;
 END_VAR
 VAR_INPUT
     stateString : STRING(31);
-    stsBusy     : BOOL;
+    busy     : BOOL;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[header.stateString     := stateString;
-header.stsBusy         := stsBusy;
-header.stsFaulted      := _faultCode <> 0;
-header.stsReady        := NOT header.stsFaulted AND NOT stsBusy AND NOT bSourceLockedToProg;
-header.stsSourceLocked := bSourceLockedToProg;
+header.busy         := busy;
+header.faulted      := _faultCode <> 0;
+header.ready        := NOT header.faulted AND NOT busy AND NOT bSourceLockedToProg;
+header.sourceLocked := bSourceLockedToProg;
 header.faultCode       := _faultCode;
 header.faultString     := THIS^.ResolveFaultString(code := _faultCode);
 header.faultSource     := _faultSource;

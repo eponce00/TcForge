@@ -368,13 +368,13 @@ intlkRunning();
     END_IF;
 
     //-------------------------------------------------------------------------
-    // Common device header (stateString, stsReady/Busy/Faulted/SourceLocked,
+    // Common device header (stateString, ready/Busy/Faulted/SourceLocked,
     // fault codes + strings, timestamps). Published via Status.header.
     //-------------------------------------------------------------------------
     _UpdateHeader(
         header      := Status.header,
         stateString := _StateToString(state := Status.State),
-        stsBusy     := Status.ActiveState
+        busy     := Status.ActiveState
     );
 ]]></ST>
     </Implementation>
@@ -396,10 +396,10 @@ Status.Step.PermStatus.nFirstFailureBitIndex := 999;
 FOR i := 0 TO 63 DO
     Status.Step.PermCfg.aNames[i]                       := '';
     Status.Step.PermStatus.aFaceplates[i].name          := '';
-    Status.Step.PermStatus.aFaceplates[i].stsOK         := FALSE;
-    Status.Step.PermStatus.aFaceplates[i].stsMapped     := FALSE;
-    Status.Step.PermStatus.aFaceplates[i].stsBypassed   := FALSE;
-    Status.Step.PermStatus.aFaceplates[i].cfgBypassable := FALSE;
+    Status.Step.PermStatus.aFaceplates[i].ok         := FALSE;
+    Status.Step.PermStatus.aFaceplates[i].mapped     := FALSE;
+    Status.Step.PermStatus.aFaceplates[i].bypassed   := FALSE;
+    Status.Step.PermStatus.aFaceplates[i].bypassable := FALSE;
 END_FOR;]]></ST>
             </Implementation>
         </Method>

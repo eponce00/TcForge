@@ -13,8 +13,8 @@ TYPE E_TwoPosActuator_Fault :
 (
     None                := 0,
 
-    AdvanceTimeout      := 1,     // outValveAdvance asserted but inFbkAdvanced didn't arrive in cfgAdvTimeoutS
-    RetractTimeout      := 2,     // outValveRetract asserted but inFbkRetracted didn't arrive in cfgRetTimeoutS
+    AdvanceTimeout      := 1,     // outValveAdvance asserted but inFbkAdvanced didn't arrive in advTimeoutS
+    RetractTimeout      := 2,     // outValveRetract asserted but inFbkRetracted didn't arrive in retTimeoutS
 
     BothFeedbackOn      := 10,    // inFbkAdvanced AND inFbkRetracted simultaneously — impossible sensor state
     NoFeedback          := 11,    // neither feedback asserted when one is expected

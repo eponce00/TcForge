@@ -12,7 +12,7 @@
 //     -> linear EU scaling -> optional LPF -> sts
 //
 // Scope: all synchronous conditioning behaviour. Time-dependent paths
-// (cfgQualityFaultAfter watchdog, cfgFilterTau smoothing over many
+// (qualityFaultAfter watchdog, filterTau smoothing over many
 // samples) are already covered by FB_DeviceBase_Test and
 // FB_LPF_FirstOrder_IIR_Test respectively.
 FUNCTION_BLOCK FB_AnalogInput_Test EXTENDS TcUnit.FB_TestSuite
@@ -47,16 +47,16 @@ END_VAR]]></Declaration>
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := ABS(fb.sts.stsValue) < TOL,
-    Message   := 'Fresh instance must publish stsValue = 0 for a raw input of 0');
+    Condition := ABS(fb.sts.value) < TOL,
+    Message   := 'Fresh instance must publish value = 0 for a raw input of 0');
 AssertTrue(
-    Condition := ABS(fb.sts.stsRawReal) < TOL,
-    Message   := 'Fresh instance must publish stsRawReal = 0');
+    Condition := ABS(fb.sts.rawReal) < TOL,
+    Message   := 'Fresh instance must publish rawReal = 0');
 AssertFalse(
-    Condition := fb.sts.stsClampActive,
-    Message   := 'Raw 0 is inside [0, 32767] so stsClampActive must be FALSE');
+    Condition := fb.sts.clampActive,
+    Message   := 'Raw 0 is inside [0, 32767] so clampActive must be FALSE');
 AssertFalse(
-    Condition := fb.sts.header.stsFaulted,
+    Condition := fb.sts.header.faulted,
     Message   := 'Fresh instance must not be faulted');
 
 TEST_FINISHED();]]></ST>
@@ -73,26 +73,26 @@ END_VAR]]></Declaration>
 // Default cfg: raw 0..32767 -> EU 0..100. Verify the two endpoints and
 // the midpoint land where the linear recurrence says they should.
 //
-//     stsValue = cfgEuMin + (raw - cfgRawMin)
-//                           * (cfgEuMax - cfgEuMin)
-//                           / (cfgRawMax - cfgRawMin)
+//     value = euMin + (raw - rawMin)
+//                           * (euMax - euMin)
+//                           / (rawMax - rawMin)
 
 fb.SetRawInt(nValue := 0);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
-    Condition := ABS(fb.sts.stsValue - 0.0) < TOL,
-    Message   := 'Raw = cfgRawMin must map to cfgEuMin (0 %)');
+    Condition := ABS(fb.sts.value - 0.0) < TOL,
+    Message   := 'Raw = rawMin must map to euMin (0 %)');
 
 fb.SetRawInt(nValue := 32767);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
-    Condition := ABS(fb.sts.stsValue - 100.0) < TOL,
-    Message   := 'Raw = cfgRawMax must map to cfgEuMax (100 %)');
+    Condition := ABS(fb.sts.value - 100.0) < TOL,
+    Message   := 'Raw = rawMax must map to euMax (100 %)');
 
 fb.SetRawInt(nValue := 16384);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
-    Condition := ABS(fb.sts.stsValue - 50.0015) < 0.01,
+    Condition := ABS(fb.sts.value - 50.0015) < 0.01,
     Message   := 'Raw ~ midpoint must map to EU ~ 50 %');
 
 TEST_FINISHED();]]></ST>
@@ -106,24 +106,24 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('RawBypassSkipsClampAndScaling');
 
-// cfgUseRawValue = TRUE publishes the raw REAL directly and suppresses
+// useRawValue = TRUE publishes the raw REAL directly and suppresses
 // the clamp flags even when the raw value is outside the scaling range.
-fb.cfg.cfgUseRawValue := TRUE;
+fb.cfg.useRawValue := TRUE;
 fb.SetRawInt(nValue := 30000);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := ABS(fb.sts.stsValue - fb.sts.stsRawReal) < TOL,
-    Message   := 'With cfgUseRawValue = TRUE, stsValue must equal stsRawReal');
+    Condition := ABS(fb.sts.value - fb.sts.rawReal) < TOL,
+    Message   := 'With useRawValue = TRUE, value must equal rawReal');
 AssertFalse(
-    Condition := fb.sts.stsClampedLow,
-    Message   := 'Raw bypass must not flag stsClampedLow');
+    Condition := fb.sts.clampedLow,
+    Message   := 'Raw bypass must not flag clampedLow');
 AssertFalse(
-    Condition := fb.sts.stsClampedHigh,
-    Message   := 'Raw bypass must not flag stsClampedHigh');
+    Condition := fb.sts.clampedHigh,
+    Message   := 'Raw bypass must not flag clampedHigh');
 AssertFalse(
-    Condition := fb.sts.stsClampActive,
-    Message   := 'Raw bypass must not flag stsClampActive');
+    Condition := fb.sts.clampActive,
+    Message   := 'Raw bypass must not flag clampActive');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -136,23 +136,23 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('ClampLowReportsAndHoldsAtRawMin');
 
-// Drive the raw INT below cfgRawMin. The clamp must flag stsClampedLow
-// and pin the scaled value at cfgEuMin.
+// Drive the raw INT below rawMin. The clamp must flag clampedLow
+// and pin the scaled value at euMin.
 fb.SetRawInt(nValue := -500);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.stsClampedLow,
-    Message   := 'Raw below cfgRawMin must set stsClampedLow');
+    Condition := fb.sts.clampedLow,
+    Message   := 'Raw below rawMin must set clampedLow');
 AssertTrue(
-    Condition := fb.sts.stsClampActive,
-    Message   := 'stsClampActive must be TRUE whenever either clamp direction is active');
+    Condition := fb.sts.clampActive,
+    Message   := 'clampActive must be TRUE whenever either clamp direction is active');
 AssertTrue(
-    Condition := ABS(fb.sts.stsValue - 0.0) < TOL,
-    Message   := 'Clamped-low output must pin to cfgEuMin (0 %)');
+    Condition := ABS(fb.sts.value - 0.0) < TOL,
+    Message   := 'Clamped-low output must pin to euMin (0 %)');
 AssertFalse(
-    Condition := fb.sts.header.stsFaulted,
-    Message   := 'cfgClampAsFault = FALSE by default; clamp alone must not fault the device');
+    Condition := fb.sts.header.faulted,
+    Message   := 'clampAsFault = FALSE by default; clamp alone must not fault the device');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -165,21 +165,21 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('ClampHighReportsAndHoldsAtRawMax');
 
-// Use REAL input so we can inject a raw that is clearly above cfgRawMax
+// Use REAL input so we can inject a raw that is clearly above rawMax
 // (INT saturates at 32767; REAL doesn't).
-fb.cfg.cfgInputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
 fb.SetRawReal(fValue := 40000.0);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.stsClampedHigh,
-    Message   := 'Raw above cfgRawMax must set stsClampedHigh');
+    Condition := fb.sts.clampedHigh,
+    Message   := 'Raw above rawMax must set clampedHigh');
 AssertTrue(
-    Condition := fb.sts.stsClampActive,
-    Message   := 'stsClampActive must be TRUE when stsClampedHigh is set');
+    Condition := fb.sts.clampActive,
+    Message   := 'clampActive must be TRUE when clampedHigh is set');
 AssertTrue(
-    Condition := ABS(fb.sts.stsValue - 100.0) < TOL,
-    Message   := 'Clamped-high output must pin to cfgEuMax (100 %)');
+    Condition := ABS(fb.sts.value - 100.0) < TOL,
+    Message   := 'Clamped-high output must pin to euMax (100 %)');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -193,16 +193,16 @@ END_VAR]]></Declaration>
         <ST><![CDATA[TEST('ClampPromotesGoodQualityToClamped');
 
 // When the raw input is clamping *and* inpQuality = GOOD, the FB must
-// promote stsQuality to CLAMPED to signal "reading is legal but pinned".
+// promote quality to CLAMPED to signal "reading is legal but pinned".
 fb.SetRawInt(nValue := -1);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.stsClampActive,
-    Message   := 'Precondition: stsClampActive must be TRUE');
+    Condition := fb.sts.clampActive,
+    Message   := 'Precondition: clampActive must be TRUE');
 AssertEquals_DINT(
     Expected := TO_DINT(TcForge.E_IO_Quality.CLAMPED),
-    Actual   := TO_DINT(fb.sts.stsQuality),
+    Actual   := TO_DINT(fb.sts.quality),
     Message  := 'GOOD quality must be promoted to CLAMPED while clamping');
 
 TEST_FINISHED();]]></ST>
@@ -216,13 +216,13 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('ClampAsFaultRaisesClampLow');
 
-fb.cfg.cfgClampAsFault := TRUE;
+fb.cfg.clampAsFault := TRUE;
 fb.SetRawInt(nValue := -10);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.header.stsFaulted,
-    Message   := 'cfgClampAsFault + raw below RawMin must fault the device');
+    Condition := fb.sts.header.faulted,
+    Message   := 'clampAsFault + raw below RawMin must fault the device');
 AssertEquals_DINT(
     Expected := TcForge.E_AnalogInput_Fault.ClampLow,
     Actual   := fb.sts.header.faultCode,
@@ -239,14 +239,14 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('ClampAsFaultRaisesClampHigh');
 
-fb.cfg.cfgClampAsFault := TRUE;
-fb.cfg.cfgInputType    := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.clampAsFault := TRUE;
+fb.cfg.inputType    := __SYSTEM.TYPE_CLASS.TYPE_REAL;
 fb.SetRawReal(fValue := 50000.0);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.header.stsFaulted,
-    Message   := 'cfgClampAsFault + raw above RawMax must fault the device');
+    Condition := fb.sts.header.faulted,
+    Message   := 'clampAsFault + raw above RawMax must fault the device');
 AssertEquals_DINT(
     Expected := TcForge.E_AnalogInput_Fault.ClampHigh,
     Actual   := fb.sts.header.faultCode,
@@ -263,15 +263,15 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('BadConfigRaisesFaultOnFirstScan');
 
-// BadConfig check runs once on the first scan. Set cfgRawMin >= cfgRawMax
+// BadConfig check runs once on the first scan. Set rawMin >= rawMax
 // BEFORE the first cyclic call so the validation can latch _configBad.
-fb.cfg.cfgRawMin := 100.0;
-fb.cfg.cfgRawMax := 100.0;
+fb.cfg.rawMin := 100.0;
+fb.cfg.rawMax := 100.0;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.header.stsFaulted,
-    Message   := 'cfgRawMin >= cfgRawMax must fault the device as BadConfig');
+    Condition := fb.sts.header.faulted,
+    Message   := 'rawMin >= rawMax must fault the device as BadConfig');
 AssertEquals_DINT(
     Expected := TcForge.E_AnalogInput_Fault.BadConfig,
     Actual   := fb.sts.header.faultCode,
@@ -292,7 +292,7 @@ END_VAR]]></Declaration>
 // Establish a good reading first.
 fb.SetRawInt(nValue := 10000);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
-snapshotRaw := fb.sts.stsRawReal;
+snapshotRaw := fb.sts.rawReal;
 
 // Flip quality to BAD and change the raw wire. The FB must discard the
 // fresh value and hold the last-known-good raw reading.
@@ -300,8 +300,8 @@ fb.SetRawInt(nValue := 25000);
 fb(inpQuality := TcForge.E_IO_Quality.BAD);
 
 AssertTrue(
-    Condition := ABS(fb.sts.stsRawReal - snapshotRaw) < TOL,
-    Message   := 'BAD quality must hold stsRawReal at the last-known-good value');
+    Condition := ABS(fb.sts.rawReal - snapshotRaw) < TOL,
+    Message   := 'BAD quality must hold rawReal at the last-known-good value');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -317,21 +317,21 @@ END_VAR]]></Declaration>
 // Select the REAL UNION member and reconfigure scaling so raw == EU,
 // then confirm the FB reads the REAL alias rather than some other
 // reinterpretation of the same bytes.
-fb.cfg.cfgInputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
-fb.cfg.cfgRawMin    := 0.0;
-fb.cfg.cfgRawMax    := 100.0;
-fb.cfg.cfgEuMin     := 0.0;
-fb.cfg.cfgEuMax     := 100.0;
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMin    := 0.0;
+fb.cfg.rawMax    := 100.0;
+fb.cfg.euMin     := 0.0;
+fb.cfg.euMax     := 100.0;
 
 fb.SetRawReal(fValue := 42.5);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := ABS(fb.sts.stsRawReal - 42.5) < TOL,
-    Message   := 'TYPE_REAL must read io.inRaw.fReal directly into stsRawReal');
+    Condition := ABS(fb.sts.rawReal - 42.5) < TOL,
+    Message   := 'TYPE_REAL must read io.inRaw.fReal directly into rawReal');
 AssertTrue(
-    Condition := ABS(fb.sts.stsValue - 42.5) < TOL,
-    Message   := 'Identity scaling must leave stsValue equal to the raw REAL input');
+    Condition := ABS(fb.sts.value - 42.5) < TOL,
+    Message   := 'Identity scaling must leave value equal to the raw REAL input');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -344,26 +344,26 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('QualityTagPropagatesToStatus');
 
-// The FB must echo inpQuality into sts.stsQuality each cycle (subject to
+// The FB must echo inpQuality into sts.quality each cycle (subject to
 // the clamp promotion covered by ClampPromotesGoodQualityToClamped).
 fb.SetRawInt(nValue := 10000);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertEquals_DINT(
     Expected := TO_DINT(TcForge.E_IO_Quality.GOOD),
-    Actual   := TO_DINT(fb.sts.stsQuality),
-    Message  := 'stsQuality must mirror inpQuality = GOOD when not clamping');
+    Actual   := TO_DINT(fb.sts.quality),
+    Message  := 'quality must mirror inpQuality = GOOD when not clamping');
 
 fb(inpQuality := TcForge.E_IO_Quality.UNKNOWN);
 AssertEquals_DINT(
     Expected := TO_DINT(TcForge.E_IO_Quality.UNKNOWN),
-    Actual   := TO_DINT(fb.sts.stsQuality),
-    Message  := 'stsQuality must mirror inpQuality = UNKNOWN');
+    Actual   := TO_DINT(fb.sts.quality),
+    Message  := 'quality must mirror inpQuality = UNKNOWN');
 
 fb(inpQuality := TcForge.E_IO_Quality.BAD);
 AssertEquals_DINT(
     Expected := TO_DINT(TcForge.E_IO_Quality.BAD),
-    Actual   := TO_DINT(fb.sts.stsQuality),
-    Message  := 'stsQuality must mirror inpQuality = BAD');
+    Actual   := TO_DINT(fb.sts.quality),
+    Message  := 'quality must mirror inpQuality = BAD');
 
 TEST_FINISHED();]]></ST>
       </Implementation>

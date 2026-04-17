@@ -5,10 +5,10 @@
 // to callers and HMIs:
 //
 //   * command routing through F_ValidateRequester (source lock)
-//   * request-vs-output bookkeeping (stsCommanded always reflects the
-//     latest intent, stsValue always reflects the physical bit)
+//   * request-vs-output bookkeeping (commanded always reflects the
+//     latest intent, value always reflects the physical bit)
 //   * debounce timers actually gating the output
-//   * cfgInvert in Regular mode
+//   * invert in Regular mode
 //   * BAD quality holding the last-known-good output
 //   * edge pulses being exactly one scan wide
 //   * SinglePulse arming on rising edge and cancelling on commanded LOW
@@ -45,19 +45,19 @@ END_VAR]]></Declaration>
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertFalse(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'Fresh instance must start with physical output LOW');
 AssertFalse(
-    Condition := fb.sts.stsCommanded,
+    Condition := fb.sts.commanded,
     Message   := 'Fresh instance must start with commanded request LOW');
 AssertFalse(
-    Condition := fb.sts.header.stsFaulted,
+    Condition := fb.sts.header.faulted,
     Message   := 'Fresh instance must not be faulted');
 AssertTrue(
-    Condition := fb.sts.header.stsReady,
-    Message   := 'Fresh instance must report stsReady TRUE (no fault, not busy, not locked)');
+    Condition := fb.sts.header.ready,
+    Message   := 'Fresh instance must report ready TRUE (no fault, not busy, not locked)');
 AssertFalse(
-    Condition := fb.sts.header.stsSourceLocked,
+    Condition := fb.sts.header.sourceLocked,
     Message   := 'Fresh instance must not be source-locked');
 
 TEST_FINISHED();]]></ST>
@@ -83,11 +83,11 @@ AssertEquals_DINT(
     Actual   := resp,
     Message  := 'SetOn from PROG on a fresh instance must be ACCEPTED');
 AssertTrue(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'Regular mode with no debounce must flush SetOn to the physical output in one cycle');
 AssertTrue(
-    Condition := fb.sts.stsCommanded,
-    Message   := 'stsCommanded must reflect the accepted SetOn request');
+    Condition := fb.sts.commanded,
+    Message   := 'commanded must reflect the accepted SetOn request');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -112,11 +112,11 @@ AssertEquals_DINT(
     Actual   := resp,
     Message  := 'SetOff from PROG must be ACCEPTED');
 AssertFalse(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'SetOff must drop the physical output LOW in one cycle with no debounce');
 AssertFalse(
-    Condition := fb.sts.stsCommanded,
-    Message   := 'stsCommanded must follow the latest SetOff request');
+    Condition := fb.sts.commanded,
+    Message   := 'commanded must follow the latest SetOff request');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -142,10 +142,10 @@ AssertEquals_DINT(
     Actual   := resp,
     Message  := 'PROG requester must be accepted even with source-lock active');
 AssertTrue(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'Accepted SetOn from PROG must still drive the physical output');
 AssertTrue(
-    Condition := fb.sts.header.stsSourceLocked,
+    Condition := fb.sts.header.sourceLocked,
     Message   := 'header must reflect source-lock state');
 
 TEST_FINISHED();]]></ST>
@@ -169,11 +169,11 @@ AssertEquals_DINT(
     Actual   := resp,
     Message  := 'OPERATOR requester must be rejected while source-locked');
 AssertFalse(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'Rejected SetOn must not touch the physical output');
 AssertFalse(
-    Condition := fb.sts.stsCommanded,
-    Message   := 'Rejected SetOn must not update stsCommanded');
+    Condition := fb.sts.commanded,
+    Message   := 'Rejected SetOn must not update commanded');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -186,19 +186,19 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('DebounceOnBlocksOutputUntilElapsed');
 
-// cfgDebounceOn = T#1S — far longer than this synchronous test will run,
+// debounceOn = T#1S — far longer than this synchronous test will run,
 // so _tonOn.Q must still be FALSE when we check: the output must be held
 // LOW while the debounce hasn't elapsed.
-fb.cfg.cfgDebounceOn := T#1S;
+fb.cfg.debounceOn := T#1S;
 fb.SetOn(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.stsCommanded,
-    Message   := 'stsCommanded must reflect the request immediately (debounce gates the output, not the request)');
+    Condition := fb.sts.commanded,
+    Message   := 'commanded must reflect the request immediately (debounce gates the output, not the request)');
 AssertFalse(
-    Condition := fb.sts.stsValue,
-    Message   := 'cfgDebounceOn must hold the physical output LOW until the TON elapses');
+    Condition := fb.sts.value,
+    Message   := 'debounceOn must hold the physical output LOW until the TON elapses');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -211,26 +211,26 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('DebounceOffHoldsOutputHighUntilElapsed');
 
-// cfgDebounceOn stays at 0 so the output flushes HIGH immediately. The
+// debounceOn stays at 0 so the output flushes HIGH immediately. The
 // OFF-debounce (T#1S) then holds it HIGH even after SetOff, until TOF.Q
 // falls — which it will not inside this synchronous test.
-fb.cfg.cfgDebounceOff := T#1S;
+fb.cfg.debounceOff := T#1S;
 fb.SetOn(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'Precondition: SetOn with zero ON-debounce must flush HIGH');
 
 fb.SetOff(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertFalse(
-    Condition := fb.sts.stsCommanded,
-    Message   := 'stsCommanded must follow the SetOff request regardless of debounce');
+    Condition := fb.sts.commanded,
+    Message   := 'commanded must follow the SetOff request regardless of debounce');
 AssertTrue(
-    Condition := fb.sts.stsValue,
-    Message   := 'cfgDebounceOff must hold the physical output HIGH until the TOF expires');
+    Condition := fb.sts.value,
+    Message   := 'debounceOff must hold the physical output HIGH until the TOF expires');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -244,26 +244,26 @@ END_VAR]]></Declaration>
         <ST><![CDATA[TEST('InvertFlipsOutputInRegularMode');
 
 // Active-low actuator: invert means "commanded ON -> physical LOW".
-fb.cfg.cfgInvert := TRUE;
+fb.cfg.invert := TRUE;
 fb.SetOn(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.stsCommanded,
-    Message   := 'stsCommanded must reflect logical intent, not inverted physical output');
+    Condition := fb.sts.commanded,
+    Message   := 'commanded must reflect logical intent, not inverted physical output');
 AssertFalse(
-    Condition := fb.sts.stsValue,
-    Message   := 'cfgInvert must flip HIGH intent into a LOW physical output');
+    Condition := fb.sts.value,
+    Message   := 'invert must flip HIGH intent into a LOW physical output');
 
 fb.SetOff(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertFalse(
-    Condition := fb.sts.stsCommanded,
-    Message   := 'stsCommanded must follow SetOff regardless of invert');
+    Condition := fb.sts.commanded,
+    Message   := 'commanded must follow SetOff regardless of invert');
 AssertTrue(
-    Condition := fb.sts.stsValue,
-    Message   := 'cfgInvert must flip LOW intent into a HIGH physical output');
+    Condition := fb.sts.value,
+    Message   := 'invert must flip LOW intent into a HIGH physical output');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -280,7 +280,7 @@ END_VAR]]></Declaration>
 fb.SetOn(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'Precondition: SetOn under GOOD quality must drive HIGH');
 
 // Now drop to BAD and try to SetOff. The hardware write must be skipped
@@ -289,12 +289,12 @@ fb.SetOff(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.BAD);
 
 AssertTrue(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'BAD quality must hold the last-known-good physical output (no hardware write)');
 AssertEquals_USINT(
     Expected := TcForge.E_IO_Quality.BAD,
-    Actual   := fb.sts.stsQuality,
-    Message  := 'stsQuality must surface the BAD tag to downstream consumers');
+    Actual   := fb.sts.quality,
+    Message  := 'quality must surface the BAD tag to downstream consumers');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -307,7 +307,7 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('StsCommandedMirrorsRequestEvenUnderBadQuality');
 
-// Even when the hardware write is vetoed by quality, stsCommanded must
+// Even when the hardware write is vetoed by quality, commanded must
 // still echo the live request so HMIs can show "operator asked for OFF
 // but the output is held HIGH because quality is BAD".
 fb.SetOn(eRequester := TcForge.E_Requester.PROG);
@@ -316,11 +316,11 @@ fb.SetOff(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.BAD);
 
 AssertFalse(
-    Condition := fb.sts.stsCommanded,
-    Message   := 'stsCommanded must reflect the current request even when BAD quality blocks the hardware write');
+    Condition := fb.sts.commanded,
+    Message   := 'commanded must reflect the current request even when BAD quality blocks the hardware write');
 AssertTrue(
-    Condition := fb.sts.stsValue,
-    Message   := 'stsValue must still show the held physical output');
+    Condition := fb.sts.value,
+    Message   := 'value must still show the held physical output');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -338,28 +338,28 @@ END_VAR]]></Declaration>
 fb.SetOn(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
-    Condition := fb.sts.stsRisingEdge,
-    Message   := 'stsRisingEdge must fire on the cycle the physical output goes HIGH');
+    Condition := fb.sts.risingEdge,
+    Message   := 'risingEdge must fire on the cycle the physical output goes HIGH');
 AssertFalse(
-    Condition := fb.sts.stsFallingEdge,
-    Message   := 'stsFallingEdge must stay LOW on a rising edge cycle');
+    Condition := fb.sts.fallingEdge,
+    Message   := 'fallingEdge must stay LOW on a rising edge cycle');
 
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertFalse(
-    Condition := fb.sts.stsRisingEdge,
-    Message   := 'stsRisingEdge must be exactly one scan wide');
+    Condition := fb.sts.risingEdge,
+    Message   := 'risingEdge must be exactly one scan wide');
 
 // Falling edge on the way back down.
 fb.SetOff(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
-    Condition := fb.sts.stsFallingEdge,
-    Message   := 'stsFallingEdge must fire on the cycle the physical output goes LOW');
+    Condition := fb.sts.fallingEdge,
+    Message   := 'fallingEdge must fire on the cycle the physical output goes LOW');
 
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertFalse(
-    Condition := fb.sts.stsFallingEdge,
-    Message   := 'stsFallingEdge must be exactly one scan wide');
+    Condition := fb.sts.fallingEdge,
+    Message   := 'fallingEdge must be exactly one scan wide');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -375,14 +375,14 @@ END_VAR]]></Declaration>
 // SinglePulse with a long pulse width (T#10S) so the _tonPulseOn.Q
 // stays FALSE inside this synchronous test and we observe the pulse
 // while it is active.
-fb.cfg.cfgMode    := TcForge.E_DigitalOutput_Mode.SinglePulse;
-fb.cfg.cfgPulseOn := T#10S;
+fb.cfg.mode    := TcForge.E_DigitalOutput_Mode.SinglePulse;
+fb.cfg.pulseOn := T#10S;
 
 fb.SetOn(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'SinglePulse must arm on the commanded rising edge and drive HIGH while active');
 
 // Commanded LOW must cancel the pulse early — operator safety shortcut.
@@ -390,7 +390,7 @@ fb.SetOff(eRequester := TcForge.E_Requester.PROG);
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertFalse(
-    Condition := fb.sts.stsValue,
+    Condition := fb.sts.value,
     Message   := 'SetOff must cancel an in-flight SinglePulse immediately');
 
 TEST_FINISHED();]]></ST>

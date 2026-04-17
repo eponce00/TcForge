@@ -20,16 +20,16 @@ STRUCT
     LoLo : ST_Alarm_Sts;
 
     {attribute 'OPC.UA.DA.Description' := 'HiHi active (rollup after suppression)'}
-    stsHiHiActive : BOOL;
+    hiHiActive : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'Hi active and not suppressed by HiHi'}
-    stsHiActive   : BOOL;
+    hiActive   : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'Lo active and not suppressed by LoLo'}
-    stsLoActive   : BOOL;
+    loActive   : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'LoLo active (rollup after suppression)'}
-    stsLoLoActive : BOOL;
+    loLoActive : BOOL;
 
     {attribute 'OPC.UA.DA.Description' := 'Any of the four levels currently active'}
-    stsAnyActive  : BOOL;
+    anyActive  : BOOL;
     {attribute 'OPC.UA.DA.Description' := 'Highest severity across all active levels'}
     eSeverity     : E_AlarmSeverity;
 END_STRUCT

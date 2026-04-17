@@ -39,7 +39,7 @@ fb.cfg.common.eSeverity := TcForge.E_AlarmSeverity.CRITICAL;
 fb(inpActive := TRUE);
 
 AssertFalse(
-    Condition := fb.sts.stsActive,
+    Condition := fb.sts.active,
     Message   := 'Disabled alarm must not go active');
 AssertEquals_USINT(
     Expected := TcForge.E_AlarmSeverity.NONE,
@@ -57,7 +57,7 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('SelfClearingTracksInput');
 
-// bRequireAck = FALSE => no latch. stsActive follows the debounced input
+// bRequireAck = FALSE => no latch. active follows the debounced input
 // in both directions.
 fb.cfg.common.bEnable     := TRUE;
 fb.cfg.common.bRequireAck := FALSE;
@@ -65,16 +65,16 @@ fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.WARNING;
 
 fb(inpActive := TRUE);
 AssertTrue(
-    Condition := fb.sts.stsActive,
+    Condition := fb.sts.active,
     Message   := 'Non-latching alarm should go active when the input is TRUE');
 
 fb(inpActive := FALSE);
 AssertFalse(
-    Condition := fb.sts.stsActive,
+    Condition := fb.sts.active,
     Message   := 'Non-latching alarm should clear the same cycle the input clears');
 AssertFalse(
-    Condition := fb.sts.stsLatched,
-    Message   := 'Non-latching alarm must never expose stsLatched');
+    Condition := fb.sts.latched,
+    Message   := 'Non-latching alarm must never expose latched');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -93,15 +93,15 @@ fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
 
 fb(inpActive := TRUE);
 AssertTrue(
-    Condition := fb.sts.stsActive,
+    Condition := fb.sts.active,
     Message   := 'Latching alarm should go active when the input fires');
 AssertTrue(
-    Condition := fb.sts.stsLatched,
-    Message   := 'stsLatched should indicate an un-acked latch');
+    Condition := fb.sts.latched,
+    Message   := 'latched should indicate an un-acked latch');
 
 fb(inpActive := FALSE);
 AssertTrue(
-    Condition := fb.sts.stsActive,
+    Condition := fb.sts.active,
     Message   := 'Latching alarm must stay active after the input clears until Ack()');
 
 TEST_FINISHED();]]></ST>
@@ -132,7 +132,7 @@ AssertEquals_DINT(
     Actual   := response,
     Message  := 'Ack() with no source lock should be accepted');
 AssertFalse(
-    Condition := fb.sts.stsActive,
+    Condition := fb.sts.active,
     Message   := 'Latch must release once condition has cleared AND Ack() has been called');
 
 TEST_FINISHED();]]></ST>
@@ -151,21 +151,21 @@ fb.cfg.common.bRequireAck := TRUE;
 fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
 
 // Condition still firing when the operator acks — valid middle state:
-// stsActive stays TRUE, stsAcked becomes TRUE, stsLatched becomes FALSE
+// active stays TRUE, acked becomes TRUE, latched becomes FALSE
 // (operator has seen it but the process is still in the bad state).
 fb(inpActive := TRUE);
 fb.Ack(eRequester := TcForge.E_Requester.OPERATOR);
 fb(inpActive := TRUE);
 
 AssertTrue(
-    Condition := fb.sts.stsActive,
-    Message   := 'stsActive should remain TRUE while the condition is still firing');
+    Condition := fb.sts.active,
+    Message   := 'active should remain TRUE while the condition is still firing');
 AssertTrue(
-    Condition := fb.sts.stsAcked,
-    Message   := 'stsAcked should be TRUE after an accepted Ack()');
+    Condition := fb.sts.acked,
+    Message   := 'acked should be TRUE after an accepted Ack()');
 AssertFalse(
-    Condition := fb.sts.stsLatched,
-    Message   := 'stsLatched should drop once the latch has been acknowledged');
+    Condition := fb.sts.latched,
+    Message   := 'latched should drop once the latch has been acknowledged');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -234,18 +234,18 @@ fb.cfg.common.eSeverity   := TcForge.E_AlarmSeverity.CRITICAL;
 // immediately — operator disables dominate any held latch.
 fb(inpActive := TRUE);
 AssertTrue(
-    Condition := fb.sts.stsActive,
+    Condition := fb.sts.active,
     Message   := 'Precondition: latch should be active before disable');
 
 fb.cfg.common.bEnable := FALSE;
 fb(inpActive := TRUE);
 
 AssertFalse(
-    Condition := fb.sts.stsActive,
-    Message   := 'Disable must drop stsActive even while the input is still firing');
+    Condition := fb.sts.active,
+    Message   := 'Disable must drop active even while the input is still firing');
 AssertFalse(
-    Condition := fb.sts.stsLatched,
-    Message   := 'Disable must clear stsLatched');
+    Condition := fb.sts.latched,
+    Message   := 'Disable must clear latched');
 AssertEquals_USINT(
     Expected := TcForge.E_AlarmSeverity.NONE,
     Actual   := fb.sts.eSeverity,
@@ -299,7 +299,7 @@ fb.cfg.common.bEnable     := TRUE;
 fb.cfg.common.bRequireAck := TRUE;
 
 // Ack() before any latch exists is accepted (the requester validation
-// passes) but must leave stsAcked FALSE — there is nothing to mark acked.
+// passes) but must leave acked FALSE — there is nothing to mark acked.
 fb(inpActive := FALSE);
 response := fb.Ack(eRequester := TcForge.E_Requester.OPERATOR);
 fb(inpActive := FALSE);
@@ -309,8 +309,8 @@ AssertEquals_DINT(
     Actual   := response,
     Message  := 'Ack() with no latch returns ACCEPTED (validation passes)');
 AssertFalse(
-    Condition := fb.sts.stsAcked,
-    Message   := 'Ack() with no latch must NOT flip stsAcked — there is no latch to ack');
+    Condition := fb.sts.acked,
+    Message   := 'Ack() with no latch must NOT flip acked — there is no latch to ack');
 
 TEST_FINISHED();]]></ST>
       </Implementation>

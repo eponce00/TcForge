@@ -15,11 +15,11 @@ TYPE E_AnalogInput_Fault :
 (
     None       := 0,
 
-    BadQuality := 10,    // inpQuality latched to BAD past cfgQualityFaultAfter
-    ClampLow   := 11,    // raw reading below cfgRawMin (with cfgClampAsFault)
-    ClampHigh  := 12,    // raw reading above cfgRawMax (with cfgClampAsFault)
+    BadQuality := 10,    // inpQuality latched to BAD past qualityFaultAfter
+    ClampLow   := 11,    // raw reading below rawMin (with clampAsFault)
+    ClampHigh  := 12,    // raw reading above rawMax (with clampAsFault)
 
-    BadConfig  := 40     // cfgRawMin >= cfgRawMax, cfgEuMin > cfgEuMax, etc.
+    BadConfig  := 40     // rawMin >= rawMax, euMin > euMax, etc.
 );
 END_TYPE]]></Declaration>
   </DUT>
