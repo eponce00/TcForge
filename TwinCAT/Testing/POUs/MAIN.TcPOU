@@ -19,6 +19,7 @@ VAR
     fbAlarmThreshold_Test    : FB_AlarmThreshold_Test;
     fbAlarmDeviation_Test    : FB_AlarmDeviation_Test;
     fbStep_Test              : FB_Step_Test;
+    fbStateMachine_Test      : FB_StateMachine_Test;
 END_VAR
 ]]>
     </Declaration>

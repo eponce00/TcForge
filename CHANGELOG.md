@@ -147,8 +147,32 @@ changes are called out explicitly under each release.
   `FB_StateMachine` is ~52 KB and TwinCAT puts method-local `VAR`
   on the task stack (default 48 KB), so a per-method probe blew
   `C0297` and took the RT task (and Windows) down at activation.
+- **`FB_StateMachine_Test`** (17 cases) via an extended
+  `FB_StateMachine_Probe` — command gate and transition matrix:
+  power-on defaults, Home/Start/Stop/Abort/Pause/Proceed happy paths
+  and wrong-state rejections, permissive-bad rejection on Home,
+  Ready+Stop short-circuit to Stopped, Abort auto-init settling over
+  two scans (transition scan resets step to 0, next scan auto-inits
+  to `ABORTING_MIN`), Homing sequence-complete via `R_TRIG_5` on
+  `_nextStep=0`, running-interlock trip auto-aborting with the
+  `RunningInterlockTripped` fault surfaced through `GetFaultCode()`,
+  odd-step auto-raise of `OddStepReached`, external
+  `inpSubmoduleFaulted` surfacing through the fault book-keeping,
+  and OEE blocked-condition publishing during RUNNING.
 
-Full suite: 164 tests across 16 suites, green on the remote runtime
+  The probe body was promoted from empty to `SUPER^()` so the SM
+  body runs when the test calls `sm()`; the step suite doesn't call
+  `sm()` so its observations are unchanged. A new `ResetAll` mutator
+  clears fault book-keeping, command-request flags, the internal
+  `R_TRIG_1` / `R_TRIG_5` rising-edge memory, and permissive /
+  interlock live bits between tests. Interlock reset order matters
+  — `MapInput(bit, TRUE)` must precede `Reset()` because
+  `FB_Interlock.Reset` snaps `_latchedBits` from `nLiveBits`, so a
+  bit left FALSE by the previous test stays latched bad across the
+  reset otherwise. `ForceState` / `ForceLastState` / `ForceNextStep`
+  and `MapHome/Start/Proceed/AutoPerm` complete the driver surface.
+
+Full suite: 181 tests across 17 suites, green on the remote runtime
 (`172.18.236.100.1.1`).
 
 ## [2026-04-16] — Alarms + architecture simplification

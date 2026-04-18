@@ -1,0 +1,579 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_StateMachine_Test" Id="{c3d4e5f6-a7b8-9012-cdef-000000002000}" SpecialFunc="None">
+    <Declaration><![CDATA[// Tests for FB_StateMachine, the sequencing core: command gating,
+// state transitions, permissive enforcement, running interlock,
+// fault surfacing, and OEE condition reporting. We drive the SM
+// through its public command API (Home/Start/Stop/Pause/Proceed/
+// Abort/ReportBlocked/ReportStarved) and observe Status.
+//
+// Test strategy: FB_StateMachine_Probe runs SUPER^() in its body,
+// so calling sm() exercises the real parent logic. The probe also
+// exposes ResetAll / ForceState / ForceLastState / SetCurrentStep /
+// ForceNextStep / Map*Perm to park the SM in an arbitrary state
+// without walking a full sequence first — otherwise every test
+// would have to start from STOPPED and drive Home -> HOMING ->
+// READY before it could observe a RUNNING-state transition.
+//
+// Shared-sm note: FB_StateMachine is ~52 KB and TwinCAT puts
+// method-local VAR on the task stack (default 48 KB), so a probe
+// per test overflows the stack (C0297) and takes the runtime down
+// at activation. The probe is therefore declared at the suite FB
+// level and each test calls sm.ResetAll() at the top to clear
+// state / faults / triggers between tests. See FB_Step_Test for
+// the first time we hit this and the resolution write-up.
+FUNCTION_BLOCK FB_StateMachine_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    sm : FB_StateMachine_Probe;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[FreshSmIsStoppedAtStepZero();
+HomeFromStoppedEntersHomingAtMinStep();
+HomeFromRunningRejectedWrongState();
+HomeRejectedWhenHomePermBad();
+StartFromReadyEntersRunningAtMinStep();
+StartRejectedFromStopped();
+StopFromRunningEntersStopping();
+StopFromReadyGoesStraightToStopped();
+AbortFromRunningEntersAborting();
+AbortRejectedFromStopped();
+PauseFromRunningEntersPausing();
+ProceedFromPausedEntersProceeding();
+HomingCompletesToReadyOnNextStepZero();
+RunningInterlockTripAutoAbortsWithFault();
+OddStepCurrentAutoRaisesOddStepReached();
+SubmoduleFaultInputRaisesSubmoduleFaulted();
+BlockedConditionPublishedDuringRunning();]]></ST>
+    </Implementation>
+    <Method Name="FreshSmIsStoppedAtStepZero" Id="{c3d4e5f6-a7b8-9012-cdef-000000002001}">
+      <Declaration><![CDATA[METHOD FreshSmIsStoppedAtStepZero]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FreshSmIsStoppedAtStepZero');
+
+// Baseline: power-on defaults. WaitingState TRUE, ActiveState FALSE,
+// Faulted FALSE, no fault code, Step.Current=0. This also verifies that
+// ResetAll puts the shared probe back to the first-boot contract between
+// tests instead of carrying over state from the previous case.
+sm.ResetAll();
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.STOPPED,
+    Actual   := sm.Status.State,
+    Message  := 'Fresh SM must report State = STOPPED');
+AssertEquals_DINT(
+    Expected := DINT#0,
+    Actual   := sm.Status.Step.Current,
+    Message  := 'Fresh SM must report Step.Current = 0');
+AssertTrue(
+    Condition := sm.Status.WaitingState,
+    Message   := 'Fresh SM must report WaitingState = TRUE');
+AssertFalse(
+    Condition := sm.Status.ActiveState,
+    Message   := 'Fresh SM must not report ActiveState');
+AssertEquals_DINT(
+    Expected := DINT#0,
+    Actual   := sm.GetFaultCode(),
+    Message  := 'Fresh SM must report no fault');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HomeFromStoppedEntersHomingAtMinStep" Id="{c3d4e5f6-a7b8-9012-cdef-000000002002}">
+      <Declaration><![CDATA[METHOD HomeFromStoppedEntersHomingAtMinStep
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HomeFromStoppedEntersHomingAtMinStep');
+
+// Stopped + Home -> Homing, auto-init to HOMING_MIN (1000). Validates the
+// happy-path command gate (Home only accepted in STOPPED) and the
+// auto-init-first-step-on-entering-active-state behaviour in one pass.
+sm.ResetAll();
+
+rsp := sm.Home();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := rsp,
+    Message  := 'Home() must be ACCEPTED from STOPPED with perms OK');
+
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.HOMING,
+    Actual   := sm.Status.State,
+    Message  := 'Home from STOPPED must transition State to HOMING');
+AssertEquals_DINT(
+    Expected := DINT#1000,
+    Actual   := sm.Status.Step.Current,
+    Message  := 'Entering HOMING must auto-init Step.Current to HOMING_MIN (1000)');
+AssertTrue(
+    Condition := sm.Status.ActiveState,
+    Message   := 'HOMING must report ActiveState = TRUE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HomeFromRunningRejectedWrongState" Id="{c3d4e5f6-a7b8-9012-cdef-000000002003}">
+      <Declaration><![CDATA[METHOD HomeFromRunningRejectedWrongState
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HomeFromRunningRejectedWrongState');
+
+// Home is only valid from STOPPED. From RUNNING it must be rejected with
+// REJECTED_WRONG_STATE and must not set the internal _homeRequested flag,
+// so a subsequent sm() does not transition.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.RUNNING);
+sm.SetCurrentStep(nStep := 3000);
+sm.ForceNextStep(nStep := 3002);
+
+rsp := sm.Home();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_WRONG_STATE,
+    Actual   := rsp,
+    Message  := 'Home() from RUNNING must return REJECTED_WRONG_STATE');
+
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.RUNNING,
+    Actual   := sm.Status.State,
+    Message  := 'State must stay RUNNING when Home() is rejected');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HomeRejectedWhenHomePermBad" Id="{c3d4e5f6-a7b8-9012-cdef-000000002004}">
+      <Declaration><![CDATA[METHOD HomeRejectedWhenHomePermBad
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HomeRejectedWhenHomePermBad');
+
+// Permissive gate: Home must be rejected with REJECTED_PERMISSIVE_NOT_MET
+// when permHome.sts.bOK is FALSE. We need one body scan after mapping
+// the bad bit so permHome() recomputes sts.bOK before Home() reads it.
+sm.ResetAll();
+sm.MapHomePerm(bitIndex := 1, bGood := FALSE);
+sm();
+
+rsp := sm.Home();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET,
+    Actual   := rsp,
+    Message  := 'Home() with permHome bad must return REJECTED_PERMISSIVE_NOT_MET');
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.STOPPED,
+    Actual   := sm.Status.State,
+    Message  := 'State must stay STOPPED when Home() is rejected on perms');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StartFromReadyEntersRunningAtMinStep" Id="{c3d4e5f6-a7b8-9012-cdef-000000002005}">
+      <Declaration><![CDATA[METHOD StartFromReadyEntersRunningAtMinStep
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('StartFromReadyEntersRunningAtMinStep');
+
+// Ready + Start -> Running, auto-init to RUNNING_MIN (3000). Parks the
+// SM directly in READY since the Home -> Homing -> Ready walk would
+// require a full step sequence and is covered elsewhere.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.READY);
+
+rsp := sm.Start();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := rsp,
+    Message  := 'Start() must be ACCEPTED from READY with perms OK');
+
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.RUNNING,
+    Actual   := sm.Status.State,
+    Message  := 'Start from READY must transition State to RUNNING');
+AssertEquals_DINT(
+    Expected := DINT#3000,
+    Actual   := sm.Status.Step.Current,
+    Message  := 'Entering RUNNING must auto-init Step.Current to RUNNING_MIN (3000)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StartRejectedFromStopped" Id="{c3d4e5f6-a7b8-9012-cdef-000000002006}">
+      <Declaration><![CDATA[METHOD StartRejectedFromStopped
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('StartRejectedFromStopped');
+
+// Start only valid from READY — STOPPED must reject with WRONG_STATE so
+// users cannot skip homing. A rejected Start must not leave the machine
+// queued for an auto-start on the next cycle.
+sm.ResetAll();
+
+rsp := sm.Start();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_WRONG_STATE,
+    Actual   := rsp,
+    Message  := 'Start() from STOPPED must return REJECTED_WRONG_STATE');
+
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.STOPPED,
+    Actual   := sm.Status.State,
+    Message  := 'State must stay STOPPED when Start() is rejected');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StopFromRunningEntersStopping" Id="{c3d4e5f6-a7b8-9012-cdef-000000002007}">
+      <Declaration><![CDATA[METHOD StopFromRunningEntersStopping
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('StopFromRunningEntersStopping');
+
+// Running + Stop -> Stopping: the graceful shutdown path. ForceNextStep
+// keeps us mid-sequence so R_TRIG_5 does not pre-fire a spurious
+// sequence-complete on this scan.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.RUNNING);
+sm.SetCurrentStep(nStep := 3000);
+sm.ForceNextStep(nStep := 3002);
+
+rsp := sm.Stop();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := rsp,
+    Message  := 'Stop() must be ACCEPTED from RUNNING');
+
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.STOPPING,
+    Actual   := sm.Status.State,
+    Message  := 'Stop from RUNNING must transition State to STOPPING');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StopFromReadyGoesStraightToStopped" Id="{c3d4e5f6-a7b8-9012-cdef-000000002008}">
+      <Declaration><![CDATA[METHOD StopFromReadyGoesStraightToStopped
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('StopFromReadyGoesStraightToStopped');
+
+// Ready is already quiescent (no sequence to shut down), so Stop skips
+// Stopping entirely and lands in STOPPED on the same scan. This avoids
+// the HMI lie of "stopping" when there is nothing to stop.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.READY);
+
+rsp := sm.Stop();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := rsp,
+    Message  := 'Stop() must be ACCEPTED from READY');
+
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.STOPPED,
+    Actual   := sm.Status.State,
+    Message  := 'Stop from READY must transition directly to STOPPED');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AbortFromRunningEntersAborting" Id="{c3d4e5f6-a7b8-9012-cdef-000000002009}">
+      <Declaration><![CDATA[METHOD AbortFromRunningEntersAborting
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AbortFromRunningEntersAborting');
+
+// Abort is accepted from any state except STOPPED / ABORTING. From
+// RUNNING it transitions to ABORTING on the first body scan with
+// Step.Current reset to 0 (the transition sets _nextStep:=0 and
+// step-mgmt propagates it). Auto-init to ABORTING_MIN (5000) happens
+// on the NEXT scan when R_TRIG_1 fires on Current=0 and the
+// "enter-active-state" branch picks the new min. Two scans is the
+// real SM contract — tested explicitly here because it trips up
+// any consumer expecting a one-scan settle.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.RUNNING);
+sm.SetCurrentStep(nStep := 3000);
+sm.ForceNextStep(nStep := 3002);
+
+rsp := sm.Abort();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := rsp,
+    Message  := 'Abort() must be ACCEPTED from RUNNING');
+
+sm();
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.ABORTING,
+    Actual   := sm.Status.State,
+    Message  := 'Abort from RUNNING must transition State to ABORTING on first scan');
+AssertEquals_DINT(
+    Expected := DINT#0,
+    Actual   := sm.Status.Step.Current,
+    Message  := 'Abort from RUNNING must reset Step.Current to 0 on the transition scan');
+
+sm();
+AssertEquals_DINT(
+    Expected := DINT#5000,
+    Actual   := sm.Status.Step.Current,
+    Message  := 'Second scan after entering ABORTING must auto-init Step.Current to ABORTING_MIN (5000)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AbortRejectedFromStopped" Id="{c3d4e5f6-a7b8-9012-cdef-000000002010}">
+      <Declaration><![CDATA[METHOD AbortRejectedFromStopped
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AbortRejectedFromStopped');
+
+// Already-stopped machine: Abort is a no-op and must report
+// REJECTED_WRONG_STATE rather than silently staying accepted.
+// Prevents the HMI from thinking it just triggered a new abort episode.
+sm.ResetAll();
+
+rsp := sm.Abort();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_WRONG_STATE,
+    Actual   := rsp,
+    Message  := 'Abort() from STOPPED must return REJECTED_WRONG_STATE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PauseFromRunningEntersPausing" Id="{c3d4e5f6-a7b8-9012-cdef-000000002011}">
+      <Declaration><![CDATA[METHOD PauseFromRunningEntersPausing
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('PauseFromRunningEntersPausing');
+
+// Running + Pause -> Pausing, and the SM must remember the step we were
+// on (ReturnNextStep) so Proceed can resume at the same spot. We only
+// assert state here; the save/restore round-trip is covered by
+// ProceedFromPausedEntersProceeding.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.RUNNING);
+sm.SetCurrentStep(nStep := 3000);
+sm.ForceNextStep(nStep := 3002);
+
+rsp := sm.Pause();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := rsp,
+    Message  := 'Pause() must be ACCEPTED from RUNNING');
+
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.PAUSING,
+    Actual   := sm.Status.State,
+    Message  := 'Pause from RUNNING must transition State to PAUSING');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ProceedFromPausedEntersProceeding" Id="{c3d4e5f6-a7b8-9012-cdef-000000002012}">
+      <Declaration><![CDATA[METHOD ProceedFromPausedEntersProceeding
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ProceedFromPausedEntersProceeding');
+
+// Paused + Proceed -> Proceeding: the sequence-resume path. Only valid
+// from PAUSED; the transition relies on permProceed and permAuto both
+// OK, which ResetAll leaves TRUE by default.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.PAUSED);
+
+rsp := sm.Proceed();
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := rsp,
+    Message  := 'Proceed() must be ACCEPTED from PAUSED');
+
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.PROCEEDING,
+    Actual   := sm.Status.State,
+    Message  := 'Proceed from PAUSED must transition State to PROCEEDING');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HomingCompletesToReadyOnNextStepZero" Id="{c3d4e5f6-a7b8-9012-cdef-000000002013}">
+      <Declaration><![CDATA[METHOD HomingCompletesToReadyOnNextStepZero]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HomingCompletesToReadyOnNextStepZero');
+
+// Sequence completion inference: the SM treats "current step is in the
+// HOMING range AND _nextStep = 0" as "the last step just finished".
+// R_TRIG_5 fires, _completeStateRequested latches, the Homing-complete
+// transition fires in the same scan, State becomes READY, and LastState
+// gets HOMING so auto-cycle book-keeping can tell what just ran.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.HOMING);
+sm.SetCurrentStep(nStep := 1005);
+sm.ForceNextStep(nStep := 0);
+
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.READY,
+    Actual   := sm.Status.State,
+    Message  := 'HOMING with _nextStep=0 at in-range step must complete to READY');
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.HOMING,
+    Actual   := sm.Status.LastState,
+    Message  := 'After HOMING->READY, LastState must be HOMING');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RunningInterlockTripAutoAbortsWithFault" Id="{c3d4e5f6-a7b8-9012-cdef-000000002014}">
+      <Declaration><![CDATA[METHOD RunningInterlockTripAutoAbortsWithFault]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RunningInterlockTripAutoAbortsWithFault');
+
+// intlkRunning trip from any active state must auto-abort and raise
+// RunningInterlockTripped through the shared fault book-keeping. The
+// state goes to ABORTING on the same scan the interlock body sees the
+// bad bit, no additional command needed.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.RUNNING);
+sm.SetCurrentStep(nStep := 3000);
+sm.ForceNextStep(nStep := 3002);
+sm.MapRunningIntlk(bitIndex := 0, bGood := FALSE);
+
+sm();
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_State.ABORTING,
+    Actual   := sm.Status.State,
+    Message  := 'Running interlock trip from RUNNING must auto-transition to ABORTING');
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_Fault.RunningInterlockTripped,
+    Actual   := sm.GetFaultCode(),
+    Message  := 'Running interlock trip must raise RunningInterlockTripped');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OddStepCurrentAutoRaisesOddStepReached" Id="{c3d4e5f6-a7b8-9012-cdef-000000002015}">
+      <Declaration><![CDATA[METHOD OddStepCurrentAutoRaisesOddStepReached]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('OddStepCurrentAutoRaisesOddStepReached');
+
+// Convention: odd step numbers are fault landing pads. When Step.Current
+// is odd and no more specific fault has been raised yet, the SM body
+// publishes Status.Faulted=TRUE and raises the default OddStepReached
+// code. A specific raise (StepTimeout, StepUserFault, submodule, ...)
+// that fired earlier would win thanks to the GetFaultCode()=0 guard.
+//
+// _nextStep must stay pinned to the same odd step — if we let it be a
+// neighbour, step-mgmt advances Current off the odd value before the
+// fault check runs and LsOdd comes out 0.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.RUNNING);
+sm.SetCurrentStep(nStep := 3001);
+sm.ForceNextStep(nStep := 3001);
+
+sm();
+
+AssertTrue(
+    Condition := sm.Status.Faulted,
+    Message   := 'Odd Step.Current must set Status.Faulted = TRUE');
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_Fault.OddStepReached,
+    Actual   := sm.GetFaultCode(),
+    Message  := 'Odd Step.Current must raise default OddStepReached when no other fault active');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SubmoduleFaultInputRaisesSubmoduleFaulted" Id="{c3d4e5f6-a7b8-9012-cdef-000000002016}">
+      <Declaration><![CDATA[METHOD SubmoduleFaultInputRaisesSubmoduleFaulted]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SubmoduleFaultInputRaisesSubmoduleFaulted');
+
+// External submodule fault hook: inpSubmoduleFaulted=TRUE must publish
+// Status.SubmoduleFaulted and raise the SubmoduleFaulted fault code so
+// parent supervisors see a matching ST_DeviceHeader_Sts entry. We park
+// in STOPPED with an even step so OddStepReached doesn't race ahead.
+sm.ResetAll();
+sm.inpSubmoduleFaulted := TRUE;
+
+sm();
+
+AssertTrue(
+    Condition := sm.Status.SubmoduleFaulted,
+    Message   := 'inpSubmoduleFaulted must surface on Status.SubmoduleFaulted');
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_Fault.SubmoduleFaulted,
+    Actual   := sm.GetFaultCode(),
+    Message  := 'inpSubmoduleFaulted must raise SubmoduleFaulted through fault book-keeping');
+
+sm.inpSubmoduleFaulted := FALSE;
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BlockedConditionPublishedDuringRunning" Id="{c3d4e5f6-a7b8-9012-cdef-000000002017}">
+      <Declaration><![CDATA[METHOD BlockedConditionPublishedDuringRunning]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BlockedConditionPublishedDuringRunning');
+
+// OEE reporting: ReportBlocked(code) stashes an internal latch that the
+// body consumes once per cycle when the SM is in a producing state
+// (RUNNING / STOPPING / READY) and publishes on Status.BlockedCondition.
+// Calling from STOPPED alone would not publish — the guard is what
+// prevents stale condition codes from looking like active blockage.
+sm.ResetAll();
+sm.ForceState(state := TcForge.E_SM_State.RUNNING);
+sm.SetCurrentStep(nStep := 3000);
+sm.ForceNextStep(nStep := 3002);
+
+sm.ReportBlocked(code := DINT#42);
+sm();
+
+AssertEquals_DINT(
+    Expected := DINT#42,
+    Actual   := sm.Status.BlockedCondition,
+    Message  := 'ReportBlocked(42) during RUNNING must publish Status.BlockedCondition = 42');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
