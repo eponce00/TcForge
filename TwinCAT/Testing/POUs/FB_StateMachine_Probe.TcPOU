@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_StateMachine_Probe" Id="{c3d4e5f6-a7b8-9012-cdef-000000001100}" SpecialFunc="None">
+    <Declaration><![CDATA[// Test-only child of FB_StateMachine. The production FB publishes its
+// live state on VAR_OUTPUT `Status`, which TwinCAT makes read-only from
+// outside. The FB_Step tests need to drive Step.Current directly so
+// the step becomes active without running the full state machine body.
+// This probe exposes a narrow setter for that, plus a body that skips
+// the parent cyclic logic: the step unit under test is what drives the
+// lifecycle, not the SM. End-to-end sequencing with SUPER^() belongs in
+// the FB_StateMachine suite.
+//
+// Lives in the Testing project only — not part of TcForge's public API.
+FUNCTION_BLOCK FB_StateMachine_Probe EXTENDS TcForge.FB_StateMachine]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Intentionally empty: tests call individual methods / mutators and
+// never want the SM body running, which would re-drive Step.Current
+// and overwrite the test's injected values.]]></ST>
+    </Implementation>
+    <Method Name="SetCurrentStep" Id="{c3d4e5f6-a7b8-9012-cdef-000000001101}">
+      <Declaration><![CDATA[// Force the active step number. Lets FB_Step see _active = TRUE without
+// us having to drive Home/Start/state transitions end-to-end.
+METHOD PUBLIC SetCurrentStep
+VAR_INPUT
+    nStep : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Status.Step.Current := nStep;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetTimerSeconds" Id="{c3d4e5f6-a7b8-9012-cdef-000000001102}">
+      <Declaration><![CDATA[// Inject a step-timer reading so timeout branches can be tested without
+// actually letting wall-clock time pass. The production SM owns the
+// timer — here we just write the published value directly.
+METHOD PUBLIC SetTimerSeconds
+VAR_INPUT
+    seconds : REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Status.Step.TimerSeconds := seconds;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

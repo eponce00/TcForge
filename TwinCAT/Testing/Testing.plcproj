@@ -36,6 +36,9 @@
     <Compile Include="POUs\FB_AnalogOutput_Probe.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="POUs\FB_StateMachine_Probe.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Testing.TcTTO">
       <SubType>Code</SubType>
     </Compile>
@@ -82,6 +85,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Tests\FB_AlarmDeviation_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Tests\FB_Step_Test.TcPOU">
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>

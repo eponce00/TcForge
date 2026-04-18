@@ -18,6 +18,7 @@ VAR
     fbAnalogOutput_Test      : FB_AnalogOutput_Test;
     fbAlarmThreshold_Test    : FB_AlarmThreshold_Test;
     fbAlarmDeviation_Test    : FB_AlarmDeviation_Test;
+    fbStep_Test              : FB_Step_Test;
 END_VAR
 ]]>
     </Declaration>

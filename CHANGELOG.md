@@ -126,8 +126,29 @@ changes are called out explicitly under each release.
   inside-band, setpoint tracked in relative mode and ignored in
   absolute mode, asymmetric limits, `bEnable` suppression, and
   `eSeverity` propagation.
+- **`FB_Step_Test`** (12 cases) via `FB_StateMachine_Probe` —
+  lifecycle contract of the step wrapper: inactive leaves
+  Entry/Execute/Exiting low, Entry one-shot on activation, the
+  perm-settle Execute pass, Exiting one-shot once perms go
+  satisfied, Advance leaves all three lifecycle outputs low,
+  `sm.Status.Step.Name` published while active, mapped-FALSE
+  perm holds Execute and blocks Exiting, flipping to TRUE releases
+  Exiting, `nTimeout = 0` disables the timeout branch,
+  `TimerSeconds > nTimeout` raises `E_SM_Fault.StepTimeout`,
+  `RaiseFault` is a no-op outside the active step, and surfaces
+  the code through `sm.GetFaultCode()` while active.
 
-Full suite: 152 tests across 15 suites, green on the remote runtime
+  `FB_StateMachine_Probe` is a tiny test-only subclass that empties
+  the SM cyclic body (so the SM logic under test doesn't interfere
+  with step observations) and exposes a narrow `SetCurrentStep` /
+  `SetTimerSeconds` pair for driving the step without running the
+  full state machine — the SM itself deserves its own dedicated
+  suite (next). The probe is shared at the test-suite FB level:
+  `FB_StateMachine` is ~52 KB and TwinCAT puts method-local `VAR`
+  on the task stack (default 48 KB), so a per-method probe blew
+  `C0297` and took the RT task (and Windows) down at activation.
+
+Full suite: 164 tests across 16 suites, green on the remote runtime
 (`172.18.236.100.1.1`).
 
 ## [2026-04-16] — Alarms + architecture simplification

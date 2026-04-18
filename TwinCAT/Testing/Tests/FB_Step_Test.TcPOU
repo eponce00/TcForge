@@ -1,0 +1,429 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_Step_Test" Id="{c3d4e5f6-a7b8-9012-cdef-000000001000}" SpecialFunc="None">
+    <Declaration><![CDATA[// Tests for FB_Step, the lightweight step-lifecycle wrapper used inside
+// FB_StateMachine sequences. FB_Step only reports "am I active?" and
+// drives Entry / Execute / Exiting / Advance on top of the parent SM.
+//
+// Test strategy: FB_Step reads sm.Status.Step.Current via VAR_IN_OUT to
+// decide whether it is the active step. Status is a VAR_OUTPUT on the
+// production FB, which TwinCAT makes read-only from outside, so we
+// drive activation via an FB_StateMachine_Probe that exposes a narrow
+// SetCurrentStep / SetTimerSeconds pair and skips the parent body. The
+// SM body is never called here — the tests observe FB_Step's own outputs
+// (Entry/Execute/Exiting), the Step.Name it publishes, and the inherited
+// fault book-keeping (sm.GetFaultCode()). End-to-end sequencing through
+// the full SM body belongs in a separate FB_StateMachine suite.
+//
+// Shared-sm note: FB_StateMachine is a heavyweight FB (~35 KB, four
+// FB_Permissives + an FB_Interlock + a full ST_SM_Status). TwinCAT
+// places method-local VAR on the task stack (default 48 KB), so one
+// probe per method blew the stack (C0297) and crashed the runtime
+// during activation. We therefore share a single probe on the suite
+// FB and reset it between tests via Setup(). `step : FB_Step` stays
+// method-local — each test gets its own fresh lifecycle state, which
+// is what makes the Entry/Execute/Exiting one-shots observable.
+FUNCTION_BLOCK FB_Step_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    sm : FB_StateMachine_Probe;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[InactiveKeepsLifecycleOutputsClear();
+EntryRaisedOnFirstActiveScan();
+ExecuteRaisedOnSecondActiveScanForPermSettle();
+ExitingFiresOneShotAfterPermsAutoSatisfied();
+AdvancePhaseKeepsAllLifecycleOutputsClear();
+NamePublishedIntoSmStepInfo();
+MappedFalsePermHoldsExecuteAndBlocksExit();
+MappedTruePermLetsExitFireAfterSettle();
+ZeroTimeoutNeverRaisesTimeoutFault();
+TimeoutRaisesStepTimeoutFault();
+InactiveRaiseFaultIsNoOp();
+RaiseFaultWhileActiveRecordsCode();]]></ST>
+    </Implementation>
+    <Method Name="Setup" Id="{c3d4e5f6-a7b8-9012-cdef-000000001099}">
+      <Declaration><![CDATA[// Prepare the shared SM probe for the next test. Reset the fault
+// book-keeping, zero the timer, and force Step.Current to something
+// the step-under-test will treat as inactive. The test then flips
+// Step.Current to its own nStep so step sees a clean FALSE -> TRUE
+// transition and Entry fires on the first call.
+METHOD PRIVATE Setup
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rsp := sm.Reset();
+sm.SetCurrentStep(nStep := 9999);
+sm.SetTimerSeconds(seconds := 0.0);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InactiveKeepsLifecycleOutputsClear" Id="{c3d4e5f6-a7b8-9012-cdef-000000001001}">
+      <Declaration><![CDATA[METHOD InactiveKeepsLifecycleOutputsClear
+VAR
+    step : TcForge.FB_Step;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('InactiveKeepsLifecycleOutputsClear');
+
+// Baseline sanity: while the SM is advertising a different step,
+// FB_Step must keep every lifecycle output FALSE and must not publish
+// anything into Step.Name (a stale name would confuse the HMI).
+Setup();
+
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Inactive');
+
+AssertFalse(
+    Condition := step.Entry,
+    Message   := 'Entry must be FALSE while the step is not the active one');
+AssertFalse(
+    Condition := step.Execute,
+    Message   := 'Execute must be FALSE while the step is not the active one');
+AssertFalse(
+    Condition := step.Exiting,
+    Message   := 'Exiting must be FALSE while the step is not the active one');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="EntryRaisedOnFirstActiveScan" Id="{c3d4e5f6-a7b8-9012-cdef-000000001002}">
+      <Declaration><![CDATA[METHOD EntryRaisedOnFirstActiveScan
+VAR
+    step : TcForge.FB_Step;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('EntryRaisedOnFirstActiveScan');
+
+// First scan where _active flips FALSE -> TRUE must produce exactly one
+// Entry pulse. Execute and Exiting must stay low so user init code
+// (one-shot) runs without also running cyclic work on the same scan.
+Setup();
+sm.SetCurrentStep(nStep := 3000);
+
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'EntryScan');
+
+AssertTrue(
+    Condition := step.Entry,
+    Message   := 'Entry must pulse TRUE on the first active scan');
+AssertFalse(
+    Condition := step.Execute,
+    Message   := 'Execute must be FALSE on the Entry scan (no cyclic work yet)');
+AssertFalse(
+    Condition := step.Exiting,
+    Message   := 'Exiting must be FALSE on the Entry scan');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ExecuteRaisedOnSecondActiveScanForPermSettle" Id="{c3d4e5f6-a7b8-9012-cdef-000000001003}">
+      <Declaration><![CDATA[METHOD ExecuteRaisedOnSecondActiveScanForPermSettle
+VAR
+    step : TcForge.FB_Step;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ExecuteRaisedOnSecondActiveScanForPermSettle');
+
+// Second scan holds Execute high for one cycle even if no perms were
+// mapped, so user MapPerm calls from the Entry scan get evaluated on
+// the *next* scan before Exiting can fire. Without this settle, a step
+// with no user work would skip Execute entirely.
+Setup();
+sm.SetCurrentStep(nStep := 3000);
+
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Settle');
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Settle');
+
+AssertFalse(
+    Condition := step.Entry,
+    Message   := 'Entry must drop to FALSE after its one-shot Entry scan');
+AssertTrue(
+    Condition := step.Execute,
+    Message   := 'Execute must fire on the second active scan (perm-settle pass)');
+AssertFalse(
+    Condition := step.Exiting,
+    Message   := 'Exiting must not fire before the perm-settle pass has run');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ExitingFiresOneShotAfterPermsAutoSatisfied" Id="{c3d4e5f6-a7b8-9012-cdef-000000001004}">
+      <Declaration><![CDATA[METHOD ExitingFiresOneShotAfterPermsAutoSatisfied
+VAR
+    step : TcForge.FB_Step;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ExitingFiresOneShotAfterPermsAutoSatisfied');
+
+// With no mapped perms, FB_Permissives' unmapped-bits-are-good policy
+// means bOK is TRUE from scan one. After Entry (scan 1) and the
+// settle-Execute (scan 2), scan 3 must surface Exiting as a one-shot
+// cleanup hook before the Advance phase takes over.
+Setup();
+sm.SetCurrentStep(nStep := 3000);
+
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Exit');
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Exit');
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Exit');
+
+AssertFalse(
+    Condition := step.Entry,
+    Message   := 'Entry must stay FALSE on the Exiting scan');
+AssertFalse(
+    Condition := step.Execute,
+    Message   := 'Execute must drop once perms are satisfied, so Exiting can run');
+AssertTrue(
+    Condition := step.Exiting,
+    Message   := 'Exiting must pulse TRUE once after perms go satisfied');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AdvancePhaseKeepsAllLifecycleOutputsClear" Id="{c3d4e5f6-a7b8-9012-cdef-000000001005}">
+      <Declaration><![CDATA[METHOD AdvancePhaseKeepsAllLifecycleOutputsClear
+VAR
+    step : TcForge.FB_Step;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AdvancePhaseKeepsAllLifecycleOutputsClear');
+
+// After Entry, settle-Execute and Exiting have fired, FB_Step is in the
+// Advance branch, which calls sm.SetNextStep every scan and leaves all
+// three lifecycle outputs FALSE. Confirms Exiting is a true one-shot
+// (not sticky) and user code won't see stale Exit work on later scans.
+Setup();
+sm.SetCurrentStep(nStep := 3000);
+
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Adv');
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Adv');
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Adv');
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Adv');
+
+AssertFalse(
+    Condition := step.Entry,
+    Message   := 'Entry must stay FALSE in the Advance phase');
+AssertFalse(
+    Condition := step.Execute,
+    Message   := 'Execute must stay FALSE in the Advance phase');
+AssertFalse(
+    Condition := step.Exiting,
+    Message   := 'Exiting must stay FALSE in the Advance phase (one-shot, not sticky)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="NamePublishedIntoSmStepInfo" Id="{c3d4e5f6-a7b8-9012-cdef-000000001006}">
+      <Declaration><![CDATA[METHOD NamePublishedIntoSmStepInfo
+VAR
+    step : TcForge.FB_Step;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('NamePublishedIntoSmStepInfo');
+
+// While a step is active it must publish its human-readable name into
+// sm.Status.Step.Name so HMI / diagnostics can show what is currently
+// running. The name comes straight from the sName VAR_INPUT each scan.
+Setup();
+sm.SetCurrentStep(nStep := 3000);
+
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0,
+     sName := 'Advance cylinder');
+
+AssertEquals_STRING(
+    Expected := 'Advance cylinder',
+    Actual   := sm.Status.Step.Name,
+    Message  := 'Active step must publish its sName into sm.Status.Step.Name');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MappedFalsePermHoldsExecuteAndBlocksExit" Id="{c3d4e5f6-a7b8-9012-cdef-000000001007}">
+      <Declaration><![CDATA[METHOD MappedFalsePermHoldsExecuteAndBlocksExit
+VAR
+    step : TcForge.FB_Step;
+    i    : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('MappedFalsePermHoldsExecuteAndBlocksExit');
+
+// A mapped permissive that is not satisfied must keep Execute firing
+// every scan while the step waits, and must never let Exiting fire.
+// The step is stuck in the "waiting for perms" Execute branch.
+Setup();
+sm.SetCurrentStep(nStep := 3000);
+
+FOR i := 1 TO 6 DO
+    step.MapPerm(nIndex := 0, sDescription := 'Sensor A', bValue := FALSE);
+    step(sm := sm, nStep := 3000, nNextStep := 3002,
+         nTimeout := 0, sName := 'WaitingPerm');
+END_FOR;
+
+AssertFalse(
+    Condition := step.Entry,
+    Message   := 'Entry must be FALSE while the step is waiting on a failing perm');
+AssertTrue(
+    Condition := step.Execute,
+    Message   := 'Execute must keep firing every scan while perms are unsatisfied');
+AssertFalse(
+    Condition := step.Exiting,
+    Message   := 'Exiting must not fire while any mapped perm is still FALSE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MappedTruePermLetsExitFireAfterSettle" Id="{c3d4e5f6-a7b8-9012-cdef-000000001008}">
+      <Declaration><![CDATA[METHOD MappedTruePermLetsExitFireAfterSettle
+VAR
+    step : TcForge.FB_Step;
+    i    : INT;
+    sawExiting : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('MappedTruePermLetsExitFireAfterSettle');
+
+// Hold a mapped permissive FALSE for a few scans (Execute stays high),
+// then flip it TRUE. After the perm-settle pass Exiting must fire
+// exactly once as a one-shot on its way into Advance. We loop a few
+// scans after the flip and latch whether Exiting was ever observed.
+Setup();
+sm.SetCurrentStep(nStep := 3000);
+
+FOR i := 1 TO 3 DO
+    step.MapPerm(nIndex := 0, sDescription := 'Sensor A', bValue := FALSE);
+    step(sm := sm, nStep := 3000, nNextStep := 3002,
+         nTimeout := 0, sName := 'WaitThenPass');
+END_FOR;
+
+sawExiting := FALSE;
+FOR i := 1 TO 4 DO
+    step.MapPerm(nIndex := 0, sDescription := 'Sensor A', bValue := TRUE);
+    step(sm := sm, nStep := 3000, nNextStep := 3002,
+         nTimeout := 0, sName := 'WaitThenPass');
+    IF step.Exiting THEN
+        sawExiting := TRUE;
+    END_IF;
+END_FOR;
+
+AssertTrue(
+    Condition := sawExiting,
+    Message   := 'Exiting must fire on the scan after the mapped perm flips to TRUE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ZeroTimeoutNeverRaisesTimeoutFault" Id="{c3d4e5f6-a7b8-9012-cdef-000000001009}">
+      <Declaration><![CDATA[METHOD ZeroTimeoutNeverRaisesTimeoutFault
+VAR
+    step : TcForge.FB_Step;
+    i    : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ZeroTimeoutNeverRaisesTimeoutFault');
+
+// nTimeout = 0 is the "disabled" convention: the timeout branch must
+// not fire regardless of TimerSeconds. We inject a large TimerSeconds
+// directly via the probe so we do not need to actually let time pass,
+// and we hold a perm FALSE so we stay in the Execute-wait branch
+// (which is where the timeout check lives).
+Setup();
+sm.SetCurrentStep(nStep := 3000);
+sm.SetTimerSeconds(seconds := 99999.0);
+
+FOR i := 1 TO 5 DO
+    step.MapPerm(nIndex := 0, sDescription := 'Sensor A', bValue := FALSE);
+    step(sm := sm, nStep := 3000, nNextStep := 3002,
+         nTimeout := 0, sName := 'NoTimeout');
+END_FOR;
+
+AssertEquals_DINT(
+    Expected := 0,
+    Actual   := sm.GetFaultCode(),
+    Message  := 'nTimeout = 0 must keep the timeout branch disabled, no fault raised');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TimeoutRaisesStepTimeoutFault" Id="{c3d4e5f6-a7b8-9012-cdef-00000000100a}">
+      <Declaration><![CDATA[METHOD TimeoutRaisesStepTimeoutFault
+VAR
+    step : TcForge.FB_Step;
+    i    : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TimeoutRaisesStepTimeoutFault');
+
+// With TimerSeconds past nTimeout and perms not satisfied, FB_Step
+// must route a StepTimeout fault through sm._RaiseStepFault so the
+// inherited ring buffer picks it up. We observe the result via
+// sm.GetFaultCode() (inherited diagnostics from FB_DeviceBase).
+Setup();
+sm.SetCurrentStep(nStep := 3000);
+sm.SetTimerSeconds(seconds := 12.0);
+
+FOR i := 1 TO 4 DO
+    step.MapPerm(nIndex := 0, sDescription := 'Sensor A', bValue := FALSE);
+    step(sm := sm, nStep := 3000, nNextStep := 3002,
+         nTimeout := 5, sName := 'WillTimeout');
+END_FOR;
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_Fault.StepTimeout,
+    Actual   := sm.GetFaultCode(),
+    Message  := 'Expired step timeout must raise E_SM_Fault.StepTimeout on the SM');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InactiveRaiseFaultIsNoOp" Id="{c3d4e5f6-a7b8-9012-cdef-00000000100b}">
+      <Declaration><![CDATA[METHOD InactiveRaiseFaultIsNoOp
+VAR
+    step : TcForge.FB_Step;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('InactiveRaiseFaultIsNoOp');
+
+// RaiseFault is documented as "only legal inside a step block"; the FB
+// must early-return when _active is FALSE so a stray call from the
+// wrong scope does not corrupt the SM fault state.
+Setup();
+
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'Idle');
+step.RaiseFault(code := TcForge.E_SM_Fault.StepUserFault, reason := 'Should not land');
+
+AssertEquals_DINT(
+    Expected := 0,
+    Actual   := sm.GetFaultCode(),
+    Message  := 'RaiseFault on an inactive step must be a no-op');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RaiseFaultWhileActiveRecordsCode" Id="{c3d4e5f6-a7b8-9012-cdef-00000000100c}">
+      <Declaration><![CDATA[METHOD RaiseFaultWhileActiveRecordsCode
+VAR
+    step : TcForge.FB_Step;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RaiseFaultWhileActiveRecordsCode');
+
+// When called while the step is active, RaiseFault must push the code
+// and reason through sm._RaiseStepFault so the SM's fault handling
+// records it. The companion SetNextStep(nStep + 1) jump is exercised
+// end-to-end by the FB_StateMachine suite; here we only lock in the
+// fault-recording contract that FB_DeviceBase exposes via GetFaultCode.
+Setup();
+sm.SetCurrentStep(nStep := 3000);
+
+step(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0, sName := 'UserFault');
+step.RaiseFault(
+    code   := TcForge.E_SM_Fault.StepUserFault,
+    reason := 'Sensor A out of range');
+
+AssertEquals_DINT(
+    Expected := TcForge.E_SM_Fault.StepUserFault,
+    Actual   := sm.GetFaultCode(),
+    Message  := 'Active-step RaiseFault must surface its code through sm.GetFaultCode');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
