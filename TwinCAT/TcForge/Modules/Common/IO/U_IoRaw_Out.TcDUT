@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="U_IoRaw_Out" Id="{c0000030-0000-0000-0000-000000000004}">
+    <Declaration><![CDATA[// 32-bit output UNION, mirror of U_IoRaw_In. The UNION itself carries no
+// AT pragma — the enclosing ST_AnalogOutput_IO puts `AT %Q*` on its
+// `outRaw` member so the whole 32-bit slot is reserved as output memory,
+// and the UNION members give the FB body zero-cost views of the same
+// bytes.
+//
+// Supported linkages:
+//   - 16-bit INT / UINT / WORD terminals (e.g. EL4024 4-20 mA, EL4004 0-10 V)
+//   - 32-bit DINT / UDINT / DWORD terminals
+//   - 32-bit REAL terminals
+//
+// Usage pattern: inside FB_AnalogOutput declare `io : ST_AnalogOutput_IO`;
+// the sts struct exposes the raw terminal as `io.outRaw`. Link from GVL_HW
+// via
+//   {attribute 'TcLinkTo' := '.io.outRaw.dw := TIID^...^Output'}
+// then choose the matching interpretation with cfg.eOutputType.
+//
+// See U_IoRaw_In for the rationale on keeping the AT pragma out of the
+// UNION type and on using multi-character member names — same
+// constraints apply here.
+TYPE U_IoRaw_Out :
+UNION
+    dw    : DWORD;
+    fReal : REAL;
+    w     : WORD;
+    nInt  : INT;
+    ui    : UINT;
+    di    : DINT;
+    udi   : UDINT;
+END_UNION
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

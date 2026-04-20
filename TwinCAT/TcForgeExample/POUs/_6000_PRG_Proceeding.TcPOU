@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="_6000_PRG_Proceeding" Id="{12345678-1234-1234-1234-123456789006}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM _6000_PRG_Proceeding
+VAR_IN_OUT
+    sm : FB_StateMachine;
+END_VAR
+VAR
+    step6000 : FB_Step;
+    step6002 : FB_Step;
+    step6004 : FB_Step;
+
+    // Resume signals
+    bHeatersReady      : BOOL;
+    bMotionResynced    : BOOL;
+    bProductionResumed : BOOL;
+    tonWarmup          : TON;
+    tonResync          : TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+//=============================================================================
+// STEP 6000 - Restore Process Conditions
+// Demonstrates: Entry (re-enable heaters), Execute (wait for temp), Exiting
+// This runs after operator presses Proceed from Paused state
+//=============================================================================
+step6000(sm := sm, nStep := 6000, nNextStep := 6002, nTimeout := 15, sName := 'Restore Conditions');
+
+IF step6000.Entry THEN
+    // One-shot: re-enable heaters and process systems
+    bHeatersReady := FALSE;
+    tonWarmup(IN := FALSE);
+END_IF;
+
+IF step6000.Execute THEN
+    // Simulate heaters reaching setpoint after 4s
+    tonWarmup(IN := TRUE, PT := T#4S);
+    bHeatersReady := tonWarmup.Q;
+
+    step6000.MapPerm(nIndex := 0, sDescription := 'Heaters At Setpoint', bValue := bHeatersReady);
+    step6000.MapPerm(nIndex := 1, sDescription := 'Coolant Flowing',     bValue := TRUE);
+    step6000.MapPerm(nIndex := 2, sDescription := 'Interlocks Satisfied', bValue := TRUE);
+END_IF;
+
+IF step6000.Exiting THEN
+    tonWarmup(IN := FALSE);
+END_IF;
+
+//=============================================================================
+// STEP 6002 - Re-synchronize Motion
+// Demonstrates: Entry (command resync), Execute (verify position match)
+//=============================================================================
+step6002(sm := sm, nStep := 6002, nNextStep := 6004, nTimeout := 10, sName := 'Resync Motion');
+
+IF step6002.Entry THEN
+    bMotionResynced := FALSE;
+    tonResync(IN := FALSE);
+END_IF;
+
+IF step6002.Execute THEN
+    // Simulate motion resync over 2s
+    tonResync(IN := TRUE, PT := T#2S);
+    bMotionResynced := tonResync.Q;
+
+    step6002.MapPerm(nIndex := 0, sDescription := 'Axes Synchronized', bValue := bMotionResynced);
+    step6002.MapPerm(nIndex := 1, sDescription := 'Position Error OK', bValue := TRUE);
+END_IF;
+
+IF step6002.Exiting THEN
+    tonResync(IN := FALSE);
+END_IF;
+
+//=============================================================================
+// STEP 6004 - Resume Production
+// Demonstrates: Entry (restart process), Exiting (hand back to Running)
+//=============================================================================
+step6004(sm := sm, nStep := 6004, nNextStep := 0, nTimeout := 5, sName := 'Resume Production');
+
+IF step6004.Entry THEN
+    bProductionResumed := FALSE;
+END_IF;
+
+IF step6004.Execute THEN
+    bProductionResumed := sm.Status.Step.TimerSeconds >= 1.0;
+
+    step6004.MapPerm(nIndex := 0, sDescription := 'Process Restarted',  bValue := bProductionResumed);
+    step6004.MapPerm(nIndex := 1, sDescription := 'Output Rate Normal', bValue := TRUE);
+END_IF;
+
+IF step6004.Exiting THEN
+    // Handoff complete - SM transitions back to Running
+    ;
+END_IF;
+]]></ST>
+    </Implementation>
+    <LineIds Name="_6000_PRG_Proceeding">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

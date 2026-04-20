@@ -1,0 +1,489 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AnalogOutput_Test" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e00}" SpecialFunc="None">
+    <Declaration><![CDATA[// Tests for FB_AnalogOutput. The production FB keeps its hardware-linked
+// `io` UNION in a private VAR section, so tests read the written bytes
+// back via FB_AnalogOutput_Probe (GetRawInt / GetRawReal / GetRawDWord).
+// The probe delegates the cyclic body to SUPER^() so the inherited
+// command-clamp-scale-write pipeline runs against each SetValue().
+//
+// Pipeline under test (from the production FB):
+//     SetValue -> persistent command -> clamp to [minCv, maxCv] ->
+//     EU -> raw scaling -> UNION write (type chosen by cfg.outputType)
+//
+// Scope: all synchronous behaviour around the command pipeline plus the
+// fault surface. Time-dependent paths (qualityFaultAfter watchdog) are
+// already covered by FB_DeviceBase_Test / FB_AnalogInput_Test and the
+// shared _tonBadQuality wiring is identical.
+FUNCTION_BLOCK FB_AnalogOutput_Test EXTENDS TcUnit.FB_TestSuite
+VAR CONSTANT
+    TOL     : REAL := 1E-3;
+    RAW_TOL : INT  := 1;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[InitialStatusPublishesDefaults();
+LinearScalingMapsEndpointsAndMidpoint();
+ClampHighPinsCommandAndFlagsClampedHigh();
+ClampLowPinsCommandAndFlagsClampedLow();
+CommandedEchoesUnclampedRequest();
+RawBypassSkipsClampAndScaling();
+ClampAsFaultRaisesClampHigh();
+ClampAsFaultRaisesClampLow();
+BadConfigRaisesFaultOnFirstScan();
+OutputTypeRealWritesRealUnionMember();
+BadQualityHoldsLastWrittenUnion();
+QualityTagPropagatesToStatus();
+SetValueRejectedWhenSourceLockedToProg();
+SetValueAcceptedFromProgWhenLocked();]]></ST>
+    </Implementation>
+    <Method Name="InitialStatusPublishesDefaults" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e01}">
+      <Declaration><![CDATA[METHOD InitialStatusPublishesDefaults
+VAR
+    fb : FB_AnalogOutput_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('InitialStatusPublishesDefaults');
+
+// Default cfg: INT terminal, EU 0..100 % scaled into raw 0..32767,
+// clampAsFault disabled. Before any SetValue the persistent command is
+// zero, so the FB must publish a clean zero command with no clamp
+// flags and no fault.
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := ABS(fb.sts.value) < TOL,
+    Message   := 'Fresh instance must publish value = 0 for an unset command');
+AssertTrue(
+    Condition := ABS(fb.sts.commanded) < TOL,
+    Message   := 'Fresh instance must publish commanded = 0');
+AssertTrue(
+    Condition := ABS(fb.sts.rawReal) < TOL,
+    Message   := 'Fresh instance must publish rawReal = 0');
+AssertFalse(
+    Condition := fb.sts.clampActive,
+    Message   := 'Zero command is inside [minCv, maxCv] so clampActive must be FALSE');
+AssertFalse(
+    Condition := fb.sts.header.faulted,
+    Message   := 'Default cfg is valid so the first scan must not fault');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LinearScalingMapsEndpointsAndMidpoint" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e02}">
+      <Declaration><![CDATA[METHOD LinearScalingMapsEndpointsAndMidpoint
+VAR
+    fb  : FB_AnalogOutput_Probe;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('LinearScalingMapsEndpointsAndMidpoint');
+
+// Default cfg: EU 0..100 -> raw 0..32767. Verify the two endpoints and
+// the midpoint land where the linear recurrence says they should,
+// both in sts.rawReal (REAL) and in io.outRaw.nInt (after INT coercion).
+//
+//     rawReal = rawMin + (cmd - euMin)
+//                             * (rawMax - rawMin)
+//                             / (euMax - euMin)
+
+rsp := fb.SetValue(rValue := 0.0);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(
+    Condition := ABS(fb.sts.rawReal - 0.0) < TOL,
+    Message   := 'cmd = euMin must map to rawMin (0)');
+AssertTrue(
+    Condition := ABS(fb.GetRawInt()) <= RAW_TOL,
+    Message   := 'UNION INT alias must receive ~0 for a 0 %% command');
+
+rsp := fb.SetValue(rValue := 100.0);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(
+    Condition := ABS(fb.sts.rawReal - 32767.0) < TOL,
+    Message   := 'cmd = euMax must map to rawMax (32767)');
+AssertTrue(
+    Condition := ABS(fb.GetRawInt() - 32767) <= RAW_TOL,
+    Message   := 'UNION INT alias must receive ~32767 for a 100 %% command');
+
+rsp := fb.SetValue(rValue := 50.0);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(
+    Condition := ABS(fb.sts.rawReal - 16383.5) < 0.01,
+    Message   := 'cmd at midpoint must map to raw midpoint');
+AssertTrue(
+    Condition := ABS(fb.GetRawInt() - 16384) <= RAW_TOL,
+    Message   := 'UNION INT alias must receive the rounded midpoint raw');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ClampHighPinsCommandAndFlagsClampedHigh" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e03}">
+      <Declaration><![CDATA[METHOD ClampHighPinsCommandAndFlagsClampedHigh
+VAR
+    fb  : FB_AnalogOutput_Probe;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ClampHighPinsCommandAndFlagsClampedHigh');
+
+// Drive a command above maxCv. clampedHigh must fire, clampActive must
+// track, value must pin at maxCv, and the raw write must use the
+// pinned value — not the unclamped request.
+rsp := fb.SetValue(rValue := 150.0);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := fb.sts.clampedHigh,
+    Message   := 'cmd above maxCv must set clampedHigh');
+AssertTrue(
+    Condition := fb.sts.clampActive,
+    Message   := 'clampActive must be TRUE whenever either clamp direction is active');
+AssertTrue(
+    Condition := ABS(fb.sts.value - 100.0) < TOL,
+    Message   := 'value must pin at maxCv (100 %%) when clamping high');
+AssertTrue(
+    Condition := ABS(fb.sts.rawReal - 32767.0) < TOL,
+    Message   := 'rawReal must reflect the clamped EU, not the unclamped request');
+AssertFalse(
+    Condition := fb.sts.header.faulted,
+    Message   := 'clampAsFault = FALSE by default; clamp alone must not fault the device');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ClampLowPinsCommandAndFlagsClampedLow" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e04}">
+      <Declaration><![CDATA[METHOD ClampLowPinsCommandAndFlagsClampedLow
+VAR
+    fb  : FB_AnalogOutput_Probe;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ClampLowPinsCommandAndFlagsClampedLow');
+
+// Drive a command below minCv. clampedLow must fire, value must pin
+// at minCv, raw write uses the pinned value.
+rsp := fb.SetValue(rValue := -25.0);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := fb.sts.clampedLow,
+    Message   := 'cmd below minCv must set clampedLow');
+AssertTrue(
+    Condition := fb.sts.clampActive,
+    Message   := 'clampActive must be TRUE whenever either clamp direction is active');
+AssertTrue(
+    Condition := ABS(fb.sts.value - 0.0) < TOL,
+    Message   := 'value must pin at minCv (0 %%) when clamping low');
+AssertTrue(
+    Condition := ABS(fb.sts.rawReal - 0.0) < TOL,
+    Message   := 'rawReal must reflect the clamped EU, not the unclamped request');
+AssertFalse(
+    Condition := fb.sts.header.faulted,
+    Message   := 'clampAsFault = FALSE by default; clamp alone must not fault the device');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="CommandedEchoesUnclampedRequest" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e05}">
+      <Declaration><![CDATA[METHOD CommandedEchoesUnclampedRequest
+VAR
+    fb  : FB_AnalogOutput_Probe;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('CommandedEchoesUnclampedRequest');
+
+// sts.commanded is the pre-clamp request — it survives the power cycle
+// via _requestSync. The tests above already prove sts.value tracks the
+// clamped write; here we pin down that sts.commanded preserves the
+// operator's original intent so the HMI can show "you asked for 150,
+// we clamped to 100".
+rsp := fb.SetValue(rValue := 150.0);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := ABS(fb.sts.commanded - 150.0) < TOL,
+    Message   := 'commanded must echo the unclamped SetValue input');
+AssertTrue(
+    Condition := ABS(fb.sts.value - 100.0) < TOL,
+    Message   := 'value must be the clamped command actually written');
+
+rsp := fb.SetValue(rValue := -7.5);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := ABS(fb.sts.commanded - (-7.5)) < TOL,
+    Message   := 'commanded must echo a negative request even when clamped low');
+AssertTrue(
+    Condition := ABS(fb.sts.value - 0.0) < TOL,
+    Message   := 'value must pin at minCv under a low clamp');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RawBypassSkipsClampAndScaling" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e06}">
+      <Declaration><![CDATA[METHOD RawBypassSkipsClampAndScaling
+VAR
+    fb  : FB_AnalogOutput_Probe;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RawBypassSkipsClampAndScaling');
+
+// useRawValue = TRUE writes the command REAL straight into the UNION
+// without clamping, so a 12345 command lands as 12345 on the raw INT
+// alias even though that is well above maxCv and well above rawMax.
+fb.cfg.useRawValue := TRUE;
+rsp := fb.SetValue(rValue := 12345.0);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := ABS(fb.sts.rawReal - 12345.0) < TOL,
+    Message   := 'With useRawValue = TRUE, rawReal must equal the raw command');
+AssertTrue(
+    Condition := ABS(fb.sts.value - 12345.0) < TOL,
+    Message   := 'With useRawValue = TRUE, value must equal the raw command');
+AssertFalse(
+    Condition := fb.sts.clampedLow,
+    Message   := 'Raw bypass must not flag clampedLow');
+AssertFalse(
+    Condition := fb.sts.clampedHigh,
+    Message   := 'Raw bypass must not flag clampedHigh');
+AssertFalse(
+    Condition := fb.sts.clampActive,
+    Message   := 'Raw bypass must not flag clampActive');
+AssertTrue(
+    Condition := ABS(fb.GetRawInt() - 12345) <= RAW_TOL,
+    Message   := 'UNION INT alias must receive the raw command unchanged');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ClampAsFaultRaisesClampHigh" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e07}">
+      <Declaration><![CDATA[METHOD ClampAsFaultRaisesClampHigh
+VAR
+    fb  : FB_AnalogOutput_Probe;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ClampAsFaultRaisesClampHigh');
+
+fb.cfg.clampAsFault := TRUE;
+rsp := fb.SetValue(rValue := 150.0);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := fb.sts.header.faulted,
+    Message   := 'clampAsFault + cmd above maxCv must fault the device');
+AssertEquals_DINT(
+    Expected := TcForge.E_AnalogOutput_Fault.ClampHigh,
+    Actual   := fb.sts.header.faultCode,
+    Message  := 'Fault code must be ClampHigh');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ClampAsFaultRaisesClampLow" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e08}">
+      <Declaration><![CDATA[METHOD ClampAsFaultRaisesClampLow
+VAR
+    fb  : FB_AnalogOutput_Probe;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ClampAsFaultRaisesClampLow');
+
+fb.cfg.clampAsFault := TRUE;
+rsp := fb.SetValue(rValue := -5.0);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := fb.sts.header.faulted,
+    Message   := 'clampAsFault + cmd below minCv must fault the device');
+AssertEquals_DINT(
+    Expected := TcForge.E_AnalogOutput_Fault.ClampLow,
+    Actual   := fb.sts.header.faultCode,
+    Message  := 'Fault code must be ClampLow');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BadConfigRaisesFaultOnFirstScan" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e09}">
+      <Declaration><![CDATA[METHOD BadConfigRaisesFaultOnFirstScan
+VAR
+    fb : FB_AnalogOutput_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BadConfigRaisesFaultOnFirstScan');
+
+// BadConfig check runs once on the first scan. Set rawMin > rawMax
+// BEFORE the first cyclic call so the validation can latch _configBad.
+fb.cfg.rawMin := 200.0;
+fb.cfg.rawMax := 100.0;
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := fb.sts.header.faulted,
+    Message   := 'rawMin > rawMax must fault the device as BadConfig');
+AssertEquals_DINT(
+    Expected := TcForge.E_AnalogOutput_Fault.BadConfig,
+    Actual   := fb.sts.header.faultCode,
+    Message  := 'Fault code must be BadConfig');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OutputTypeRealWritesRealUnionMember" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e0a}">
+      <Declaration><![CDATA[METHOD OutputTypeRealWritesRealUnionMember
+VAR
+    fb  : FB_AnalogOutput_Probe;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('OutputTypeRealWritesRealUnionMember');
+
+// Select the REAL UNION member and reconfigure scaling so raw == EU,
+// then confirm the FB writes the REAL alias with the exact command
+// (no integer coercion).
+fb.cfg.outputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMin     := 0.0;
+fb.cfg.rawMax     := 100.0;
+fb.cfg.euMin      := 0.0;
+fb.cfg.euMax      := 100.0;
+
+rsp := fb.SetValue(rValue := 42.5);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := ABS(fb.sts.rawReal - 42.5) < TOL,
+    Message   := 'Identity scaling must leave rawReal equal to the command');
+AssertTrue(
+    Condition := ABS(fb.GetRawReal() - 42.5) < TOL,
+    Message   := 'TYPE_REAL must write io.outRaw.fReal directly with the command');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BadQualityHoldsLastWrittenUnion" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e0b}">
+      <Declaration><![CDATA[METHOD BadQualityHoldsLastWrittenUnion
+VAR
+    fb           : FB_AnalogOutput_Probe;
+    rsp          : TcForge.E_RpcMethodResponse;
+    snapshot     : DWORD;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BadQualityHoldsLastWrittenUnion');
+
+// Establish a known value in the UNION under GOOD quality.
+rsp := fb.SetValue(rValue := 25.0);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+snapshot := fb.GetRawDWord();
+
+// Flip quality to BAD and change the commanded value. The FB must
+// still recompute sts.rawReal (it is pure output of the pipeline),
+// but it must NOT touch the hardware-linked UNION — the terminal
+// keeps its last-known-good bytes.
+rsp := fb.SetValue(rValue := 75.0);
+fb(inpQuality := TcForge.E_IO_Quality.BAD);
+
+AssertEquals_DWORD(
+    Expected := snapshot,
+    Actual   := fb.GetRawDWord(),
+    Message  := 'BAD quality must skip the UNION write and hold the last-known-good bytes');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="QualityTagPropagatesToStatus" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e0c}">
+      <Declaration><![CDATA[METHOD QualityTagPropagatesToStatus
+VAR
+    fb : FB_AnalogOutput_Probe;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('QualityTagPropagatesToStatus');
+
+// FB_AnalogOutput echoes inpQuality straight through (no clamp-to-CLAMPED
+// promotion like the input FB does — output-side consumers treat CLAMPED
+// as informational and the write still goes out).
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertEquals_DINT(
+    Expected := TO_DINT(TcForge.E_IO_Quality.GOOD),
+    Actual   := TO_DINT(fb.sts.quality),
+    Message  := 'quality must mirror inpQuality = GOOD');
+
+fb(inpQuality := TcForge.E_IO_Quality.UNKNOWN);
+AssertEquals_DINT(
+    Expected := TO_DINT(TcForge.E_IO_Quality.UNKNOWN),
+    Actual   := TO_DINT(fb.sts.quality),
+    Message  := 'quality must mirror inpQuality = UNKNOWN');
+
+fb(inpQuality := TcForge.E_IO_Quality.BAD);
+AssertEquals_DINT(
+    Expected := TO_DINT(TcForge.E_IO_Quality.BAD),
+    Actual   := TO_DINT(fb.sts.quality),
+    Message  := 'quality must mirror inpQuality = BAD');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetValueRejectedWhenSourceLockedToProg" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e0d}">
+      <Declaration><![CDATA[METHOD SetValueRejectedWhenSourceLockedToProg
+VAR
+    fb  : FB_AnalogOutput_Probe;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetValueRejectedWhenSourceLockedToProg');
+
+// With source locked to PROG, an OPERATOR SetValue must be rejected
+// with SOURCE_LOCKED, the persistent command must stay at zero, and
+// no clamp flags or writes may trigger.
+fb.LockSource(bLock := TRUE);
+
+rsp := fb.SetValue(rValue := 42.0, eRequester := TcForge.E_Requester.OPERATOR);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertEquals_DINT(
+    Expected := TO_DINT(TcForge.E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED),
+    Actual   := TO_DINT(rsp),
+    Message  := 'OPERATOR SetValue against a source-locked FB must be rejected');
+AssertTrue(
+    Condition := ABS(fb.sts.commanded - 0.0) < TOL,
+    Message   := 'A rejected SetValue must leave commanded unchanged');
+AssertTrue(
+    Condition := ABS(fb.sts.value - 0.0) < TOL,
+    Message   := 'A rejected SetValue must leave value unchanged');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetValueAcceptedFromProgWhenLocked" Id="{c1c2d3e4-f5a6-7890-abcd-000000000e0e}">
+      <Declaration><![CDATA[METHOD SetValueAcceptedFromProgWhenLocked
+VAR
+    fb  : FB_AnalogOutput_Probe;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetValueAcceptedFromProgWhenLocked');
+
+// With source locked to PROG, a PROG SetValue must still be accepted —
+// that's the whole point of locking: only the program may drive.
+fb.LockSource(bLock := TRUE);
+
+rsp := fb.SetValue(rValue := 42.0, eRequester := TcForge.E_Requester.PROG);
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertEquals_DINT(
+    Expected := TO_DINT(TcForge.E_RpcMethodResponse.ACCEPTED),
+    Actual   := TO_DINT(rsp),
+    Message  := 'PROG SetValue must be accepted even when source-locked to PROG');
+AssertTrue(
+    Condition := ABS(fb.sts.commanded - 42.0) < TOL,
+    Message   := 'Accepted PROG SetValue must update commanded');
+AssertTrue(
+    Condition := ABS(fb.sts.value - 42.0) < TOL,
+    Message   := 'Accepted PROG SetValue must flow into value');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

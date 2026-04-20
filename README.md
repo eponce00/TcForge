@@ -1,59 +1,59 @@
-# TwinCAT State Machine Library
+# TcForge
 
-A structured approach to implementing industrial automation sequences in TwinCAT PLC using state-based control with integrated safety permissions and HMI interface.
+A TwinCAT 3 library of reusable function blocks for Beckhoff PLCs, plus an example application that consumes it.
 
-## What It Is
+[License: MIT](LICENSE)
 
-This library provides a framework for building robust automation sequences that follow a clear state machine pattern. Instead of writing complex ladder logic or unstructured code, you define your machine's behavior through distinct states (Homing, Running, Stopping, etc.) and individual steps within each state.
+## Modules
 
-The system handles common industrial automation needs like safety interlocks, operator permissions, fault recovery, and step-by-step sequence execution with timeouts.
 
-## How It Works
+| Module     | What it covers                                                                               |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| Common     | Shared types, enums, validation helpers, `F_Now`, `FB_DeviceBase` (owns the fault ring + header).|
+| Sequencing | State machines and sequence steps with an Entry/Execute/Exiting lifecycle, plus permissives. |
+| Pneumatics | Actuator control with feedback monitoring.                                                   |
+| IO         | `FB_DigitalInput` / `FB_DigitalOutput` / `FB_AnalogInput` / `FB_AnalogOutput` — debounce, pulse modes, UNION-based raw terminals, scaling, IIR filter. Process-limit alarms compose externally via `FB_AlarmLimit`. |
+| Alarms     | `FB_AlarmSimple` / `FB_AlarmThreshold` / `FB_AlarmLimit` / `FB_AlarmDeviation` / `FB_AlarmRateOfChange` — uniform debounce / latch / ack / severity / timestamps surface via `FB_AlarmBase` + `I_Alarm`. |
 
-The library centers around three main concepts:
 
-**State Machine Controller** (`FB_StateMachine`) - Manages overall machine states and transitions. It knows when your machine should be homing, running, stopping, or handling faults, and ensures proper state transitions based on commands and conditions.
+## Conventions
 
-**Sequence Steps** (`FB_SequenceStep`) - Each state contains a series of numbered steps that execute in order. Each step can have its own timeout, safety permissions, and fault handling. Steps use even numbers (1000, 1002) for normal execution and odd numbers (1001, 1003) for fault conditions.
+- **Method-centric commands.** Command logic lives in RPC methods exposed over OPC UA. The FB body only does cyclic monitoring.
+- **Requester tracking.** Every command records its source (`PROG` or `OPERATOR`) and can be locked to program-only while automatic is running.
+- **Unified validation.** `F_ValidateRequester` runs the same source / fault / permission check everywhere.
+- **Permissive system.** `FB_Permissives` evaluates interlocks with `MapReason` and reports through `sts.OK`.
 
-**Permission System** (`FB_Permissives`) - Validates safety conditions and interlocks before allowing operations. Supports bypass functionality for maintenance and troubleshooting while maintaining safety integrity.
+The docs below cover these in detail.
 
-## Implementation Example
+## Project layout
 
-The included code example demonstrates a typical implementation with four main states:
+- `TwinCAT/TcForge.sln`: solution entry point.
+- `TcForge/`: the reusable library.
+- `TcForgeExample/`: an example application that consumes the library.
+- `docs/`: design docs.
 
-- **Homing** (steps 1000-1999) - Machine initialization and reference positioning
-- **Running** (steps 2000-2999) - Normal production operation
-- **Stopping** (steps 3000-3999) - Controlled shutdown sequence  
-- **Aborting** (steps 4000-4999) - Emergency stop and safe state
+## Getting started
 
-Each state has its own program (PRG_Homing, PRG_Running, etc.) that manages the step sequence for that particular operation. The main program coordinates between states and handles the overall state transitions.
+Open `TwinCAT/TcForge.sln` in TwinCAT XAE, build it, and browse `TcForgeExample` for a working consumer. Use `TcForge` as the library in your own project.
 
-## Repository Layout
+## Docs
 
-The active TwinCAT source now lives under a single cleaned host project:
 
-- `TwinCAT/Core.sln` - unified solution entry point
-- `TwinCAT/Core.tsproj` - shared TwinCAT project configuration
-- `TwinCAT/CoreExample` - example PLC application
-- `TwinCAT/Core` - library PLC source used to build the reusable state machine library
+| #   | Document                                                   | Covers                                                          |
+| --- | ---------------------------------------------------------- | --------------------------------------------------------------- |
+| 1   | [Programming Standards](docs/1-Programming-Standards.md)   | Naming, organization, FB structure patterns.                    |
+| 2   | [Architecture](docs/2-Architecture.md)                     | `FB_DeviceBase`, unified fault model, device header pattern.    |
+| 3   | [Command Source Control](docs/3-Command-Source-Control.md) | Requester validation and source locking.                        |
+| 4   | [RPC Method Response](docs/4-RPC-Method-Response.md)       | Response codes and method inventory.                            |
+| 5   | [I/O Binding](docs/5-IO-Binding.md)                        | `ST_*_IO` pattern, `@AT %I*/%Q*`, scaling to plant-sized I/O.   |
+| 6   | [Persistent Variables](docs/6-Persistent-Variables.md)     | PERSISTENT vs RETAIN and UPS configuration.                     |
+| 7   | [Sequencing](docs/7-Sequencing.md)                         | `FB_StateMachine`, `FB_Step`, authoring sequences, permissives. |
+| 8   | [Alarms](docs/8-Alarms.md)                                 | `FB_AlarmBase`, severity model, ack semantics, alarm catalog.   |
+| 9   | [HMI Integration](docs/9-HMI-Integration.md)               | OPC UA pragmas, cfg/sts exposure, RPC over OPC UA.              |
 
-This keeps the example PLC and the library PLC in one TwinCAT project instead of maintaining separate solutions or duplicate folder trees.
 
-## Key Benefits
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
-- **Predictable Behavior** - Clear state definitions eliminate unexpected machine behavior
-- **Maintainable Code** - Structured approach makes troubleshooting and modifications easier
-- **Safety Integration** - Built-in permission checking ensures safe operation
-- **Operator Interface** - Ready-made HMI structures for complete operator control
-- **Fault Recovery** - Automatic fault detection with retry capabilities
+## License
 
-## Getting Started
-
-1. Open `TwinCAT/Core.sln` in TwinCAT XAE
-2. Use `CoreExample` as the reference example for how the library is consumed
-3. Use `Core` as the source PLC for the reusable library objects
-4. Build the unified solution and adapt the example state programs to your machine
-5. Configure safety permissions and HMI interface for your application
-
-This library transforms complex automation sequences into manageable, structured code that's easier to develop, debug, and maintain.
+MIT. See [LICENSE](LICENSE).

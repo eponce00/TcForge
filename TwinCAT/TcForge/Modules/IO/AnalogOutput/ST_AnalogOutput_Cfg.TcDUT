@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_AnalogOutput_Cfg" Id="{b0100004-0001-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Configuration for FB_AnalogOutput. Defaults drive a 0-100 % command
+// range into an INT 0..32767 scaled terminal.
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_AnalogOutput_Cfg :
+STRUCT
+    // Which UNION member to write. Supported values:
+    //   TYPE_REAL, TYPE_INT, TYPE_UINT, TYPE_WORD, TYPE_DWORD, TYPE_UDINT, TYPE_DINT
+    {attribute 'OPC.UA.DA.Description' := 'Terminal numeric type (selects UNION member)'}
+    outputType         : __SYSTEM.TYPE_CLASS := __SYSTEM.TYPE_CLASS.TYPE_INT;
+
+    // When TRUE, the FB writes the command REAL directly into the UNION
+    // without clamping or scaling. Handy for soft signals / diagnostics.
+    {attribute 'OPC.UA.DA.Description' := 'Write commanded value directly; skip clamp + scale'}
+    useRawValue        : BOOL := FALSE;
+
+    // Command limits in engineering units.
+    {attribute 'OPC.UA.DA.Description' := 'Minimum allowed command (EU)'}
+    minCv              : REAL := 0.0;
+    {attribute 'OPC.UA.DA.Description' := 'Maximum allowed command (EU)'}
+    maxCv              : REAL := 100.0;
+
+    // EU <-> raw linear scaling.
+    {attribute 'OPC.UA.DA.Description' := 'Engineering value at fRawMin'}
+    euMin              : REAL := 0.0;
+    {attribute 'OPC.UA.DA.Description' := 'Engineering value at fRawMax'}
+    euMax              : REAL := 100.0;
+    {attribute 'OPC.UA.DA.Description' := 'Raw value at fEuMin'}
+    rawMin             : REAL := 0.0;
+    {attribute 'OPC.UA.DA.Description' := 'Raw value at fEuMax'}
+    rawMax             : REAL := 32767.0;
+    {attribute 'OPC.UA.DA.Description' := 'Engineering unit for the HMI'}
+    unit               : E_Unit := E_Unit.PERCENT;
+
+    // Clamp alarm behaviour.
+    {attribute 'OPC.UA.DA.Description' := 'Promote clamping to a device fault (ClampLow / ClampHigh)'}
+    clampAsFault       : BOOL := FALSE;
+
+    // Quality watchdog.
+    {attribute 'OPC.UA.DA.Description' := 'Raise BadQuality fault after this long in BAD quality (T#0MS = disabled)'}
+    qualityFaultAfter  : TIME := T#0MS;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

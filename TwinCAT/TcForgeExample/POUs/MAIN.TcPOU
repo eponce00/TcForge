@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="MAIN" Id="{4f4444b9-0fc9-41d2-8d8b-6376a7d4acc5}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+    fbStateMachine : FB_StateMachine;
+    
+    // Online-view command buttons — set TRUE in watch/online to trigger, auto-reset each scan
+    btnHome    : BOOL;
+    btnStart   : BOOL;
+    btnStop    : BOOL;
+    btnAbort   : BOOL;
+    btnPause   : BOOL;
+    btnProceed : BOOL;
+    btnRetry   : BOOL;
+	
+	bTestcfgAutoRun : BOOL := TRUE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbStateMachine(
+    cfgAutoRun := bTestcfgAutoRun  // disable auto-run so manual buttons stay in control
+);
+
+// --- Online command buttons (write TRUE in TwinCAT online view to trigger) ---
+IF btnHome    THEN fbStateMachine.Home();    btnHome    := FALSE; END_IF;
+IF btnStart   THEN fbStateMachine.Start();   btnStart   := FALSE; END_IF;
+IF btnStop    THEN fbStateMachine.Stop();    btnStop    := FALSE; END_IF;
+IF btnAbort   THEN fbStateMachine.Abort();   btnAbort   := FALSE; END_IF;
+IF btnPause   THEN fbStateMachine.Pause();   btnPause   := FALSE; END_IF;
+IF btnProceed THEN fbStateMachine.Proceed(); btnProceed := FALSE; END_IF;
+IF btnRetry   THEN fbStateMachine.Retry();   btnRetry   := FALSE; END_IF;
+
+_1000_PRG_Homing(sm := fbStateMachine);
+_3000_PRG_Running(sm := fbStateMachine);
+_2000_PRG_Stopping(sm := fbStateMachine);
+_5000_PRG_Aborting(sm := fbStateMachine);
+_4000_PRG_Pausing(sm := fbStateMachine);
+_6000_PRG_Proceeding(sm := fbStateMachine);
+
+// Process-condition alarms (separate from device faults — see docs/8-Alarms.md)
+PRG_Alarms(sm := fbStateMachine);
+]]></ST>
+    </Implementation>
+    <LineIds Name="MAIN">
+      <LineId Id="1" Count="0" />
+      <LineId Id="4" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

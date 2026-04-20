@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_StateMachine_Probe" Id="{c3d4e5f6-a7b8-9012-cdef-000000001100}" SpecialFunc="None">
+    <Declaration><![CDATA[// Test-only child of FB_StateMachine. Two jobs:
+//
+//   1. Shift internals (state, step, timer, _nextStep, permissives) into
+//      test reach. FB_StateMachine publishes Status as VAR_OUTPUT (which
+//      TwinCAT makes read-only from outside) and keeps its permission /
+//      interlock blocks as plain VAR members with no external mapping
+//      API, so tests cannot drive them without a subclass.
+//
+//   2. Drive the parent body when the test wants it (SUPER^()) and skip
+//      it when the test doesn't. FB_Step_Test never calls sm() on the
+//      probe — it only uses the mutators and the step FB under test
+//      drives its own observables. FB_StateMachine_Test does call sm()
+//      to exercise transitions. Because the body is just SUPER^(),
+//      both uses are safe: invoking sm() runs the parent logic,
+//      skipping it leaves the injected test state put.
+//
+// Access note: FB_StateMachine declares permAuto / permHome / permStart
+// / permProceed / intlkRunning / R_TRIG_1 / R_TRIG_5 / _nextStep and
+// the _*Requested command flags as plain `VAR`, which in TwinCAT is
+// accessible to subclasses (PROTECTED-like default). This probe leans
+// on that — none of these mutators compile if the parent hides them.
+//
+// Lives in the Testing project only — not part of TcForge's public API.
+FUNCTION_BLOCK FB_StateMachine_Probe EXTENDS TcForge.FB_StateMachine]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();]]></ST>
+    </Implementation>
+    <Method Name="ResetAll" Id="{c3d4e5f6-a7b8-9012-cdef-000000001198}">
+      <Declaration><![CDATA[// Full isolation reset for the shared suite-level probe. Clears fault
+// book-keeping, command-request flags, permissive / interlock live
+// state, rising-edge memory on the SM's internal triggers, and
+// published Status back to its power-on values. Each test method
+// calls this in its own Setup() so tests see a clean slate even
+// though the probe instance itself is reused.
+//
+// Why rising edges matter: R_TRIG_5 fires _completeStateRequested
+// when the current step is in-range for the state AND _nextStep=0.
+// In STOPPED with Step.Current=0 that condition is trivially TRUE
+// (STOPPED has no step range, _IsStepInStateRange returns a
+// degenerate [0,0] match), so a fresh probe or a previous test
+// leaves the rising-edge memory armed — we must explicitly drive
+// CLK:=FALSE to clear it.
+METHOD PUBLIC ResetAll
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rsp := Reset();
+
+_abortRequested         := FALSE;
+_completeStateRequested := FALSE;
+_homeRequested          := FALSE;
+_pauseRequested         := FALSE;
+_proceedRequested       := FALSE;
+_startRequested         := FALSE;
+_stopRequested          := FALSE;
+_retryActive            := FALSE;
+RetryComplete           := FALSE;
+_blockedCode            := 0;
+_starvedCode            := 0;
+
+// Order matters for FB_Interlock: Reset() snaps _latchedBits to the
+// current nLiveBits, so the live bits must already be good before the
+// reset. Otherwise a bit left FALSE by a previous test (e.g. the
+// running-interlock-trip case) stays latched bad across the reset and
+// makes every subsequent test look like the interlock auto-aborted.
+// FB_Permissives is non-latching so the order doesn't matter there,
+// but we keep it consistent.
+permHome.MapInput(bitIndex := 0, inputValue := TRUE);
+permStart.MapInput(bitIndex := 0, inputValue := TRUE);
+permProceed.MapInput(bitIndex := 0, inputValue := TRUE);
+permAuto.MapInput(bitIndex := 0, inputValue := TRUE);
+intlkRunning.MapInput(bitIndex := 0, inputValue := TRUE);
+permHome.Reset();
+permStart.Reset();
+permProceed.Reset();
+permAuto.Reset();
+intlkRunning.Reset();
+
+R_TRIG_1(CLK := FALSE);
+R_TRIG_5(CLK := FALSE);
+
+Status.State            := TcForge.E_SM_State.STOPPED;
+Status.LastState        := TcForge.E_SM_State.STOPPED;
+Status.Step.Current     := 0;
+Status.Step.Next        := 0;
+Status.Step.TimerSeconds := 0.0;
+Status.Faulted          := FALSE;
+Status.SubmoduleFaulted := FALSE;
+Status.BlockedCondition := 0;
+Status.StarvedCondition := 0;
+Status.AutoStartRequest := FALSE;
+Status.AutoCycleRequest := FALSE;
+
+_nextStep      := 0;
+_returnState   := TcForge.E_SM_State.STOPPED;
+ReturnNextStep := 0;
+PreviousStep   := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetCurrentStep" Id="{c3d4e5f6-a7b8-9012-cdef-000000001101}">
+      <Declaration><![CDATA[// Force the active step number. Lets FB_Step see _active = TRUE without
+// us having to drive Home/Start/state transitions end-to-end.
+METHOD PUBLIC SetCurrentStep
+VAR_INPUT
+    nStep : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Status.Step.Current := nStep;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetTimerSeconds" Id="{c3d4e5f6-a7b8-9012-cdef-000000001102}">
+      <Declaration><![CDATA[// Inject a step-timer reading so timeout branches can be tested without
+// actually letting wall-clock time pass. The production SM owns the
+// timer — here we just write the published value directly.
+METHOD PUBLIC SetTimerSeconds
+VAR_INPUT
+    seconds : REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Status.Step.TimerSeconds := seconds;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ForceState" Id="{c3d4e5f6-a7b8-9012-cdef-000000001103}">
+      <Declaration><![CDATA[// Park the SM in a specific state without walking the full
+// Home/Start/Complete command sequence. Used by the transition tests
+// to set up "machine is in state X, now issue command Y" without
+// running a sequence first.
+METHOD PUBLIC ForceState
+VAR_INPUT
+    state : TcForge.E_SM_State;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Status.State := state;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ForceLastState" Id="{c3d4e5f6-a7b8-9012-cdef-000000001104}">
+      <Declaration><![CDATA[// Set Status.LastState directly. Needed for the AutoCycle path
+// (fires when State=READY AND LastState=RUNNING) without walking
+// a full RUNNING -> READY transition first.
+METHOD PUBLIC ForceLastState
+VAR_INPUT
+    state : TcForge.E_SM_State;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Status.LastState := state;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ForceNextStep" Id="{c3d4e5f6-a7b8-9012-cdef-000000001105}">
+      <Declaration><![CDATA[// Drive _nextStep directly. Used with ForceState+SetCurrentStep to
+// simulate "mid-sequence" — if _nextStep stays at 0 while a forced
+// Current lands inside the state's step range, R_TRIG_5 fires a
+// spurious sequence-complete that tests don't want.
+METHOD PUBLIC ForceNextStep
+VAR_INPUT
+    nStep : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_nextStep := nStep;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MapHomePerm" Id="{c3d4e5f6-a7b8-9012-cdef-000000001106}">
+      <Declaration><![CDATA[// Map a bit into the private permHome block so the Home-permissive
+// gate can be observed. Without this the internal FB_Permissives has
+// no external mapping surface on the SM, and every test would see
+// "all perms OK" by default.
+METHOD PUBLIC MapHomePerm
+VAR_INPUT
+    bitIndex : UDINT;
+    bGood    : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[permHome.MapInput(bitIndex := bitIndex, inputValue := bGood);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MapStartPerm" Id="{c3d4e5f6-a7b8-9012-cdef-000000001107}">
+      <Declaration><![CDATA[METHOD PUBLIC MapStartPerm
+VAR_INPUT
+    bitIndex : UDINT;
+    bGood    : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[permStart.MapInput(bitIndex := bitIndex, inputValue := bGood);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MapProceedPerm" Id="{c3d4e5f6-a7b8-9012-cdef-000000001108}">
+      <Declaration><![CDATA[METHOD PUBLIC MapProceedPerm
+VAR_INPUT
+    bitIndex : UDINT;
+    bGood    : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[permProceed.MapInput(bitIndex := bitIndex, inputValue := bGood);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MapAutoPerm" Id="{c3d4e5f6-a7b8-9012-cdef-000000001109}">
+      <Declaration><![CDATA[METHOD PUBLIC MapAutoPerm
+VAR_INPUT
+    bitIndex : UDINT;
+    bGood    : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[permAuto.MapInput(bitIndex := bitIndex, inputValue := bGood);]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

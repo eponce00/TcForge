@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_DeviceHeader_Sts" Id="{c0000011-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Common status header embedded at the top of every device sts struct.
+// Populated by FB_DeviceBase each cycle from the composed fault handler and
+// source-lock flag; device-specific fields sit below the header in the child
+// sts struct.
+//
+// Fault surface:
+//   - faultCode / faultString : stable identifiers from the device's fault
+//     enum and ResolveFaultString().
+//   - faultSource / faultReason : contextual detail supplied by whoever
+//     raised the fault (step number, interlock, submodule, free-form text).
+//   HMI typically shows faultString as the title and faultReason as a detail
+//   line. Either may be empty — consumers should handle that gracefully.
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_DeviceHeader_Sts :
+STRUCT
+    {attribute 'OPC.UA.DA.Description' := 'Human-readable device state'}
+    stateString     : STRING(31);
+    {attribute 'OPC.UA.DA.Description' := 'Device idle, not faulted, source reachable'}
+    ready        : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Device actively transitioning'}
+    busy         : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Device fault is currently asserted'}
+    faulted      : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Source is locked to PROG (rejects OPERATOR commands)'}
+    sourceLocked : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Current fault code (0 = no fault)'}
+    faultCode       : DINT;
+    {attribute 'OPC.UA.DA.Description' := 'Current fault code as text (ResolveFaultString)'}
+    faultString     : STRING(79);
+    {attribute 'OPC.UA.DA.Description' := 'Where the current fault was raised (step/interlock/submodule)'}
+    faultSource     : STRING(31);
+    {attribute 'OPC.UA.DA.Description' := 'Free-form human-readable detail about the current fault'}
+    faultReason     : STRING(79);
+    {attribute 'OPC.UA.DA.Description' := 'Most recent fault code (survives Reset)'}
+    lastFaultCode   : DINT;
+    {attribute 'OPC.UA.DA.Description' := 'Most recent fault code as text'}
+    lastFaultString : STRING(79);
+    {attribute 'OPC.UA.DA.Description' := 'Source of most recent fault'}
+    lastFaultSource : STRING(31);
+    {attribute 'OPC.UA.DA.Description' := 'Free-form detail of most recent fault'}
+    lastFaultReason : STRING(79);
+    {attribute 'OPC.UA.DA.Description' := 'Who issued the last accepted command'}
+    lastRequester   : E_Requester;
+    {attribute 'OPC.UA.DA.Description' := 'Timestamp of last accepted command'}
+    tsLastCommand   : LTIME;
+    {attribute 'OPC.UA.DA.Description' := 'Timestamp of most recent raised fault'}
+    tsLastFault     : LTIME;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

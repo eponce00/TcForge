@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AlarmRateOfChange" Id="{a0200005-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Runaway / sensor-drop detector. Alarms when |d(inpPv)/dt| > cfg.fRateLimit.
+//
+// dt is measured via F_GetTaskCycleTime() so the rate is calibrated in
+// engineering-units per second regardless of task rate. First scan after
+// power-up or after bEnable rises initialises the previous sample and reports
+// zero rate (no false trip at boot).
+//
+// outRateOfChange is always exposed for diagnostics / trending, not only when
+// the alarm is active.
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_AlarmRateOfChange EXTENDS FB_AlarmBase
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg   : ST_AlarmRateOfChange_Cfg;
+
+    {attribute 'OPC.UA.DA' := '0'}
+    inpPv : REAL;
+END_VAR
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    {attribute 'OPC.UA.DA.Description' := 'Latest rate of change (units / s)'}
+    outRateOfChange : REAL;
+END_VAR
+VAR
+    {attribute 'OPC.UA.DA' := '0'}
+    _raw           : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _previousPv    : REAL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _firstScan     : BOOL := TRUE;
+    {attribute 'OPC.UA.DA' := '0'}
+    _cycleTimeSec  : REAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Cycle time in seconds (F_GetTaskCycleTime returns TIME in ms).
+_cycleTimeSec := TIME_TO_REAL(F_GetTaskCycleTime()) / 1000.0;
+
+IF NOT cfg.common.bEnable THEN
+    // Mirror the base's disabled path for our extra state
+    outRateOfChange := 0.0;
+    _previousPv     := inpPv;
+    _firstScan      := TRUE;
+    _raw            := FALSE;
+    _Evaluate(cfgCommon := cfg.common, bRawCondition := FALSE);
+    RETURN;
+END_IF;
+
+// Seed on first enabled scan — no rate is meaningful yet.
+IF _firstScan THEN
+    _firstScan      := FALSE;
+    _previousPv     := inpPv;
+    outRateOfChange := 0.0;
+    _raw            := FALSE;
+    _Evaluate(cfgCommon := cfg.common, bRawCondition := FALSE);
+    RETURN;
+END_IF;
+
+IF _cycleTimeSec > 0.0 THEN
+    outRateOfChange := (inpPv - _previousPv) / _cycleTimeSec;
+ELSE
+    outRateOfChange := 0.0;
+END_IF;
+_previousPv := inpPv;
+
+_raw := ABS(outRateOfChange) > cfg.fRateLimit;
+_Evaluate(cfgCommon := cfg.common, bRawCondition := _raw);]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

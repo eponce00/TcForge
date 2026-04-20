@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <Itf Name="I_Alarm" Id="{c0000006-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Common contract every FB_Alarm* exposes. Lets HMI gateways and aggregators
+// acknowledge a heterogeneous collection of alarms uniformly.
+INTERFACE I_Alarm
+]]></Declaration>
+    <Method Name="Ack" Id="{c0000006-0000-0000-1000-000000000001}">
+      <Declaration><![CDATA[METHOD Ack : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+    </Method>
+    <Method Name="LockSource" Id="{c0000006-0000-0000-1000-000000000002}">
+      <Declaration><![CDATA[METHOD LockSource : E_RpcMethodResponse
+VAR_INPUT
+    bLock : BOOL;
+END_VAR]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

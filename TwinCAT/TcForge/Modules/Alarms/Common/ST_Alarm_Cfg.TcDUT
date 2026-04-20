@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_Alarm_Cfg" Id="{b0200000-0001-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Shared head of every alarm's configuration. Each concrete alarm's
+// ST_Alarm<Type>_Cfg nests this as `common` so the HMI / consumer-facing shape
+// is consistent. Alarms default disabled — explicit enable at commissioning
+// prevents silent nuisance trips.
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_Alarm_Cfg :
+STRUCT
+    {attribute 'OPC.UA.DA.Description' := 'FALSE = alarm suppressed (always reports NONE/FALSE)'}
+    bEnable     : BOOL := FALSE;
+
+    {attribute 'OPC.UA.DA.Description' := 'Debounce — condition must hold this long before tripping'}
+    tOnDelay    : TIME := T#0MS;
+
+    {attribute 'OPC.UA.DA.Description' := 'Hysteresis — condition must clear this long before releasing'}
+    tOffDelay   : TIME := T#0MS;
+
+    {attribute 'OPC.UA.DA.Description' := 'TRUE = alarm latches and requires Ack() to clear'}
+    bRequireAck : BOOL := FALSE;
+
+    {attribute 'OPC.UA.DA.Description' := 'HMI severity tag surfaced on sts.eSeverity while active'}
+    eSeverity   : E_AlarmSeverity := E_AlarmSeverity.NONE;
+
+    {attribute 'OPC.UA.DA.Description' := 'Short operator-facing message (e.g. "Tank 1 level > 95%")'}
+    sMessage    : STRING(79) := '';
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DigitalOutput" Id="{a0100002-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Generic digital output driver.
+//
+// Pipeline:
+//   SetOn / SetOff -> persistent request -> quality gate -> asymmetric
+//   debounce -> mode (Regular | SinglePulse | ContinuousPulse) -> invert
+//   (Regular only) -> terminal bit (io.outSignal)
+//
+// Request is persisted so an unexpected PLC restart resumes the last
+// commanded state instead of silently dropping the output.
+//
+// Inversion deliberately only applies in Regular mode — inverting a pulse
+// train just phase-shifts it, which is rarely what the author means. Pulse
+// behaviour should be shaped through cfg.pulseOn / cfg.pulseOff.
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_DigitalOutput EXTENDS FB_DeviceBase
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg        : ST_DigitalOutput_Cfg;
+    {attribute 'OPC.UA.DA' := '0'}
+    inpQuality : E_IO_Quality := E_IO_Quality.GOOD;
+END_VAR
+
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_DigitalOutput_Sts;
+END_VAR
+
+VAR PERSISTENT
+    // Last commanded value. Survives power cycle / warm reset.
+    {attribute 'OPC.UA.DA' := '0'}
+    _requestSync : BOOL;
+END_VAR
+
+VAR
+    // Hardware-linked struct (AT %Q*). Wired at instance declaration with
+    // {attribute 'TcLinkTo' := '.io.outSignal := TIID^...'}. See docs/5-IO-Binding.md.
+    {attribute 'OPC.UA.DA' := '0'}
+    io              : ST_DigitalOutput_IO;
+
+    // Debounce of commanded value.
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonOn          : TON;
+    {attribute 'OPC.UA.DA' := '0'}
+    _tofOff         : TOF;
+
+    // Pulse-mode timers.
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonPulseOn     : TON;
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonPulseOff    : TON;
+
+    // Quality watchdog.
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonBadQuality  : TON;
+
+    // Scratch state.
+    {attribute 'OPC.UA.DA' := '0'}
+    _debouncedCmd   : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _prevDebounced  : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _pulseActive    : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _finalOutput    : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _prevPhysical   : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// 1. Publish quality + commanded value before any gating.
+sts.quality   := inpQuality;
+sts.commanded := _requestSync;
+
+// 2. Asymmetric debounce on commanded value. Keeps pulse timers in sync
+//    with the debounced edge, not the raw request.
+_tonOn (IN := _requestSync, PT := cfg.debounceOn);
+_tofOff(IN := _requestSync, PT := cfg.debounceOff);
+
+IF _requestSync AND _tonOn.Q THEN
+    _debouncedCmd := TRUE;
+ELSIF NOT _requestSync AND NOT _tofOff.Q THEN
+    _debouncedCmd := FALSE;
+END_IF;
+
+// 3. Mode shaping.
+CASE cfg.mode OF
+    E_DigitalOutput_Mode.Regular:
+        _tonPulseOn (IN := FALSE);
+        _tonPulseOff(IN := FALSE);
+        _pulseActive := FALSE;
+        IF cfg.invert THEN
+            _finalOutput := NOT _debouncedCmd;
+        ELSE
+            _finalOutput := _debouncedCmd;
+        END_IF;
+
+    E_DigitalOutput_Mode.SinglePulse:
+        // Rising edge of debounced command arms the one-shot.
+        IF _debouncedCmd AND NOT _prevDebounced THEN
+            _pulseActive := TRUE;
+            _tonPulseOn(IN := FALSE);
+        END_IF;
+
+        IF _pulseActive THEN
+            _tonPulseOn(IN := TRUE, PT := cfg.pulseOn);
+            IF _tonPulseOn.Q THEN
+                _pulseActive := FALSE;
+            END_IF;
+        END_IF;
+
+        // Commanded-LOW disarms the pulse early so operators can cancel.
+        IF NOT _debouncedCmd THEN
+            _pulseActive := FALSE;
+            _tonPulseOn(IN := FALSE);
+        END_IF;
+
+        _tonPulseOff(IN := FALSE);
+        _finalOutput := _pulseActive AND NOT _tonPulseOn.Q;
+
+    E_DigitalOutput_Mode.ContinuousPulse:
+        // While the command is TRUE, alternate ON / OFF using the two
+        // pulse timers as a simple state machine.
+        IF _debouncedCmd THEN
+            IF _pulseActive THEN
+                _tonPulseOn (IN := TRUE, PT := cfg.pulseOn);
+                _tonPulseOff(IN := FALSE);
+                IF _tonPulseOn.Q THEN
+                    _pulseActive := FALSE;
+                    _tonPulseOn(IN := FALSE);
+                END_IF;
+            ELSE
+                _tonPulseOff(IN := TRUE, PT := cfg.pulseOff);
+                _tonPulseOn (IN := FALSE);
+                IF _tonPulseOff.Q THEN
+                    _pulseActive := TRUE;
+                    _tonPulseOff(IN := FALSE);
+                END_IF;
+            END_IF;
+            _finalOutput := _pulseActive;
+        ELSE
+            _pulseActive := FALSE;
+            _tonPulseOn (IN := FALSE);
+            _tonPulseOff(IN := FALSE);
+            _finalOutput := FALSE;
+        END_IF;
+END_CASE;
+
+// 4. Write hardware only when quality is acceptable. Bad quality holds the
+//    last known good state to avoid commanding unsafe transitions.
+IF inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED THEN
+    io.outSignal := _finalOutput;
+END_IF;
+
+// 5. Edge pulses reflect the *physical* output, not the command.
+sts.risingEdge  :=      io.outSignal AND NOT _prevPhysical;
+sts.fallingEdge := NOT io.outSignal AND     _prevPhysical;
+_prevPhysical := io.outSignal;
+_prevDebounced := _debouncedCmd;
+
+sts.value := io.outSignal;
+
+// 6. Quality watchdog.
+_tonBadQuality(
+    IN := inpQuality = E_IO_Quality.BAD AND cfg.qualityFaultAfter > T#0MS,
+    PT := cfg.qualityFaultAfter
+);
+
+IF _tonBadQuality.Q THEN
+    _Raise(
+        code   := E_DigitalOutput_Fault.BadQuality,
+        source := 'QUALITY',
+        reason := 'inpQuality stayed BAD past qualityFaultAfter'
+    );
+END_IF;
+
+// 7. Refresh shared header.
+_UpdateHeader(header := sts.header, stateString := '', busy := FALSE);]]></ST>
+    </Implementation>
+    <Folder Name="Public" Id="{a0100002-0000-0000-f000-000000000001}" />
+    <Folder Name="Protected" Id="{a0100002-0000-0000-f000-000000000002}" />
+    <Method Name="SetOn" Id="{a0100002-0000-0000-1000-000000000001}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC SetOn : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SetOn := F_ValidateRequester(
+    eRequester    := eRequester,
+    bSourceLocked := bSourceLockedToProg,
+    bFaulted      := IsFaulted()
+);
+
+IF SetOn <> E_RpcMethodResponse.ACCEPTED THEN
+    RETURN;
+END_IF;
+
+_requestSync := TRUE;
+_AcceptCommand(eRequester := eRequester);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetOff" Id="{a0100002-0000-0000-1000-000000000002}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC SetOff : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SetOff := F_ValidateRequester(
+    eRequester    := eRequester,
+    bSourceLocked := bSourceLockedToProg,
+    bFaulted      := IsFaulted()
+);
+
+IF SetOff <> E_RpcMethodResponse.ACCEPTED THEN
+    RETURN;
+END_IF;
+
+_requestSync := FALSE;
+_AcceptCommand(eRequester := eRequester);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResolveFaultString" Id="{a0100002-0000-0000-1000-000000000003}" FolderPath="Protected\">
+      <Declaration><![CDATA[METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE code OF
+    0:
+        ResolveFaultString := '';
+    E_DigitalOutput_Fault.BadQuality:
+        ResolveFaultString := 'Output quality BAD past configured timeout';
+ELSE
+    ResolveFaultString := CONCAT('DigitalOutput fault ', DINT_TO_STRING(code));
+END_CASE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_DigitalOutput">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DigitalOutput.SetOn">
+      <LineId Id="1" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_DigitalOutput.SetOff">
+      <LineId Id="1" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_DigitalOutput.ResolveFaultString">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

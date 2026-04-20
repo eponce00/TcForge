@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_DigitalOutput_Cfg" Id="{b0100002-0001-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Configuration for FB_DigitalOutput. Defaults drive the output directly.
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_DigitalOutput_Cfg :
+STRUCT
+    // Signal conditioning
+    {attribute 'OPC.UA.DA.Description' := 'Invert output signal (active-low actuators). Regular mode only.'}
+    invert            : BOOL := FALSE;
+
+    // Asymmetric debounce of the commanded value (not the physical output).
+    // Useful for suppressing chatter from the commander. T#0MS disables.
+    {attribute 'OPC.UA.DA.Description' := 'OFF->ON debounce delay on commanded value'}
+    debounceOn        : TIME := T#0MS;
+    {attribute 'OPC.UA.DA.Description' := 'ON->OFF debounce delay on commanded value'}
+    debounceOff       : TIME := T#0MS;
+
+    // Output mode
+    {attribute 'OPC.UA.DA.Description' := 'Regular, SinglePulse, or ContinuousPulse'}
+    mode              : E_DigitalOutput_Mode := E_DigitalOutput_Mode.Regular;
+    {attribute 'OPC.UA.DA.Description' := 'ON duration for pulse modes'}
+    pulseOn           : TIME := T#100MS;
+    {attribute 'OPC.UA.DA.Description' := 'OFF duration for ContinuousPulse mode'}
+    pulseOff          : TIME := T#100MS;
+
+    // Quality watchdog
+    {attribute 'OPC.UA.DA.Description' := 'Raise BadQuality fault after this long in BAD quality (T#0MS = disabled)'}
+    qualityFaultAfter : TIME := T#0MS;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

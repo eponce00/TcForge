@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="_4000_PRG_Pausing" Id="{12345678-1234-1234-1234-123456789004}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM _4000_PRG_Pausing
+VAR_IN_OUT
+    sm : FB_StateMachine;
+END_VAR
+VAR
+    step4000 : FB_Step;
+    step4002 : FB_Step;
+
+    // Simulated signals
+    bAxesHolding       : BOOL;
+    bProcessSuspended  : BOOL;
+    tonRampDown        : TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+//=============================================================================
+// STEP 4000 - Ramp Down to Hold
+// Demonstrates: Entry (command hold), Execute (monitor ramp), Exiting (confirm)
+//=============================================================================
+step4000(sm := sm, nStep := 4000, nNextStep := 4002, nTimeout := 8, sName := 'Ramp Down');
+
+IF step4000.Entry THEN
+    // One-shot: command controlled ramp-down
+    bAxesHolding := FALSE;
+    bProcessSuspended := FALSE;
+    tonRampDown(IN := FALSE);
+END_IF;
+
+IF step4000.Execute THEN
+    // Simulate ramp-down over 3 seconds
+    tonRampDown(IN := TRUE, PT := T#3S);
+    bAxesHolding := tonRampDown.Q;
+
+    step4000.MapPerm(nIndex := 0, sDescription := 'Axes Holding Position', bValue := bAxesHolding);
+    step4000.MapPerm(nIndex := 1, sDescription := 'No Motion Commands',    bValue := TRUE);
+END_IF;
+
+IF step4000.Exiting THEN
+    tonRampDown(IN := FALSE);
+END_IF;
+
+//=============================================================================
+// STEP 4002 - Suspend Process
+// Demonstrates: Entry (freeze process state), nNextStep := 0 enters Paused
+//=============================================================================
+step4002(sm := sm, nStep := 4002, nNextStep := 0, nTimeout := 5, sName := 'Suspend Process');
+
+IF step4002.Entry THEN
+    bProcessSuspended := FALSE;
+END_IF;
+
+IF step4002.Execute THEN
+    // Simulate process freeze
+    bProcessSuspended := sm.Status.Step.TimerSeconds >= 1.0;
+
+    step4002.MapPerm(nIndex := 0, sDescription := 'Process State Saved',  bValue := bProcessSuspended);
+    step4002.MapPerm(nIndex := 1, sDescription := 'Heaters in Standby',   bValue := TRUE);
+    step4002.MapPerm(nIndex := 2, sDescription := 'Vacuum Maintained',    bValue := TRUE);
+END_IF;
+
+IF step4002.Exiting THEN
+    // Process is now paused - operator can inspect / Proceed resumes
+    ;
+END_IF;
+]]></ST>
+    </Implementation>
+    <LineIds Name="_4000_PRG_Pausing">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_Interlock_Faceplate" Id="{a1b2c3d4-1001-4e5f-9000-000000000001}">
+    <Declaration><![CDATA[(*
+Interlock Faceplate Structure
+=============================
+Per-bit HMI data for a single interlock condition.
+*)
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_Interlock_Faceplate :
+STRUCT
+	{attribute 'OPC.UA.DA.Description' := 'Human readable name of the interlock'}
+	name : STRING(50);
+	{attribute 'OPC.UA.DA.Description' := 'Effective status after latch + bypass (TRUE=good, FALSE=bad)'}
+	ok : BOOL;
+	{attribute 'OPC.UA.DA.Description' := 'Raw real-time condition (TRUE=good, FALSE=bad)'}
+	live : BOOL;
+	{attribute 'OPC.UA.DA.Description' := 'TRUE if currently latched bad (needs Reset)'}
+	latched : BOOL;
+	{attribute 'OPC.UA.DA.Description' := 'TRUE if this bit is actively mapped via MapInput'}
+	mapped : BOOL;
+	{attribute 'OPC.UA.DA.Description' := 'TRUE if this bit is currently bypassed'}
+	bypassed : BOOL;
+	{attribute 'OPC.UA.DA.Description' := 'TRUE if this bit is configured as bypassable'}
+	bypassable : BOOL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

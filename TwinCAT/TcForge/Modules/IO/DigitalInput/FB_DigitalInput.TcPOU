@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DigitalInput" Id="{a0100001-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Generic digital input conditioner.
+//
+// Pipeline:
+//   terminal bit (io.inSignal) -> quality gate -> invert -> asymmetric
+//   debounce -> edge detection -> sts.value / risingEdge / fallingEdge
+//
+// Quality handling: while inpQuality is BAD the raw reading is ignored and
+// the previous rawValue is held. If the input stays BAD longer than
+// cfg.qualityFaultAfter the FB raises E_DigitalInput_Fault.BadQuality
+// through the fault book-keeping inherited from FB_DeviceBase.
+//
+// Debounce is asymmetric on purpose: many sensors need a short ON-delay to
+// reject noise but should drop out instantly when they go dark (or vice
+// versa). Setting both times to T#0MS disables the filter.
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_DigitalInput EXTENDS FB_DeviceBase
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg        : ST_DigitalInput_Cfg;
+    {attribute 'OPC.UA.DA' := '0'}
+    inpQuality : E_IO_Quality := E_IO_Quality.GOOD;
+END_VAR
+
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_DigitalInput_Sts;
+END_VAR
+
+VAR
+    // Hardware-linked struct (AT %I*). Wired at instance declaration with
+    // {attribute 'TcLinkTo' := '.io.inSignal := TIID^...'}. See docs/5-IO-Binding.md.
+    {attribute 'OPC.UA.DA' := '0'}
+    io              : ST_DigitalInput_IO;
+
+    // Debounce timers (asymmetric ON / OFF delays).
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonOn          : TON;
+    {attribute 'OPC.UA.DA' := '0'}
+    _tofOff         : TOF;
+
+    // Quality watchdog — only ticks while inpQuality = BAD.
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonBadQuality  : TON;
+
+    // Scratch values.
+    {attribute 'OPC.UA.DA' := '0'}
+    _rawBool        : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _invertedBool   : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _debouncedBool  : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _prevDebounced  : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// 1. Quality-gated read. BAD quality holds the previous raw value so
+//    downstream logic does not see glitches while a wire break persists.
+sts.quality := inpQuality;
+
+IF inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED THEN
+    _rawBool := io.inSignal;
+ELSE
+    _rawBool := sts.rawValue;
+END_IF;
+
+// 2. Invert if the sensor is active-low.
+IF cfg.invert THEN
+    _invertedBool := NOT _rawBool;
+ELSE
+    _invertedBool := _rawBool;
+END_IF;
+
+// 3. Asymmetric debounce. TON confirms rising edges; TOF confirms falling
+//    edges. Q on either timer encodes "input has held that state long enough".
+_tonOn(IN := _invertedBool, PT := cfg.debounceOn);
+_tofOff(IN := _invertedBool, PT := cfg.debounceOff);
+
+IF _invertedBool AND _tonOn.Q THEN
+    _debouncedBool := TRUE;
+ELSIF NOT _invertedBool AND NOT _tofOff.Q THEN
+    _debouncedBool := FALSE;
+END_IF;
+
+// 4. Edge pulses are one-scan wide and fire on the debounced value.
+sts.risingEdge  :=      _debouncedBool AND NOT _prevDebounced;
+sts.fallingEdge := NOT _debouncedBool AND     _prevDebounced;
+_prevDebounced     := _debouncedBool;
+
+// 5. Publish processed + raw values.
+sts.value    := _debouncedBool;
+sts.rawValue := _rawBool;
+
+// 6. Quality watchdog. Enabled only when qualityFaultAfter > 0.
+_tonBadQuality(
+    IN := inpQuality = E_IO_Quality.BAD AND cfg.qualityFaultAfter > T#0MS,
+    PT := cfg.qualityFaultAfter
+);
+
+IF _tonBadQuality.Q THEN
+    _Raise(
+        code   := E_DigitalInput_Fault.BadQuality,
+        source := 'QUALITY',
+        reason := 'inpQuality stayed BAD past qualityFaultAfter'
+    );
+END_IF;
+
+// 7. Refresh shared header (fault surface, ready flags, timestamps).
+_UpdateHeader(header := sts.header, stateString := '', busy := FALSE);]]></ST>
+    </Implementation>
+    <Folder Name="Protected" Id="{a0100001-0000-0000-f000-000000000001}" />
+    <Method Name="ResolveFaultString" Id="{a0100001-0000-0000-1000-000000000001}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Maps E_DigitalInput_Fault codes to human-readable strings for the HMI.
+METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE code OF
+    0:
+        ResolveFaultString := '';
+    E_DigitalInput_Fault.BadQuality:
+        ResolveFaultString := 'Signal quality BAD past configured timeout';
+    E_DigitalInput_Fault.StuckHigh:
+        ResolveFaultString := 'Debounced signal stuck HIGH past configured timeout';
+    E_DigitalInput_Fault.StuckLow:
+        ResolveFaultString := 'Debounced signal stuck LOW past configured timeout';
+ELSE
+    ResolveFaultString := CONCAT('DigitalInput fault ', DINT_TO_STRING(code));
+END_CASE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_DigitalInput">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DigitalInput.ResolveFaultString">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_AnalogInput_Cfg" Id="{b0100003-0001-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Configuration for FB_AnalogInput. Defaults are a 0-100 % pass-through of
+// an INT terminal scaled linearly from raw 0..32767 — adjust for the real
+// hardware.
+//
+// FB_AnalogInput is intentionally conditioning-only: raw type select, quality
+// gate, clamp-to-scaling-range, linear scale, optional LPF. If you need HH /
+// HI / LO / LL process alarms, compose FB_AlarmLimit with the published
+// value — that keeps alarm config, latching, severity, and ack logic in
+// one place (see docs/8-Alarms.md).
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_AnalogInput_Cfg :
+STRUCT
+    // Which UNION member to read. Supported values:
+    //   TYPE_REAL, TYPE_INT, TYPE_UINT, TYPE_WORD, TYPE_DWORD, TYPE_UDINT, TYPE_DINT
+    {attribute 'OPC.UA.DA.Description' := 'Terminal numeric type (selects UNION member)'}
+    inputType          : __SYSTEM.TYPE_CLASS := __SYSTEM.TYPE_CLASS.TYPE_INT;
+
+    // When TRUE, the FB skips clamping + scaling + filtering and publishes
+    // the raw REAL representation directly. Handy for soft signals, bit-
+    // masked terminals, or diagnostics.
+    {attribute 'OPC.UA.DA.Description' := 'Bypass clamp + scale + filter; publish raw value'}
+    useRawValue        : BOOL := FALSE;
+
+    // Raw-to-EU linear scaling. Example: 4-20 mA on an EL3024 reports raw
+    // in [0, 32767]; to get 0-100 % set fRawMin=0, fRawMax=32767, fPvMin=0,
+    // fPvMax=100.
+    {attribute 'OPC.UA.DA.Description' := 'Raw value corresponding to fPvMin'}
+    rawMin             : REAL := 0.0;
+    {attribute 'OPC.UA.DA.Description' := 'Raw value corresponding to fPvMax'}
+    rawMax             : REAL := 32767.0;
+
+    {attribute 'OPC.UA.DA.Description' := 'Engineering value at fRawMin'}
+    euMin              : REAL := 0.0;
+    {attribute 'OPC.UA.DA.Description' := 'Engineering value at fRawMax'}
+    euMax              : REAL := 100.0;
+    {attribute 'OPC.UA.DA.Description' := 'Engineering unit for the HMI'}
+    unit               : E_Unit := E_Unit.PERCENT;
+
+    // Clamp reporting. sts.clamped* always tracks whether the raw input
+    // was outside [rawMin, rawMax]; clampAsFault promotes that condition
+    // to a persistent device fault.
+    {attribute 'OPC.UA.DA.Description' := 'Promote out-of-range raw readings to ClampLow / ClampHigh faults'}
+    clampAsFault       : BOOL := FALSE;
+
+    // Optional first-order low-pass filter. T#0MS disables filtering.
+    {attribute 'OPC.UA.DA.Description' := 'Low-pass filter time constant (T#0MS = disabled)'}
+    filterTau          : TIME := T#0MS;
+
+    // Quality watchdog.
+    {attribute 'OPC.UA.DA.Description' := 'Raise BadQuality fault after this long in BAD quality (T#0MS = disabled)'}
+    qualityFaultAfter  : TIME := T#0MS;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

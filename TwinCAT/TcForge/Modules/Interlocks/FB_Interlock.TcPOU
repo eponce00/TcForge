@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_Interlock" Id="{a1b2c3d4-1001-4e5f-9000-000000000010}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+INTERLOCK - Safety Protection Function Block
+============================================
+Philosophy: Prevents unsafe conditions from continuing. Latches bad
+            conditions until a deliberate Reset() call, even if the
+            real-world condition has already recovered.
+Behavior:   Every mapped bit latches by design. Reset() is required to
+            clear latched bits. Bypass is available per bit only if
+            cfg.nBypassable marks the bit as bypassable.
+Logic:      Mapped bits 1 = good, 0 = bad. Unmapped bits default good.
+            A bit that was bad at the time its mapping stopped is
+            remembered and keeps sts.bOK FALSE until Reset() is called.
+            sts.bOK = TRUE when every active interlock bit is good.
+Mapping:    Call MapInput(bitIndex, value) every cycle for each active
+            interlock condition. Unmapped bits automatically reset to
+            good after FB_BitMatrix64's MAPPING_TIMEOUT cycles.
+Clearing:   Call Reset() after the real-world conditions have cleared.
+
+The 64-bit condition-matrix machinery is shared with FB_Permissives via
+FB_BitMatrix64; the latching + unmapped-bad memory is the interlock-only
+logic that sits on top.
+
+Contrast with FB_Permissives: permissives are non-latching operational
+readiness checks; interlocks are latching safety protections.
+*)
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK PUBLIC FB_Interlock
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg : ST_Interlock_Config;
+END_VAR
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_Interlock_Status;
+END_VAR
+VAR
+    {attribute 'OPC.UA.DA' := '0'}
+    _core            : FB_BitMatrix64;
+    {attribute 'OPC.UA.DA' := '0'}
+    _latchedBits     : ULINT := 16#FFFFFFFFFFFFFFFF;
+    {attribute 'OPC.UA.DA' := '0'}
+    _unmappedBadBits : ULINT := 0;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Drive the shared bit-matrix machinery (cycle counter, cleanup, transitions).
+_core();
+
+// Carry forward any "bad at unmap" memory — keeps sts.bOK FALSE until Reset().
+_unmappedBadBits := _unmappedBadBits OR _core.nJustUnmappedBad;
+
+// Latch once a mapped bit goes bad; inactive/unmapped bits remain good.
+_latchedBits := (_latchedBits AND _core.nLiveBits) OR NOT _core.nActiveMask;
+
+// Effective: latched-or-unmapped, then forced good by any bypass bits.
+sts.nInterlocks           := (_latchedBits OR NOT _core.nActiveMask) OR _core.nBypassMask;
+sts.nLatched              := _latchedBits;
+sts.nBypassMask           := _core.nBypassMask;
+sts.nFirstFailureBitIndex := _core.nFirstFailureBitIndex;
+sts.bOK                   := (sts.nInterlocks = 16#FFFFFFFFFFFFFFFF) AND (_unmappedBadBits = 0);
+
+UpdateFaceplates();]]></ST>
+    </Implementation>
+    <Folder Name="Private" Id="{a1b2c3d4-1001-4e5f-9000-000000000011}" />
+    <Folder Name="Public" Id="{a1b2c3d4-1001-4e5f-9000-000000000012}" />
+    <Method Name="MapInput" Id="{a1b2c3d4-1001-4e5f-9000-000000000030}" FolderPath="Public\">
+      <Declaration><![CDATA[(*
+Map a boolean input signal to a specific interlock bit (0..63).
+Call every cycle for each active interlock condition.
+TRUE = good / safe, FALSE = bad / unsafe.
+*)
+METHOD PUBLIC MapInput
+VAR_INPUT
+    bitIndex   : UDINT;
+    inputValue : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_core.MapInput(bitIndex := bitIndex, inputValue := inputValue);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Reset" Id="{a1b2c3d4-1001-4e5f-9000-000000000031}" FolderPath="Public\">
+      <Declaration><![CDATA[(*
+Reset - clear latched bits by snapping them to the current live value.
+Active bits that are currently good become good; active bits still bad
+stay bad. Unmapped bits remain good. Also clears the unmapped-bad memory
+and the first-failure sequence. Bypass states are intentionally preserved
+— use SetBypass(i, FALSE) to clear them.
+*)
+{attribute 'TcRpcEnable':='1'}
+METHOD Reset]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Snap latched bits to current live values on active bits; unmapped stay good.
+_latchedBits     := (_core.nLiveBits AND _core.nActiveMask) OR NOT _core.nActiveMask;
+_unmappedBadBits := 0;
+_core.ClearFirstFailure();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetBypass" Id="{a1b2c3d4-1001-4e5f-9000-000000000032}" FolderPath="Public\">
+      <Declaration><![CDATA[(*
+Set or clear bypass for a specific interlock bit. Only bits configured as
+bypassable in cfg.nBypassable can be enabled; clearing is always allowed.
+WARNING: bypassing an interlock disables safety protection — use with care.
+*)
+{attribute 'TcRpcEnable':='1'}
+METHOD PUBLIC SetBypass : E_RpcMethodResponse
+VAR_INPUT
+    bitIndex : UDINT;
+    bEnable  : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SetBypass := _core.SetBypass(
+    bitIndex        := bitIndex,
+    bEnable         := bEnable,
+    nBypassableMask := cfg.nBypassable);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="UpdateFaceplates" Id="{a1b2c3d4-1001-4e5f-9000-000000000033}" FolderPath="Private\">
+      <Declaration><![CDATA[METHOD PRIVATE UpdateFaceplates
+VAR
+    i       : UDINT;
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR i := 0 TO 63 DO
+    bitMask := SHL(ULINT#1, i);
+    sts.aFaceplates[i].name          := cfg.aNames[i];
+    sts.aFaceplates[i].ok         := (sts.nInterlocks AND bitMask) <> 0;
+    sts.aFaceplates[i].live       := (_core.nLiveBits  AND bitMask) <> 0;
+    sts.aFaceplates[i].latched    := ((_core.nActiveMask AND bitMask) <> 0) AND ((_latchedBits AND bitMask) = 0);
+    sts.aFaceplates[i].mapped     := (_core.nActiveMask AND bitMask) <> 0;
+    sts.aFaceplates[i].bypassed   := (_core.nBypassMask AND bitMask) <> 0;
+    sts.aFaceplates[i].bypassable := (cfg.nBypassable   AND bitMask) <> 0;
+END_FOR;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

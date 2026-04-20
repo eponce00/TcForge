@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="_5000_PRG_Aborting" Id="{12345678-1234-1234-1234-123456789005}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM _5000_PRG_Aborting
+VAR_IN_OUT
+    sm : FB_StateMachine;
+END_VAR
+VAR
+    step5000 : FB_Step;
+    step5002 : FB_Step;
+    step5004 : FB_Step;
+
+    // Emergency signals
+    bOutputsDisabled   : BOOL;
+    bPneumaticsVented  : BOOL;
+    bMotionHalted      : BOOL;
+    tonEmergency       : TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+//=============================================================================
+// STEP 5000 - Immediate Halt
+// Demonstrates: Entry (kill outputs immediately), Execute (verify halted)
+// NOTE: Abort is an emergency path — minimal delays, prioritize safety
+//=============================================================================
+step5000(sm := sm, nStep := 5000, nNextStep := 5002, nTimeout := 3, sName := 'Immediate Halt');
+
+IF step5000.Entry THEN
+    // One-shot: immediately disable all outputs
+    bOutputsDisabled := TRUE;   // In real code: write FALSE to all DO
+    bMotionHalted := FALSE;
+    tonEmergency(IN := FALSE);
+END_IF;
+
+IF step5000.Execute THEN
+    // Verify motion has actually stopped (simulate 1s settling)
+    tonEmergency(IN := TRUE, PT := T#1S);
+    bMotionHalted := tonEmergency.Q;
+
+    step5000.MapPerm(nIndex := 0, sDescription := 'Outputs Disabled', bValue := bOutputsDisabled);
+    step5000.MapPerm(nIndex := 1, sDescription := 'Motion Halted',    bValue := bMotionHalted);
+END_IF;
+
+IF step5000.Exiting THEN
+    tonEmergency(IN := FALSE);
+END_IF;
+
+//=============================================================================
+// STEP 5002 - Vent Pneumatics
+// Demonstrates: Entry (open vent valves), Execute (wait for pressure drop)
+//=============================================================================
+step5002(sm := sm, nStep := 5002, nNextStep := 5004, nTimeout := 8, sName := 'Vent Pneumatics');
+
+IF step5002.Entry THEN
+    // One-shot: open all vent valves
+    bPneumaticsVented := FALSE;
+END_IF;
+
+IF step5002.Execute THEN
+    // Simulate pressure bleed-off over 3s
+    bPneumaticsVented := sm.Status.Step.TimerSeconds >= 3.0;
+
+    step5002.MapPerm(nIndex := 0, sDescription := 'Pressure Below 0.5 bar', bValue := bPneumaticsVented);
+    step5002.MapPerm(nIndex := 1, sDescription := 'Vent Valves Open',       bValue := TRUE);
+END_IF;
+
+//=============================================================================
+// STEP 5004 - Confirm Safe State
+// Demonstrates: Exiting (log abort reason), nNextStep := 0 enters Aborted
+//=============================================================================
+step5004(sm := sm, nStep := 5004, nNextStep := 0, nTimeout := 5, sName := 'Confirm Safe State');
+
+IF step5004.Execute THEN
+    step5004.MapPerm(nIndex := 0, sDescription := 'All Energy Isolated',  bValue := sm.Status.Step.TimerSeconds >= 1.0);
+    step5004.MapPerm(nIndex := 1, sDescription := 'Safety Relay Latched', bValue := TRUE);
+END_IF;
+
+IF step5004.Exiting THEN
+    // Log abort event for maintenance review
+    ;
+END_IF;
+]]></ST>
+    </Implementation>
+    <LineIds Name="_5000_PRG_Aborting">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

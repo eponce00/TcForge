@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_DigitalOutput_Mode" Id="{b0100002-0005-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Output shaping modes for FB_DigitalOutput.
+//   Regular         : output tracks the commanded value (optionally inverted)
+//   SinglePulse     : one-shot — commanded rising edge drives the output ON
+//                     for cfg.tPulseOn, then OFF
+//   ContinuousPulse : while commanded TRUE, output cycles ON/OFF with
+//                     cfg.tPulseOn / cfg.tPulseOff (good for lamps, blinkers,
+//                     repeat-start pulses)
+{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+TYPE E_DigitalOutput_Mode :
+(
+    Regular         := 0,
+    SinglePulse     := 1,
+    ContinuousPulse := 2
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

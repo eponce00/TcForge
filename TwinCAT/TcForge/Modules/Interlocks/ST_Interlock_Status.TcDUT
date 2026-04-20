@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_Interlock_Status" Id="{a1b2c3d4-1001-4e5f-9000-000000000003}">
+    <Declaration><![CDATA[(*
+Interlock Status Structure
+==========================
+Status outputs for FB_Interlock.
+*)
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_Interlock_Status :
+STRUCT
+	{attribute 'OPC.UA.DA.Description' := 'Overall status - TRUE when all interlocks are good'}
+	bOK : BOOL := FALSE;
+	{attribute 'OPC.UA.DA.Description' := 'Effective interlock status after latch + bypass (1=good, 0=bad)'}
+	nInterlocks : ULINT := 0;
+	{attribute 'OPC.UA.DA.Description' := 'Latched status - stays bad until Reset() (1=good, 0=latched bad)'}
+	nLatched : ULINT := 0;
+	{attribute 'OPC.UA.DA.Description' := 'Current bypass mask (1=bypassed, 0=not bypassed)'}
+	nBypassMask : ULINT := 0;
+	{attribute 'OPC.UA.DA.Description' := 'Bit index (0-63) of the first bit to trip, 999=no trips'}
+	nFirstFailureBitIndex : UDINT := 999;
+	{attribute 'OPC.UA.DA.Description' := 'Individual interlock faceplate data for HMI'}
+	aFaceplates : ARRAY[0..63] OF ST_Interlock_Faceplate;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

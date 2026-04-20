@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="_2000_PRG_Stopping" Id="{12345678-1234-1234-1234-123456789002}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM _2000_PRG_Stopping
+VAR_IN_OUT
+    sm : FB_StateMachine;
+END_VAR
+VAR
+    step2000 : FB_Step;
+    step2002 : FB_Step;
+    step2004 : FB_Step;
+
+    // Simulated signals
+    bMotorsStopped     : BOOL;
+    bConveyorEmpty     : BOOL;
+    bBrakeEngaged      : BOOL;
+    tonDecel           : TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+//=============================================================================
+// STEP 2000 - Controlled Deceleration
+// Demonstrates: Entry (command stop), Execute (monitor decel), Exiting (confirm)
+//=============================================================================
+step2000(sm := sm, nStep := 2000, nNextStep := 2002, nTimeout := 10, sName := 'Decelerate');
+
+IF step2000.Entry THEN
+    // One-shot: command all axes to decelerate
+    bMotorsStopped := FALSE;
+    bBrakeEngaged := FALSE;
+    tonDecel(IN := FALSE);
+END_IF;
+
+IF step2000.Execute THEN
+    // Simulate controlled deceleration over 4 seconds
+    tonDecel(IN := TRUE, PT := T#4S);
+    bMotorsStopped := tonDecel.Q;
+
+    step2000.MapPerm(nIndex := 0, sDescription := 'Motors Stopped',   bValue := bMotorsStopped);
+    step2000.MapPerm(nIndex := 1, sDescription := 'No Motion Faults', bValue := TRUE);
+END_IF;
+
+IF step2000.Exiting THEN
+    tonDecel(IN := FALSE);
+END_IF;
+
+//=============================================================================
+// STEP 2002 - Clear Conveyor
+// Demonstrates: Entry (start flush), Execute (wait empty), Exiting (disengage)
+//=============================================================================
+step2002(sm := sm, nStep := 2002, nNextStep := 2004, nTimeout := 15, sName := 'Clear Conveyor');
+
+IF step2002.Entry THEN
+    bConveyorEmpty := FALSE;
+END_IF;
+
+IF step2002.Execute THEN
+    // Simulate conveyor clearing in 6 seconds
+    bConveyorEmpty := sm.Status.Step.TimerSeconds >= 6.0;
+
+    step2002.MapPerm(nIndex := 0, sDescription := 'Conveyor Empty',      bValue := bConveyorEmpty);
+    step2002.MapPerm(nIndex := 1, sDescription := 'Product Accounted For', bValue := TRUE);
+END_IF;
+
+IF step2002.Exiting THEN
+    // Conveyor off
+    ;
+END_IF;
+
+//=============================================================================
+// STEP 2004 - Engage Brakes & Safe State
+// Demonstrates: Entry (engage brakes), nNextStep := 0 completes sequence
+//=============================================================================
+step2004(sm := sm, nStep := 2004, nNextStep := 0, nTimeout := 5, sName := 'Engage Brakes');
+
+IF step2004.Entry THEN
+    bBrakeEngaged := FALSE;
+END_IF;
+
+IF step2004.Execute THEN
+    bBrakeEngaged := sm.Status.Step.TimerSeconds >= 1.0;
+
+    step2004.MapPerm(nIndex := 0, sDescription := 'Brakes Engaged',   bValue := bBrakeEngaged);
+    step2004.MapPerm(nIndex := 1, sDescription := 'Safe State Active', bValue := TRUE);
+END_IF;
+]]></ST>
+    </Implementation>
+    <LineIds Name="_2000_PRG_Stopping">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

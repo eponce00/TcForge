@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_TwoPosActuator_Probe" Id="{b1c2d3e4-f5a6-7890-abcd-000000000b00}" SpecialFunc="None">
+    <Declaration><![CDATA[// Test-only child of FB_TwoPosActuator. The production FB keeps io,
+// advancePermissives, and retractPermissives in its private VAR section,
+// so tests use this probe to inject field signals and map permissives
+// without touching the public surface.
+//
+// The probe delegates the cyclic body back to the parent via SUPER^() —
+// without that call the child's empty body would replace the parent's
+// state-machine logic and every assertion would see zeroed state.
+//
+// Lives in the Testing project only — not part of TcForge's public API.
+FUNCTION_BLOCK FB_TwoPosActuator_Probe EXTENDS TcForge.FB_TwoPosActuator]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Run the inherited state machine using the probe's injected signals.
+SUPER^();]]></ST>
+    </Implementation>
+    <Method Name="SetAdvancedFeedback" Id="{b1c2d3e4-f5a6-7890-abcd-000000000b01}">
+      <Declaration><![CDATA[METHOD PUBLIC SetAdvancedFeedback
+VAR_INPUT
+    bValue : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[io.inFbkAdvanced := bValue;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetRetractedFeedback" Id="{b1c2d3e4-f5a6-7890-abcd-000000000b02}">
+      <Declaration><![CDATA[METHOD PUBLIC SetRetractedFeedback
+VAR_INPUT
+    bValue : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[io.inFbkRetracted := bValue;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetValveAdvance" Id="{b1c2d3e4-f5a6-7890-abcd-000000000b03}">
+      <Declaration><![CDATA[METHOD PUBLIC GetValveAdvance : BOOL]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetValveAdvance := io.outValveAdvance;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="GetValveRetract" Id="{b1c2d3e4-f5a6-7890-abcd-000000000b04}">
+      <Declaration><![CDATA[METHOD PUBLIC GetValveRetract : BOOL]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetValveRetract := io.outValveRetract;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MapAdvancePerm" Id="{b1c2d3e4-f5a6-7890-abcd-000000000b05}">
+      <Declaration><![CDATA[// Map a single permissive bit into advancePermissives so tests can force
+// REJECTED_PERMISSIVE_NOT_MET / PermissivesNotOK without touching the
+// production code's permissive wiring.
+METHOD PUBLIC MapAdvancePerm
+VAR_INPUT
+    nBit   : UDINT;
+    bValue : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[advancePermissives.MapInput(bitIndex := nBit, inputValue := bValue);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MapRetractPerm" Id="{b1c2d3e4-f5a6-7890-abcd-000000000b06}">
+      <Declaration><![CDATA[METHOD PUBLIC MapRetractPerm
+VAR_INPUT
+    nBit   : UDINT;
+    bValue : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[retractPermissives.MapInput(bitIndex := nBit, inputValue := bValue);]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

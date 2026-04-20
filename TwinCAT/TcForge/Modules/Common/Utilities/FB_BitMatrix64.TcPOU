@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_BitMatrix64" Id="{c0000040-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// ============================================================================
+// FB_BitMatrix64 — Shared 64-bit condition-matrix core
+// ============================================================================
+// Internal composition helper used by FB_Permissives (non-latching) and
+// FB_Interlock (latching). Encapsulates the mechanics both FBs share:
+//
+//   - 64 bits of "good (1) / bad (0)" live state fed by MapInput()
+//   - an active-mask so unmapped bits default to good and bypass logic is
+//     parameterised on the caller's cfg.nBypassable (no cfg coupling here)
+//   - cycle-based cleanup that unmaps a bit if it hasn't been re-fed within
+//     MAPPING_TIMEOUT scans
+//   - first-failure tracking (sequence counter + first-failure bit index)
+//   - "just unmapped while bad" events so the caller can latch that memory
+//     if it needs to (FB_Interlock.nUnmappedBadBits)
+//
+// The caller composes an instance, calls the cyclic body, then computes its
+// own effective mask / rollup (interlocks latch; permissives don't). See
+// docs/2-Architecture.md for the split between the two surfaces.
+// ============================================================================
+{attribute 'OPC.UA.DA' := '0'}
+FUNCTION_BLOCK FB_BitMatrix64
+VAR_OUTPUT
+    // Current live bits (1=good, 0=bad). Unmapped bits are held at 1.
+    nLiveBits             : ULINT := 16#FFFFFFFFFFFFFFFF;
+    // 1 = bit is actively mapped (refreshed within MAPPING_TIMEOUT cycles).
+    nActiveMask           : ULINT := 0;
+    // Dynamic bypass mask (1=bypassed). See SetBypass / ClearBypass.
+    nBypassMask           : ULINT := 0;
+    // Bit index (0..63) of the first bit to go bad in the current failure
+    // sequence; 999 when no sequence is active.
+    nFirstFailureBitIndex : UDINT := 999;
+    // Bits that transitioned from active to unmapped *this cycle* while
+    // their live value was bad. OR'd each cycle; caller latches if it cares.
+    nJustUnmappedBad      : ULINT := 0;
+END_VAR
+VAR
+    _previousBits     : ULINT := 16#FFFFFFFFFFFFFFFF;
+    _cycleCounter     : UDINT := 0;
+    _lastMappedCycle  : ARRAY[0..63] OF UDINT;
+    _sequenceCounter  : UDINT := 0;
+    MAPPING_TIMEOUT   : UDINT := 10;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[_cycleCounter := _cycleCounter + 1;
+IF _cycleCounter = 0 THEN _cycleCounter := 1; END_IF;
+
+nJustUnmappedBad := 0;
+_CleanupUnmapped();
+_DetectTransitions();
+
+_previousBits := nLiveBits;]]></ST>
+    </Implementation>
+    <Folder Name="Private" Id="{c0000040-0000-0000-f000-000000000001}" />
+    <Folder Name="Public" Id="{c0000040-0000-0000-f000-000000000002}" />
+    <Method Name="MapInput" Id="{c0000040-0000-0000-1000-000000000001}" FolderPath="Public\">
+      <Declaration><![CDATA[// Feed one bit's live value. Call every cycle for every active condition;
+// any bit not refreshed within MAPPING_TIMEOUT scans is automatically
+// considered unmapped and its live bit snaps back to good.
+METHOD PUBLIC MapInput
+VAR_INPUT
+    bitIndex   : UDINT;
+    inputValue : BOOL;
+END_VAR
+VAR
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bitIndex > 63 THEN RETURN; END_IF;
+
+bitMask := SHL(ULINT#1, bitIndex);
+nActiveMask := nActiveMask OR bitMask;
+_lastMappedCycle[bitIndex] := _cycleCounter;
+
+IF inputValue THEN
+    nLiveBits := nLiveBits OR bitMask;
+ELSE
+    nLiveBits := nLiveBits AND NOT bitMask;
+END_IF;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetBypass" Id="{c0000040-0000-0000-1000-000000000002}" FolderPath="Public\">
+      <Declaration><![CDATA[// Enable/disable bypass for a single bit. The caller passes its own
+// cfg.nBypassable so this FB stays decoupled from caller-specific cfg DUTs.
+// Clearing a bypass is always permitted; enabling requires the bit to be
+// marked bypassable.
+METHOD PUBLIC SetBypass : E_RpcMethodResponse
+VAR_INPUT
+    bitIndex         : UDINT;
+    bEnable          : BOOL;
+    nBypassableMask  : ULINT;
+END_VAR
+VAR
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bitIndex > 63 THEN
+    SetBypass := E_RpcMethodResponse.REJECTED_INVALID_PARAMETER;
+    RETURN;
+END_IF;
+
+bitMask := SHL(ULINT#1, bitIndex);
+
+IF bEnable AND (nBypassableMask AND bitMask) = 0 THEN
+    SetBypass := E_RpcMethodResponse.REJECTED_BYPASS_NOT_ALLOWED;
+    RETURN;
+END_IF;
+
+IF bEnable THEN
+    nBypassMask := nBypassMask OR bitMask;
+ELSE
+    nBypassMask := nBypassMask AND NOT bitMask;
+END_IF;
+
+SetBypass := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ClearBypass" Id="{c0000040-0000-0000-1000-000000000003}" FolderPath="Public\">
+      <Declaration><![CDATA[// Clear every bypass bit at once (e.g. on a Reset()).
+METHOD PUBLIC ClearBypass]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nBypassMask := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ClearFirstFailure" Id="{c0000040-0000-0000-1000-000000000004}" FolderPath="Public\">
+      <Declaration><![CDATA[// Drop any first-failure sequence in progress.
+METHOD PUBLIC ClearFirstFailure]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nFirstFailureBitIndex := 999;
+_sequenceCounter      := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_CleanupUnmapped" Id="{c0000040-0000-0000-1000-000000000010}" FolderPath="Private\">
+      <Declaration><![CDATA[METHOD PRIVATE _CleanupUnmapped
+VAR
+    i       : UDINT;
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR i := 0 TO 63 DO
+    bitMask := SHL(ULINT#1, i);
+    IF (nActiveMask AND bitMask) <> 0 THEN
+        IF (_cycleCounter - _lastMappedCycle[i]) > MAPPING_TIMEOUT THEN
+            // Expose bad-at-unmap as an event so latching callers (FB_Interlock)
+            // can remember it. Non-latching callers simply ignore this output.
+            IF (nLiveBits AND bitMask) = 0 THEN
+                nJustUnmappedBad := nJustUnmappedBad OR bitMask;
+            END_IF;
+            nActiveMask := nActiveMask AND NOT bitMask;
+            nLiveBits   := nLiveBits   OR bitMask;
+        END_IF;
+    END_IF;
+END_FOR;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_DetectTransitions" Id="{c0000040-0000-0000-1000-000000000011}" FolderPath="Private\">
+      <Declaration><![CDATA[METHOD PRIVATE _DetectTransitions
+VAR
+    i       : UDINT;
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// New failure sequence: all-good last cycle, something bad now.
+IF _previousBits = 16#FFFFFFFFFFFFFFFF AND nLiveBits <> 16#FFFFFFFFFFFFFFFF THEN
+    _sequenceCounter      := 0;
+    nFirstFailureBitIndex := 999;
+END_IF;
+
+FOR i := 0 TO 63 DO
+    bitMask := SHL(ULINT#1, i);
+    IF (nActiveMask AND bitMask) <> 0 THEN
+        IF ((_previousBits AND bitMask) <> 0) AND ((nLiveBits AND bitMask) = 0) THEN
+            _sequenceCounter := _sequenceCounter + 1;
+            IF _sequenceCounter = 1 THEN
+                nFirstFailureBitIndex := i;
+            END_IF;
+        END_IF;
+    END_IF;
+END_FOR;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

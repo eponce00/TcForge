@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_F_ValidateRequester_Test" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560001}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_F_ValidateRequester_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+END_VAR
+]]>
+    </Declaration>
+    <Implementation>
+      <ST><![CDATA[AcceptsNormally();
+AcceptsProgramWhenLocked();
+RejectsOperatorWhenLocked();
+RejectsWhenFaulted();
+]]>
+      </ST>
+    </Implementation>
+    <Method Name="AcceptsNormally" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560002}">
+      <Declaration><![CDATA[METHOD AcceptsNormally
+VAR
+    nExpected : DINT := TcForge.E_RpcMethodResponse.ACCEPTED;
+    nActual   : DINT;
+END_VAR
+]]>
+      </Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AcceptsNormally');
+
+nActual := TcForge.F_ValidateRequester(
+    eRequester    := TcForge.E_Requester.OPERATOR,
+    bSourceLocked := FALSE,
+    bFaulted      := FALSE);
+
+AssertEquals_DINT(
+    Expected := nExpected,
+    Actual   := nActual,
+    Message  := 'Should accept when there are no restrictions');
+
+TEST_FINISHED();
+]]>
+        </ST>
+      </Implementation>
+    </Method>
+    <Method Name="AcceptsProgramWhenLocked" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560003}">
+      <Declaration><![CDATA[METHOD AcceptsProgramWhenLocked
+VAR
+    nExpected : DINT := TcForge.E_RpcMethodResponse.ACCEPTED;
+    nActual   : DINT;
+END_VAR
+]]>
+      </Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AcceptsProgramWhenLocked');
+
+nActual := TcForge.F_ValidateRequester(
+    eRequester    := TcForge.E_Requester.PROG,
+    bSourceLocked := TRUE,
+    bFaulted      := FALSE);
+
+AssertEquals_DINT(
+    Expected := nExpected,
+    Actual   := nActual,
+    Message  := 'PROG requester should be accepted even when source is locked');
+
+TEST_FINISHED();
+]]>
+        </ST>
+      </Implementation>
+    </Method>
+    <Method Name="RejectsOperatorWhenLocked" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560004}">
+      <Declaration><![CDATA[METHOD RejectsOperatorWhenLocked
+VAR
+    nExpected : DINT := TcForge.E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED;
+    nActual   : DINT;
+END_VAR
+]]>
+      </Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RejectsOperatorWhenLocked');
+
+nActual := TcForge.F_ValidateRequester(
+    eRequester    := TcForge.E_Requester.OPERATOR,
+    bSourceLocked := TRUE,
+    bFaulted      := FALSE);
+
+AssertEquals_DINT(
+    Expected := nExpected,
+    Actual   := nActual,
+    Message  := 'OPERATOR must be rejected when source is locked');
+
+TEST_FINISHED();
+]]>
+        </ST>
+      </Implementation>
+    </Method>
+    <Method Name="RejectsWhenFaulted" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234560006}">
+      <Declaration><![CDATA[METHOD RejectsWhenFaulted
+VAR
+    nExpected : DINT := TcForge.E_RpcMethodResponse.REJECTED_FAULTED;
+    nActual   : DINT;
+END_VAR
+]]>
+      </Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RejectsWhenFaulted');
+
+nActual := TcForge.F_ValidateRequester(
+    eRequester    := TcForge.E_Requester.OPERATOR,
+    bSourceLocked := FALSE,
+    bFaulted      := TRUE);
+
+AssertEquals_DINT(
+    Expected := nExpected,
+    Actual   := nActual,
+    Message  := 'Should reject when faulted');
+
+TEST_FINISHED();
+]]>
+        </ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_F_ValidateRequester_Test">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_Permissive_Status" Id="{a69785e2-4ebb-4762-9b68-73bc834e7b09}">
+    <Declaration><![CDATA[(*
+Permissive Status Structure
+===========================
+Contains all status outputs from permissive function block
+*)
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_Permissive_Status :
+STRUCT
+	{attribute 'OPC.UA.DA.Description' := 'Overall status - TRUE when all permissive bits are good'}
+	bOK : BOOL := FALSE;
+	{attribute 'OPC.UA.DA.Description' := 'Current permissive status after logic (1=good, 0=bad)'}
+	nPermissives : ULINT := 0;
+	{attribute 'OPC.UA.DA.Description' := 'Current bypass mask (1=bypassed, 0=not bypassed)'}
+	nBypassMask : ULINT := 0;
+	{attribute 'OPC.UA.DA.Description' := 'Bit index (0-63) of the first failure, 999=no failures'}
+	nFirstFailureBitIndex : UDINT := 999;
+	
+	{attribute 'OPC.UA.DA.Description' := 'Individual permissive faceplate data for HMI'}
+	aFaceplates : ARRAY[0..63] OF ST_Permissive_Faceplate;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

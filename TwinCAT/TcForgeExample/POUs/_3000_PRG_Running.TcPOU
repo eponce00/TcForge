@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="_3000_PRG_Running" Id="{12345678-1234-1234-1234-123456789003}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM _3000_PRG_Running
+VAR_IN_OUT
+    sm : FB_StateMachine;
+END_VAR
+VAR
+    step3000 : FB_Step;
+    step3002 : FB_Step;
+    step3004 : FB_Step;
+    step3006 : FB_Step;
+    step3008 : FB_Step;
+
+    // Simulated process signals
+    bMaterialLoaded    : BOOL;
+    bProcessRunning    : BOOL;
+    bQualityOK         : BOOL;
+    bPackagingReady    : BOOL;
+    nPartCount         : INT;
+    nBatchTarget       : INT := 10;
+    tonProcess         : TON;
+    tonInspect         : TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+//=============================================================================
+// STEP 3000 - Load Raw Material
+// Demonstrates: Entry (command loader), Execute (wait for material sensor)
+//=============================================================================
+step3000(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 12, sName := 'Load Material');
+
+IF step3000.Entry THEN
+    // One-shot: command the loader to feed material
+    bMaterialLoaded := FALSE;
+    nPartCount := 0;
+    tonProcess(IN := FALSE);
+END_IF;
+
+IF step3000.Execute THEN
+    // Simulate material arriving after 3s
+    bMaterialLoaded := sm.Status.Step.TimerSeconds >= 3.0;
+
+    step3000.MapPerm(nIndex := 0, sDescription := 'Material Loaded',    bValue := bMaterialLoaded);
+    step3000.MapPerm(nIndex := 1, sDescription := 'Temperature In Range', bValue := TRUE);
+    step3000.MapPerm(nIndex := 2, sDescription := 'Recipe Selected',    bValue := TRUE);
+END_IF;
+
+IF step3000.Exiting THEN
+    // Material confirmed, clear loader command
+    ;
+END_IF;
+
+//=============================================================================
+// STEP 3002 - Run Production Cycle
+// Demonstrates: Entry (start process), Execute (count parts), Exiting (stop)
+//=============================================================================
+step3002(sm := sm, nStep := 3002, nNextStep := 3004, nTimeout := 30, sName := 'Run Cycle');
+
+IF step3002.Entry THEN
+    bProcessRunning := FALSE;
+    tonProcess(IN := FALSE);
+END_IF;
+
+IF step3002.Execute THEN
+    // Simulate process running, completes after 5s
+    tonProcess(IN := TRUE, PT := T#5S);
+    bProcessRunning := TRUE;
+    nPartCount := nPartCount + 1;  // In real code this would be edge-triggered
+
+    step3002.MapPerm(nIndex := 0, sDescription := 'Cycle Complete',   bValue := tonProcess.Q);
+    step3002.MapPerm(nIndex := 1, sDescription := 'No Alarms Active', bValue := TRUE);
+END_IF;
+
+IF step3002.Exiting THEN
+    tonProcess(IN := FALSE);
+    bProcessRunning := FALSE;
+END_IF;
+
+//=============================================================================
+// STEP 3004 - Quality Inspection
+// Demonstrates: Inline dynamic branching via nNextStep (pass -> pack, fail -> finalize).
+// nNextStep is re-evaluated every scan, so a SEL / IF computed before the call
+// is all you need -- no override method, no init-time registration.
+//=============================================================================
+step3004(sm := sm,
+         nStep     := 3004,
+         nNextStep := SEL(bQualityOK, 3008, 3006),   // fail -> skip packaging
+         nTimeout  := 12,
+         sName     := 'Quality Inspection');
+
+IF step3004.Entry THEN
+    bQualityOK := FALSE;
+    tonInspect(IN := FALSE);
+END_IF;
+
+IF step3004.Execute THEN
+    // Simulate inspection taking 2s, always passes in this example
+    tonInspect(IN := TRUE, PT := T#2S);
+    bQualityOK := tonInspect.Q;
+
+    step3004.MapPerm(nIndex := 0, sDescription := 'Inspection Complete', bValue := tonInspect.Q);
+END_IF;
+
+IF step3004.Exiting THEN
+    tonInspect(IN := FALSE);
+END_IF;
+
+//=============================================================================
+// STEP 3006 - Package Product
+// Demonstrates: Entry (prepare packaging), Execute (seal & label)
+//=============================================================================
+step3006(sm := sm, nStep := 3006, nNextStep := 3008, nTimeout := 15, sName := 'Package Product');
+
+IF step3006.Entry THEN
+    bPackagingReady := FALSE;
+END_IF;
+
+IF step3006.Execute THEN
+    bPackagingReady := sm.Status.Step.TimerSeconds >= 3.0;
+
+    step3006.MapPerm(nIndex := 0, sDescription := 'Box Sealed',   bValue := bPackagingReady);
+    step3006.MapPerm(nIndex := 1, sDescription := 'Label Applied', bValue := bPackagingReady);
+    step3006.MapPerm(nIndex := 2, sDescription := 'Conveyor Clear', bValue := TRUE);
+END_IF;
+
+IF step3006.Exiting THEN
+    // Package dispatched
+    ;
+END_IF;
+
+//=============================================================================
+// STEP 3008 - Finalize Batch
+// Demonstrates: Exiting (generate reports), nNextStep := 0 ends sequence
+//=============================================================================
+step3008(sm := sm, nStep := 3008, nNextStep := 0, nTimeout := 10, sName := 'Finalize Batch');
+
+IF step3008.Execute THEN
+    step3008.MapPerm(nIndex := 0, sDescription := 'Batch Record Saved', bValue := sm.Status.Step.TimerSeconds >= 2.0);
+    step3008.MapPerm(nIndex := 1, sDescription := 'Counters Reset',     bValue := TRUE);
+END_IF;
+
+IF step3008.Exiting THEN
+    // Final cleanup: reset batch counters
+    nPartCount := 0;
+END_IF;
+]]></ST>
+    </Implementation>
+    <LineIds Name="_3000_PRG_Running">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

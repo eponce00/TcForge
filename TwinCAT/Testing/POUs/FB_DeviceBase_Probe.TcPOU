@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DeviceBase_Probe" Id="{b1c2d3e4-f5a6-7890-abcd-000000000500}" SpecialFunc="None">
+    <Declaration><![CDATA[// Test-only concrete child of FB_DeviceBase. Exposes the protected API
+// (_Raise / _ClearFault / _AcceptCommand / _UpdateHeader) through public
+// "Probe*" wrappers so FB_DeviceBase_Test can drive the base contract
+// without a full device FB in the way. Also overrides ResolveFaultString
+// so the tests can verify virtual dispatch.
+//
+// This FB lives in the Testing project on purpose — it is not part of the
+// TcForge public surface.
+FUNCTION_BLOCK FB_DeviceBase_Probe EXTENDS TcForge.FB_DeviceBase
+VAR_OUTPUT
+    header : TcForge.ST_DeviceHeader_Sts;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Nothing cyclic — tests call the probe methods directly.]]></ST>
+    </Implementation>
+    <Method Name="ProbeRaise" Id="{b1c2d3e4-f5a6-7890-abcd-000000000501}">
+      <Declaration><![CDATA[METHOD PUBLIC ProbeRaise : BOOL
+VAR_INPUT
+    code   : DINT;
+    source : STRING(31);
+    reason : STRING(79);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ProbeRaise := _Raise(code := code, source := source, reason := reason);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ProbeClearFault" Id="{b1c2d3e4-f5a6-7890-abcd-000000000502}">
+      <Declaration><![CDATA[METHOD PUBLIC ProbeClearFault]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_ClearFault();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ProbeAcceptCommand" Id="{b1c2d3e4-f5a6-7890-abcd-000000000503}">
+      <Declaration><![CDATA[METHOD PUBLIC ProbeAcceptCommand
+VAR_INPUT
+    eRequester : TcForge.E_Requester;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_AcceptCommand(eRequester := eRequester);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Refresh" Id="{b1c2d3e4-f5a6-7890-abcd-000000000504}">
+      <Declaration><![CDATA[// Populate the probe's own header struct via the protected _UpdateHeader.
+METHOD PUBLIC Refresh
+VAR_INPUT
+    stateString : STRING(31);
+    busy     : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_UpdateHeader(
+    header      := header,
+    stateString := stateString,
+    busy     := busy);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResolveFaultString" Id="{b1c2d3e4-f5a6-7890-abcd-000000000505}">
+      <Declaration><![CDATA[// Minimal resolver so the tests can verify virtual dispatch through the
+// base's GetFaultString() / _UpdateHeader() calls. Maps a few well-known
+// codes; everything else returns empty (inherited default behaviour).
+METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE code OF
+    42: ResolveFaultString := 'Motion timeout';
+    99: ResolveFaultString := 'Limit tripped';
+ELSE
+    ResolveFaultString := '';
+END_CASE;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <GVL Name="GVL_HW" Id="{e0000001-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// ============================================================================
+// GVL_HW — Centralised hardware-bound FB instances
+// ============================================================================
+// Every device FB that owns physical I/O lives here. The FB's internal io
+// struct (AT %I* / %Q*) is linked to terminals via {attribute 'TcLinkTo' := ...}
+// on the instance declaration. No IO wiring ever appears inside logic code.
+//
+// See docs/5-IO-Binding.md for the full pattern, TIID/TIIB shortcut reference,
+// and scaling guidance (when to keep it flat vs. group by station).
+//
+// The examples below use placeholder paths; once real hardware is in the I/O
+// tree, replace the TIID^... strings with the paths copied from the terminal
+// channel's Properties panel. Until then, the instances are commented out so
+// the example project still compiles without hardware attached.
+// ============================================================================
+{attribute 'qualified_only'}
+VAR_GLOBAL
+    // -----------------------------------------------------------------------
+    // Example: a pneumatic clamp with two feedbacks and two solenoids.
+    // Uncomment and replace the terminal paths after wiring real hardware.
+    // -----------------------------------------------------------------------
+    // {attribute 'TcLinkTo' :=
+    //  '.io.inFbkAdvanced   := TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)^Channel 1^Input;
+    //   .io.inFbkRetracted  := TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)^Channel 2^Input;
+    //   .io.outValveAdvance := TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 3 (EL2008)^Channel 1^Output;
+    //   .io.outValveRetract := TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 3 (EL2008)^Channel 2^Output'}
+    // CLAMP_A : FB_TwoPosActuator;
+
+    // -----------------------------------------------------------------------
+    // Example: a simple part-present photoeye and an indicator lamp.
+    // -----------------------------------------------------------------------
+    // {attribute 'TcLinkTo' :=
+    //  '.io.inSignal := TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)^Channel 3^Input'}
+    // SENSOR_PART_PRESENT : FB_DigitalInput;
+
+    // {attribute 'TcLinkTo' :=
+    //  '.io.outSignal := TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 3 (EL2008)^Channel 3^Output'}
+    // LAMP_CYCLE_RUNNING : FB_DigitalOutput;
+
+    // -----------------------------------------------------------------------
+    // Example: an analog pressure transducer and a proportional valve.
+    //
+    // Analog IO uses a 32-bit UNION (U_IoRaw_In / U_IoRaw_Out). Link the
+    // .dw member regardless of the terminal's native type — the FB picks the
+    // correct reinterpretation from cfg.inputType / cfg.outputType.
+    //
+    // Examples by terminal family:
+    //   EL3068 (INT):     inputType  := TYPE_INT
+    //   EL3062 (INT):     inputType  := TYPE_INT
+    //   EL3751 (REAL):    inputType  := TYPE_REAL
+    //   EL3104 (INT):     inputType  := TYPE_INT
+    //   EL4132 (INT):     outputType := TYPE_INT
+    //   EL4102 (INT):     outputType := TYPE_INT
+    //   EL4134 (INT):     outputType := TYPE_INT
+    // -----------------------------------------------------------------------
+    // {attribute 'TcLinkTo' :=
+    //  '.io.inRaw.dw := TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 4 (EL3068)^AI Standard Channel 1^Value'}
+    // PRESSURE_TRANSDUCER : FB_AnalogInput;
+
+    // {attribute 'TcLinkTo' :=
+    //  '.io.outRaw.dw := TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 5 (EL4132)^AO Outputs Channel 1^Analog output'}
+    // PROPORTIONAL_VALVE : FB_AnalogOutput;
+
+    // -----------------------------------------------------------------------
+    // Placeholder so the file compiles cleanly until real hardware is added.
+    // Delete once you declare at least one real instance above.
+    // -----------------------------------------------------------------------
+    _placeholder : BOOL;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

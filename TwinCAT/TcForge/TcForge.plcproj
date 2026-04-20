@@ -1,0 +1,424 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <FileVersion>1.0.0.0</FileVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{c50d021a-2a7e-435e-bd9b-20a91e08c1da}</ProjectGuid>
+    <SubObjectsSortedByName>True</SubObjectsSortedByName>
+    <DownloadApplicationInfo>true</DownloadApplicationInfo>
+    <WriteProductVersion>true</WriteProductVersion>
+    <GenerateTpy>true</GenerateTpy>
+    <Name>TcForge</Name>
+    <ProgramVersion>3.1.4026.17</ProgramVersion>
+    <Application>{3e8d9abc-3123-42ab-93ad-a721324fdb78}</Application>
+    <TypeSystem>{8770fba7-8d90-4aee-b41d-0da656d9de95}</TypeSystem>
+    <Implicit_Task_Info>{e2841deb-7cb0-4ed0-95a3-4e505c3af3e9}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{1c27c020-be78-46b5-af31-3898ec6ad8d4}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{0388767e-eca5-4e8e-b77c-7e12cce16845}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{07f2a7a2-0d34-40b5-ac8d-f85dc2fe7fb0}</LibraryReferences>
+    <Company>Home</Company>
+    <Released>false</Released>
+    <Title>TcForge</Title>
+    <ProjectVersion>1.0.0.4</ProjectVersion>
+    <VirtualLibrary>true</VirtualLibrary>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Modules\Common\E_Requester.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\E_RpcMethodResponse.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\F_ValidateRequester.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\E_TwoPosActuator_Fault.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\E_TwoPosActuator_State.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\FB_TwoPosActuator.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_IO.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Interlocks\FB_Interlock.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Interlocks\ST_Interlock_Config.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Interlocks\ST_Interlock_Status.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Interlocks\ST_Interlock_Faceplate.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\Permissives\FB_Permissives.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Config.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Status.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Faceplate.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\StateMachine\E_SM_Fault.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\StateMachine\E_SM_State.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\StateMachine\FB_StateMachine.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\StateMachine\FB_Step.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Status.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Step.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalInput\FB_DigitalInput.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalInput\ST_DigitalInput_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalInput\ST_DigitalInput_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalInput\ST_DigitalInput_IO.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\FB_DigitalOutput.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\ST_DigitalOutput_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\ST_DigitalOutput_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\ST_DigitalOutput_IO.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogInput\FB_AnalogInput.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogInput\ST_AnalogInput_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogInput\ST_AnalogInput_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogInput\ST_AnalogInput_IO.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogOutput\FB_AnalogOutput.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogOutput\ST_AnalogOutput_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogOutput\ST_AnalogOutput_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogOutput\ST_AnalogOutput_IO.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalInput\E_DigitalInput_Fault.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\E_DigitalOutput_Fault.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\DigitalOutput\E_DigitalOutput_Mode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogInput\E_AnalogInput_Fault.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\IO\AnalogOutput\E_AnalogOutput_Fault.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\E_IO_Quality.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\E_Unit.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\U_IoRaw_In.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\U_IoRaw_Out.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Utilities\F_GetTaskCycleTime.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Utilities\F_Now.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Utilities\FB_BitMatrix64.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Utilities\FB_LPF_FirstOrder_IIR.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\FB_DeviceBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\ST_DeviceHeader_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\ST_FaultEntry.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Interfaces\I_Alarm.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Common\E_AlarmSeverity.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Common\ST_Alarm_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Common\ST_Alarm_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Common\FB_AlarmBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Simple\ST_AlarmSimple_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Simple\FB_AlarmSimple.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Threshold\ST_AlarmThreshold_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Threshold\FB_AlarmThreshold.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Limit\ST_AlarmLimit_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Limit\ST_AlarmLimit_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Limit\FB_AlarmLimit.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Deviation\ST_AlarmDeviation_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\Deviation\FB_AlarmDeviation.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\RateOfChange\ST_AlarmRateOfChange_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Alarms\RateOfChange\FB_AlarmRateOfChange.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Modules" />
+    <Folder Include="Modules\Common" />
+    <Folder Include="Modules\Common\Interfaces" />
+    <Folder Include="Modules\Common\IO" />
+    <Folder Include="Modules\Common\Utilities" />
+    <Folder Include="Modules\Interlocks" />
+    <Folder Include="Modules\Pneumatics" />
+    <Folder Include="Modules\Pneumatics\TwoPosActuator" />
+    <Folder Include="Modules\Sequencing" />
+    <Folder Include="Modules\Sequencing\Permissives" />
+    <Folder Include="Modules\Sequencing\StateMachine" />
+    <Folder Include="Modules\IO" />
+    <Folder Include="Modules\IO\DigitalInput" />
+    <Folder Include="Modules\IO\DigitalOutput" />
+    <Folder Include="Modules\IO\AnalogInput" />
+    <Folder Include="Modules\IO\AnalogOutput" />
+    <Folder Include="Modules\Alarms" />
+    <Folder Include="Modules\Alarms\Common" />
+    <Folder Include="Modules\Alarms\Simple" />
+    <Folder Include="Modules\Alarms\Threshold" />
+    <Folder Include="Modules\Alarms\Limit" />
+    <Folder Include="Modules\Alarms\Deviation" />
+    <Folder Include="Modules\Alarms\RateOfChange" />
+    <Folder Include="GVLs" />
+    <Folder Include="VISUs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PlaceholderReference Include="Tc2_Standard">
+      <DefaultResolution>Tc2_Standard, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_Standard</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_System">
+      <DefaultResolution>Tc2_System, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_System</Namespace>
+      <Parameters>
+        <Parameter ListName="PARAM" xmlns="">
+          <Key>TABLE_UPPER_BOUND</Key>
+          <Value>15</Value>
+        </Parameter>
+        <Parameter ListName="PARAM" xmlns="">
+          <Key>STRING_LENGTH_EXP</Key>
+          <Value>255</Value>
+        </Parameter>
+        <Parameter ListName="PARAM" xmlns="">
+          <Key>STRING_LENGTH_ADDRESS</Key>
+          <Value>20</Value>
+        </Parameter>
+        <Parameter ListName="PARAM" xmlns="">
+          <Key>STRING_LENGTH_COMMENT</Key>
+          <Value>255</Value>
+        </Parameter>
+        <Parameter ListName="PARAM" xmlns="">
+          <Key>STRING_LENGTH_OUTSTRING</Key>
+          <Value>255</Value>
+        </Parameter>
+        <Parameter ListName="PARAM" xmlns="">
+          <Key>TABLE_SHOW_VALID_ITEMS</Key>
+          <Value>FALSE</Value>
+        </Parameter>
+      </Parameters>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc3_Module">
+      <DefaultResolution>Tc3_Module, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc3_Module</Namespace>
+    </PlaceholderReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="TcForge.tmc">
+      <SubType>Content</SubType>
+    </None>
+  </ItemGroup>
+  <ProjectExtensions>
+    <PlcProjectOptions>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="OptionKey">
+      <v n="Name">"&lt;ProjectRoot&gt;"</v>
+      <d n="SubKeys" t="Hashtable" ckt="String" cvt="OptionKey">
+        <v>{192FAD59-8248-4824-A8DE-9177C94C195A}</v>
+        <o>
+          <v n="Name">"{192FAD59-8248-4824-A8DE-9177C94C195A}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" />
+        </o>
+        <v>{246001F4-279D-43AC-B241-948EB31120E1}</v>
+        <o>
+          <v n="Name">"{246001F4-279D-43AC-B241-948EB31120E1}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String">
+            <v>ExtendedSettings</v>
+            <v>true</v>
+            <v>GeneralPropertySupport</v>
+            <v>false</v>
+            <v>GlobalTextListFilePath</v>
+            <v>""</v>
+            <v>GlobalVisuImageFilePath</v>
+            <v>"%APPLICATIONPATH%\"</v>
+            <v>ImplicitChecksForVisualizationPOUs</v>
+            <v>true</v>
+            <v>UnicodeStrings</v>
+            <v>false</v>
+          </d>
+        </o>
+        <v>{29BD8D0C-3586-4548-BB48-497B9A01693F}</v>
+        <o>
+          <v n="Name">"{29BD8D0C-3586-4548-BB48-497B9A01693F}"</v>
+          <d n="SubKeys" t="Hashtable" ckt="String" cvt="OptionKey">
+            <v>NamingConventions</v>
+            <o>
+              <v n="Name">"NamingConventions"</v>
+              <d n="SubKeys" t="Hashtable" />
+              <d n="Values" t="Hashtable" />
+            </o>
+            <v>Rules</v>
+            <o>
+              <v n="Name">"Rules"</v>
+              <d n="SubKeys" t="Hashtable" />
+              <d n="Values" t="Hashtable" />
+            </o>
+          </d>
+          <d n="Values" t="Hashtable" />
+        </o>
+        <v>{40450F57-0AA3-4216-96F3-5444ECB29763}</v>
+        <o>
+          <v n="Name">"{40450F57-0AA3-4216-96F3-5444ECB29763}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String">
+            <v>ActiveVisuExtensionsLength</v>
+            <v>0</v>
+            <v>ActiveVisuProfile</v>
+            <v>"IR0whWr8bwfyBwAAaCbC8QAAAABVAgAA1xHl6QAAAAABAAAAAAAAAAEaUwB5AHMAdABlAG0ALgBTAHQAcgBpAG4AZwACTHsAZgA5ADUAYgBiADQAMgA2AC0ANQA1ADIANAAtADQAYgA0ADUALQA5ADQAMAAwAC0AZgBiADAAZgAyAGUANwA3AGUANQAxAGIAfQADCE4AYQBtAGUABDJUAHcAaQBuAEMAQQBUACAAMwAuADEAIABCAHUAaQBsAGQAIAA0ADAAMgA2AC4AMQA1AAUWUAByAG8AZgBpAGwAZQBEAGEAdABhAAZMewAxADYAZQA1ADUAYgA2ADAALQA3ADAANAAzAC0ANABhADYAMwAtAGIANgA1AGIALQA2ADEANAA3ADEAMwA4ADcAOABkADQAMgB9AAcSTABpAGIAcgBhAHIAaQBlAHMACEx7ADMAYgBmAGQANQA0ADUAOQAtAGIAMAA3AGYALQA0AGQANgBlAC0AYQBlADEAYQAtAGEAOAAzADMANQA2AGEANQA1ADEANAAyAH0ACUx7ADkAYwA5ADUAOAA5ADYAOAAtADIAYwA4ADUALQA0ADEAYgBiAC0AOAA4ADcAMQAtADgAOQA1AGYAZgAxAGYAZQBkAGUAMQBhAH0ACg5WAGUAcgBzAGkAbwBuAAsGaQBuAHQADApVAHMAYQBnAGUADQpUAGkAdABsAGUADhpWAGkAcwB1AEUAbABlAG0ATQBlAHQAZQByAA8OQwBvAG0AcABhAG4AeQAQDFMAeQBzAHQAZQBtABESVgBpAHMAdQBFAGwAZQBtAHMAEjBWAGkAcwB1AEUAbABlAG0AcwBTAHAAZQBjAGkAYQBsAEMAbwBuAHQAcgBvAGwAcwATKFYAaQBzAHUARQBsAGUAbQBzAFcAaQBuAEMAbwBuAHQAcgBvAGwAcwAUJFYAaQBzAHUARQBsAGUAbQBUAGUAeAB0AEUAZABpAHQAbwByABUiVgBpAHMAdQBOAGEAdABpAHYAZQBDAG8AbgB0AHIAbwBsABYUVgBpAHMAdQBJAG4AcAB1AHQAcwAXGFYAaQBzAHUARQBsAGUAbQBCAGEAcwBlABgmRABlAHYAUABsAGEAYwBlAGgAbwBsAGQAZQByAHMAVQBzAGUAZAAZCGIAbwBvAGwAGiJQAGwAdQBnAGkAbgBDAG8AbgBzAHQAcgBhAGkAbgB0AHMAG0x7ADQAMwBkADUAMgBiAGMAZQAtADkANAAyAGMALQA0ADQAZAA3AC0AOQBlADkANAAtADEAYgBmAGQAZgAzADEAMABlADYAMwBjAH0AHBxBAHQATABlAGEAcwB0AFYAZQByAHMAaQBvAG4AHRRQAGwAdQBnAGkAbgBHAHUAaQBkAB4WUwB5AHMAdABlAG0ALgBHAHUAaQBkAB9IYQBmAGMAZAA1ADQANAA2AC0ANAA5ADEANAAtADQAZgBlADcALQBiAGIANwA4AC0AOQBiAGYAZgBlAGIANwAwAGYAZAAxADcAIBRVAHAAZABhAHQAZQBJAG4AZgBvACFMewBiADAAMwAzADYANgBhADgALQBiADUAYwAwAC0ANABiADkAYQAtAGEAMAAwAGUALQBlAGIAOAA2ADAAMQAxADEAMAA0AGMAMwB9ACIOVQBwAGQAYQB0AGUAcwAjTHsAMQA4ADYAOABmAGYAYwA5AC0AZQA0AGYAYwAtADQANQAzADIALQBhAGMAMAA2AC0AMQBlADMAOQBiAGIANQA1ADcAYgA2ADkAfQAkTHsAYQA1AGIAZAA0ADgAYwAzAC0AMABkADEANwAtADQAMQBiADUALQBiADEANgA0AC0ANQBmAGMANgBhAGQAMgBiADkANgBiADcAfQAlFk8AYgBqAGUAYwB0AHMAVAB5AHAAZQAmVFUAcABkAGEAdABlAEwAYQBuAGcAdQBhAGcAZQBNAG8AZABlAGwARgBvAHIAQwBvAG4AdgBlAHIAdABpAGIAbABlAEwAaQBiAHIAYQByAGkAZQBzACcQTABpAGIAVABpAHQAbABlACgUTABpAGIAQwBvAG0AcABhAG4AeQApHlUAcABkAGEAdABlAFAAcgBvAHYAaQBkAGUAcgBzACo4UwB5AHMAdABlAG0ALgBDAG8AbABsAGUAYwB0AGkAbwBuAHMALgBIAGEAcwBoAHQAYQBiAGwAZQArEnYAaQBzAHUAZQBsAGUAbQBzACwMcwB5AHMAdABlAG0ALUg2AGMAYgAxAGMAZABlADEALQBkADUAZABjAC0ANABhADMAYgAtADkAMAA1ADQALQAyADEAZgBhADcANQA2AGEAMwBmAGEANAAuKEkAbgB0AGUAcgBmAGEAYwBlAFYAZQByAHMAaQBvAG4ASQBuAGYAbwAvTHsAYwA2ADEAMQBlADQAMAAwAC0ANwBmAGIAOQAtADQAYwAzADUALQBiADkAYQBjAC0ANABlADMAMQA0AGIANQA5ADkANgA0ADMAfQAwGE0AYQBqAG8AcgBWAGUAcgBzAGkAbwBuADEYTQBpAG4AbwByAFYAZQByAHMAaQBvAG4AMgxMAGUAZwBhAGMAeQAzMEwAYQBuAGcAdQBhAGcAZQBNAG8AZABlAGwAVgBlAHIAcwBpAG8AbgBJAG4AZgBvADQwTABvAGEAZABMAGkAYgByAGEAcgBpAGUAcwBJAG4AdABvAFAAcgBvAGoAZQBjAHQANRpDAG8AbQBwAGEAdABpAGIAaQBsAGkAdAB5ANAAAhoD0AMBLQTQBQYaB9AHCBoBRQcJCNAACRoERQoLBAQAAAAHAAAAAAAAAAAAAADQDAutAgAAANANAS0O0A8BLRDQAAkaBEUKCwQEAAAABwAAAAAAAAAAAAAA0AwLrQEAAADQDQEtEdAPAS0Q0AAJGgRFCgsEBAAAAAcAAAAAAAAAAAAAANAMC60CAAAA0A0BLRLQDwEtENAACRoERQoLBAQAAAAHAAAAAAAAAAAAAADQDAutAgAAANANAS0T0A8BLRDQAAkaBEUKCwQEAAAABwAAAAAAAAAAAAAA0AwLrQIAAADQDQEtFNAPAS0Q0AAJGgRFCgsEBAAAAAcAAAAAAAAAAAAAANAMC60CAAAA0A0BLRXQDwEtENAACRoERQoLBAQAAAAHAAAAAAAAAAAAAADQDAutAgAAANANAS0W0A8BLRDQAAkaBEUKCwQEAAAABwAAAAAAAAAAAAAA0AwLrQQAAADQDQEtF9APAS0Q0BgZrQFFGhsB0AAbGgJFHAsEBAAAAAIAAAAAAAAAAAAAANAdHi0f0CAhGgJFIiMC0AAkGgVFCgsEAwAAAAMAAAAAAAAACgAAANAlC60AAAAA0AMBLSbQJwEtEdAoAS0Q0AAkGgVFCgsEAwAAAAMAAAAAAAAACgAAANAlC60BAAAA0AMBLSbQJwEtEdAoAS0QmikqAUUAAQLQAAEtK9AAAS0s0AAeLS3QLi8aA9AwC60BAAAA0DELrSQAAADQMhmtANAzLxoD0DALrQIAAADQMQutBgAAANAyGa0A0DQZrQDQNRmtAA=="</v>
+          </d>
+        </o>
+        <v>{8A0FB252-96EB-4DCC-A5B4-B4804D05E2D6}</v>
+        <o>
+          <v n="Name">"{8A0FB252-96EB-4DCC-A5B4-B4804D05E2D6}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
+            <v>WriteLineIDs</v>
+            <v>True</v>
+          </d>
+        </o>
+        <v>{8F99A816-E488-41E4-9FA3-846536012284}</v>
+        <o>
+          <v n="Name">"{8F99A816-E488-41E4-9FA3-846536012284}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String" cvt="String">
+            <v>DisabledWarningIds</v>
+            <v>5410</v>
+          </d>
+        </o>
+        <v>{E709B08B-B6E4-4966-8EED-D793A13114C6}</v>
+        <o>
+          <v n="Name">"{E709B08B-B6E4-4966-8EED-D793A13114C6}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
+            <v>Utf8Encoding</v>
+            <v>True</v>
+          </d>
+        </o>
+        <v>{F66C7017-BDD8-4114-926C-81D6D687E35F}</v>
+        <o>
+          <v n="Name">"{F66C7017-BDD8-4114-926C-81D6D687E35F}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
+            <v>CalcActiveTransOnly</v>
+            <v>True</v>
+          </d>
+        </o>
+      </d>
+      <d n="Values" t="Hashtable" />
+    </o>
+        </Data>
+        <TypeList>
+          <Type n="Boolean">System.Boolean</Type>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="Int32">System.Int32</Type>
+          <Type n="OptionKey">{54dd0eac-a6d8-46f2-8c27-2f43c7e49861}</Type>
+          <Type n="String">System.String</Type>
+        </TypeList>
+      </XmlArchive>
+    </PlcProjectOptions>
+  </ProjectExtensions>
+</Project>

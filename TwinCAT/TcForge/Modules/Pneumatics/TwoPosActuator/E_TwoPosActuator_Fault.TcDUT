@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
+  <DUT Name="E_TwoPosActuator_Fault" Id="{A1234567-1234-1234-1234-123456789002}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'to_string'}
+// Fault codes for FB_TwoPosActuator. Range convention follows E_SM_Fault:
+//   0        No fault
+//   1-9      Timeouts
+//   10-19    Feedback / hardware
+//   20-29    State violations
+//   50-59    Interlocks / permissives
+TYPE E_TwoPosActuator_Fault :
+(
+    None                := 0,
+
+    AdvanceTimeout      := 1,     // outValveAdvance asserted but inFbkAdvanced didn't arrive in advTimeoutS
+    RetractTimeout      := 2,     // outValveRetract asserted but inFbkRetracted didn't arrive in retTimeoutS
+
+    BothFeedbackOn      := 10,    // inFbkAdvanced AND inFbkRetracted simultaneously — impossible sensor state
+    NoFeedback          := 11,    // neither feedback asserted when one is expected
+
+    UndefinedState      := 20,    // lost feedback after being Advanced/Retracted
+    ConflictingCommands := 21,    // both valves commanded simultaneously
+
+    PermissivesNotOK    := 50     // a required permissive went FALSE during motion
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

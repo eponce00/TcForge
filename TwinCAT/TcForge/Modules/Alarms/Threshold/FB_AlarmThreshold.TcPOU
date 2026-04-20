@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AlarmThreshold" Id="{a0200002-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Single-direction threshold alarm over a REAL process value.
+//
+// Usage (high temp warning with 2s debounce, latching + ack):
+//   almHi.cfg.common.bEnable     := TRUE;
+//   almHi.cfg.common.tOnDelay    := T#2S;
+//   almHi.cfg.common.bRequireAck := TRUE;
+//   almHi.cfg.common.eSeverity   := E_AlarmSeverity.WARNING;
+//   almHi.cfg.common.sMessage    := 'Reactor T > 80C';
+//   almHi.cfg.fThreshold         := 80.0;
+//   almHi.cfg.bFailHigh          := TRUE;
+//   almHi(inpValue := reactorTempC);
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_AlarmThreshold EXTENDS FB_AlarmBase
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg      : ST_AlarmThreshold_Cfg;
+
+    {attribute 'OPC.UA.DA' := '0'}
+    inpValue : REAL;
+END_VAR
+VAR
+    {attribute 'OPC.UA.DA' := '0'}
+    _raw : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// bFailHigh wins if both directions are (mis)configured.
+IF cfg.bFailHigh THEN
+    _raw := inpValue > cfg.fThreshold;
+ELSIF cfg.bFailLow THEN
+    _raw := inpValue < cfg.fThreshold;
+ELSE
+    _raw := FALSE;
+END_IF;
+
+_Evaluate(cfgCommon := cfg.common, bRawCondition := _raw);]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

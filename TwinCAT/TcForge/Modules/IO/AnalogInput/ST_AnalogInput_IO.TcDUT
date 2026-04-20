@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_AnalogInput_IO" Id="{b0100003-0003-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Hardware-linked primitives for FB_AnalogInput. One 32-bit UNION is enough
+// to support every common EL3xxx terminal — 4-20 mA, 0-10 V, thermocouple,
+// counter, etc. Choose the numeric interpretation with cfg.inputType.
+//
+// `AT %I*` is attached here (on the UNION variable), not inside U_IoRaw_In.
+// That follows the DMC-documented hardware-linking pattern and keeps the
+// type usable from subclasses / test probes — TwinCAT's compiler mis-parses
+// AT pragmas that sit on UNION members when the enclosing FB is extended
+// by a referenced library.
+//
+// Link at instance site via
+//     {attribute 'TcLinkTo' := '.io.inRaw.dw := TIID^...^Value'}
+//
+// See docs/5-IO-Binding.md for the full worked examples.
+TYPE ST_AnalogInput_IO :
+STRUCT
+    inRaw AT %I* : U_IoRaw_In;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

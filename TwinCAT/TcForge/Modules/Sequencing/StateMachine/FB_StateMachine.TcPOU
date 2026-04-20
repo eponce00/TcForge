@@ -1,0 +1,866 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_StateMachine" Id="{7408693c-f749-4b9e-8684-bfcba9889df8}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_StateMachine EXTENDS FB_DeviceBase
+VAR_INPUT
+    cfgAutoRun : BOOL;
+    inpSubmoduleFaulted : BOOL;
+END_VAR
+
+VAR_OUTPUT
+    Status : ST_SM_Status;
+END_VAR
+
+VAR CONSTANT
+    HOMING_MIN   : DINT := 1000; HOMING_MAX   : DINT := 1999;
+    RUNNING_MIN  : DINT := 3000; RUNNING_MAX  : DINT := 3999;
+    STOPPING_MIN : DINT := 2000; STOPPING_MAX : DINT := 2999;
+    ABORTING_MIN : DINT := 5000; ABORTING_MAX : DINT := 5999;
+    PAUSING_MIN  : DINT := 4000; PAUSING_MAX  : DINT := 4999;
+    PROCEEDING_MIN : DINT := 6000; PROCEEDING_MAX : DINT := 6999;
+END_VAR
+
+VAR
+    // Internal command request flags (set by methods, consumed by body)
+    _abortRequested : BOOL;
+    _completeStateRequested : BOOL;
+    _homeRequested : BOOL;
+    _pauseRequested : BOOL;
+    _proceedRequested : BOOL;
+    _startRequested : BOOL;
+    _stopRequested : BOOL;
+    _retryActive : BOOL;
+    RetryComplete : BOOL;
+
+    // OEE condition latches. Updated by ReportBlocked / ReportStarved, consumed
+    // and cleared by the body each cycle. Kept internal so the FB contract
+    // never mutates external inputs.
+    _blockedCode : DINT;
+    _starvedCode : DINT;
+
+    // Timer
+    StepTimer : TON;
+
+    // Edge detection
+    R_TRIG_1 : R_TRIG;
+    R_TRIG_5 : R_TRIG;
+
+    // Internal state tracking
+    _previousState : E_SM_State;
+    PreviousStep : DINT;
+    TimerReset : BOOL;
+    LsOdd : DINT;
+    _returnState : E_SM_State;
+    ReturnNextStep : DINT;
+
+    // Permission handlers
+    permAuto : FB_Permissives;
+    permHome : FB_Permissives;
+    permProceed : FB_Permissives;
+    permStart : FB_Permissives;
+
+    // Running interlock (latching - auto-aborts from any active state)
+    intlkRunning : FB_Interlock;
+
+    // Step ownership (internal)
+    _nextStep : DINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+//-----------------------------------------------------------------------------
+// Main Implementation
+//-----------------------------------------------------------------------------
+//-------------------------------------------------------------------------
+// Process permissions for different states
+//-------------------------------------------------------------------------
+permHome();
+permStart();
+permProceed();
+permAuto();
+
+intlkRunning();
+
+    // Auto-abort if any running interlock trips (e-stop, safety gate, etc.)
+    IF NOT intlkRunning.sts.bOK AND
+       NOT (Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTING) THEN
+        _abortRequested := TRUE;
+        _Raise(
+            code   := E_SM_Fault.RunningInterlockTripped,
+            source := 'INTLK_RUNNING',
+            reason := 'Running interlock tripped, auto-aborting'
+        );
+    END_IF;
+
+    //-------------------------------------------------------------------------
+    // Ready state calculations
+    //-------------------------------------------------------------------------
+    Status.ReadyToHome := (Status.State = E_SM_State.STOPPED) AND
+                          permHome.sts.bOK AND
+                          permAuto.sts.bOK;
+
+    Status.ReadyToStart := (Status.State = E_SM_State.READY) AND
+                          permStart.sts.bOK AND
+                          permAuto.sts.bOK AND
+                          NOT Status.AutoStartRequest;
+
+    Status.ReadyToProceed := (Status.State = E_SM_State.PAUSED) AND
+                            permProceed.sts.bOK AND
+                            permAuto.sts.bOK;
+
+    //-------------------------------------------------------------------------
+    // Auto-start request logic
+    // AutoCycle fires when we just finished a RUNNING cycle (READY with LastState=RUNNING)
+    //-------------------------------------------------------------------------
+    Status.AutoStartRequest := _startRequested AND NOT permStart.sts.bOK;
+    Status.AutoCycleRequest := cfgAutoRun AND (Status.State = E_SM_State.READY) AND
+                              (Status.LastState = E_SM_State.RUNNING) AND NOT permStart.sts.bOK;
+
+    //-------------------------------------------------------------------------
+    // Remember last state before change
+    //-------------------------------------------------------------------------
+    _previousState := Status.State;
+
+    //-------------------------------------------------------------------------
+    // Auto-run handling (internal - not from external command)
+    //-------------------------------------------------------------------------
+    IF cfgAutoRun AND permAuto.sts.bOK AND permStart.sts.bOK AND
+       (Status.State = E_SM_State.READY) AND (Status.LastState = E_SM_State.RUNNING) THEN
+        _startRequested := TRUE;
+    END_IF;
+
+    //-------------------------------------------------------------------------
+    // Sequence completion inference — current step is the final step of its
+    // state (range is in-state AND next-step is zero).
+    //-------------------------------------------------------------------------
+    R_TRIG_5(CLK := _IsStepInStateRange(
+        state := Status.State,
+        nStep := Status.Step.Current
+    ) AND (_nextStep = 0));
+    IF R_TRIG_5.Q THEN
+        _completeStateRequested := TRUE;
+    END_IF;
+
+    //-------------------------------------------------------------------------
+    // State Transitions
+    //-------------------------------------------------------------------------
+
+    // Homing complete → Ready
+    IF _completeStateRequested AND (Status.State = E_SM_State.HOMING) THEN
+        _nextStep := 0;
+        Status.State := E_SM_State.READY;
+        _completeStateRequested := FALSE;
+    END_IF;
+
+    // Running complete → Ready (LastState will be RUNNING so AutoCycle can detect a just-finished cycle)
+    IF _completeStateRequested AND (Status.State = E_SM_State.RUNNING) THEN
+        _nextStep := 0;
+        Status.State := E_SM_State.READY;
+        _completeStateRequested := FALSE;
+    END_IF;
+
+    // Running + Stop → Stopping
+    IF _stopRequested AND (Status.State = E_SM_State.RUNNING) THEN
+        Status.State := E_SM_State.STOPPING;
+    END_IF;
+
+    // Stopping complete → Stopped
+    IF _completeStateRequested AND (Status.State = E_SM_State.STOPPING) THEN
+        _nextStep := 0;
+        Status.State := E_SM_State.STOPPED;
+        _completeStateRequested := FALSE;
+    END_IF;
+
+    // Aborting complete → Stopped (Status.Faulted remains indicated via LastState = ABORTING)
+    IF _completeStateRequested AND (Status.State = E_SM_State.ABORTING) THEN
+        _nextStep := 0;
+        Status.State := E_SM_State.STOPPED;
+        _completeStateRequested := FALSE;
+    END_IF;
+
+    // Running + Pause → Pausing (save context for Proceed)
+    IF _pauseRequested AND (Status.State = E_SM_State.RUNNING) THEN
+        _returnState := Status.State;
+        ReturnNextStep := Status.Step.Current;  // resume re-enters same step
+        Status.State := E_SM_State.PAUSING;
+        _nextStep := 0;
+    END_IF;
+
+    // Pausing complete → Paused
+    IF _completeStateRequested AND (Status.State = E_SM_State.PAUSING) THEN
+        _nextStep := 0;
+        Status.State := E_SM_State.PAUSED;
+        _completeStateRequested := FALSE;
+    END_IF;
+
+    // Proceeding complete → return to state before pause, re-enter the paused step
+    IF _completeStateRequested AND (Status.State = E_SM_State.PROCEEDING) THEN
+        _nextStep := ReturnNextStep;
+        Status.State := _returnState;
+        _completeStateRequested := FALSE;
+    END_IF;
+
+    // Ready + Start → Running
+    IF (_startRequested OR
+        (Status.AutoStartRequest AND permStart.sts.bOK AND permAuto.sts.bOK)) AND
+        (Status.State = E_SM_State.READY) THEN
+        _nextStep := 0;
+        Status.State := E_SM_State.RUNNING;
+        _startRequested := FALSE;
+    END_IF;
+
+    // Ready + Stop → Stopped (no sequence needed, machine is already quiescent)
+    IF _stopRequested AND (Status.State = E_SM_State.READY) THEN
+        _nextStep := 0;
+        Status.State := E_SM_State.STOPPED;
+    END_IF;
+
+    // Stopped + Home → Homing
+    IF _homeRequested AND (Status.State = E_SM_State.STOPPED) THEN
+        _nextStep := 0;
+        Status.State := E_SM_State.HOMING;
+    END_IF;
+
+    // Paused + Proceed → Proceeding
+    IF _proceedRequested AND (Status.State = E_SM_State.PAUSED) THEN
+        _nextStep := 0;
+        Status.State := E_SM_State.PROCEEDING;
+    END_IF;
+
+    // Abort from any state except Stopped / Aborting
+    IF _abortRequested AND NOT (Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTING) THEN
+        _nextStep := 0;
+        Status.State := E_SM_State.ABORTING;
+    END_IF;
+
+    //-------------------------------------------------------------------------
+    // Track state changes
+    //-------------------------------------------------------------------------
+    IF Status.State <> _previousState THEN
+        Status.LastState := _previousState;
+    END_IF;
+
+    //-------------------------------------------------------------------------
+    // Derived status flags
+    //-------------------------------------------------------------------------
+    Status.WaitingState := (Status.State = E_SM_State.STOPPED) OR (Status.State = E_SM_State.READY) OR
+                           (Status.State = E_SM_State.PAUSED);
+    Status.ActiveState  := (Status.State = E_SM_State.HOMING) OR (Status.State = E_SM_State.RUNNING) OR
+                           (Status.State = E_SM_State.STOPPING) OR (Status.State = E_SM_State.PAUSING) OR
+                           (Status.State = E_SM_State.PROCEEDING) OR (Status.State = E_SM_State.ABORTING);
+
+    //-------------------------------------------------------------------------
+    // Step and timer management
+    //-------------------------------------------------------------------------
+
+    // Reset timer and clear step name when transitioning to step 0
+    R_TRIG_1(CLK := Status.Step.Current = 0);
+    IF R_TRIG_1.Q THEN
+        Status.Step.Name := '';
+        _ClearStepPermissives();
+        TimerReset := TRUE;
+        StepTimer(IN := FALSE, PT := T#99H);
+        Status.Step.TimerSeconds := 0.0;
+    END_IF;
+
+    // Auto-initialize first step when entering an active state
+    IF Status.Step.Current = 0 AND Status.ActiveState THEN
+        _nextStep := _GetFirstStepForState(state := Status.State);
+    END_IF;
+
+    // Detect step change and update
+    IF Status.Step.Current <> _nextStep THEN
+        PreviousStep := Status.Step.Current;
+        Status.Step.Current := _nextStep;
+        TimerReset := TRUE;
+        StepTimer(IN := FALSE, PT := T#99H);
+        Status.Step.TimerSeconds := 0.0;
+    END_IF;
+
+    Status.Step.Next := _nextStep;
+
+    // Step timer logic
+    IF NOT (Status.State = E_SM_State.PAUSED) OR ((Status.State = E_SM_State.PAUSED) AND _completeStateRequested) THEN
+        IF TimerReset THEN
+            StepTimer(IN := FALSE, PT := T#99H);
+            Status.Step.TimerSeconds := 0.0;
+            TimerReset := FALSE;
+        ELSE
+            StepTimer(IN := TRUE, PT := T#99H);
+            Status.Step.TimerSeconds := UDINT_TO_REAL(TIME_TO_UDINT(StepTimer.ET)) / 1000.0;
+        END_IF;
+    ELSE
+        StepTimer(IN := FALSE, PT := T#99H);
+    END_IF;
+
+    //-------------------------------------------------------------------------
+    // Fault detection — surface through the shared fault handler so the
+    // ring-buffer/history in ST_DeviceHeader_Sts stays populated.
+    //
+    // Ordering discipline:
+    //   1. Submodule faults raise immediately with a specific code + source.
+    //   2. OddStepReached is the "nothing more specific said anything" default
+    //      for landing on an odd step. We only auto-raise it when no fault is
+    //      currently active, so a more specific raise (StepTimeout raised by
+    //      FB_Step, StepUserFault raised by step.RaiseFault, etc.) wins.
+    //-------------------------------------------------------------------------
+    LsOdd := Status.Step.Current MOD 2;
+    Status.Faulted := LsOdd <> 0;
+    Status.SubmoduleFaulted := inpSubmoduleFaulted;
+
+    IF Status.SubmoduleFaulted THEN
+        _Raise(
+            code   := E_SM_Fault.SubmoduleFaulted,
+            source := 'SUBMODULE',
+            reason := 'Submodule reported fault via inpSubmoduleFaulted'
+        );
+    END_IF;
+
+    IF Status.Faulted AND GetFaultCode() = 0 THEN
+        _RaiseStepFault(
+            stepNum  := Status.Step.Current,
+            stepName := Status.Step.Name,
+            code     := E_SM_Fault.OddStepReached,
+            reason   := ''
+        );
+    END_IF;
+
+    //-------------------------------------------------------------------------
+    // Retry logic
+    //-------------------------------------------------------------------------
+    IF RetryComplete THEN
+        _retryActive := FALSE;
+        RetryComplete := FALSE;
+    END_IF;
+
+    IF _retryActive THEN
+        RetryComplete := TRUE;
+    END_IF;
+
+    IF _retryActive AND Status.Faulted THEN
+        // Roll back to previous (even, non-faulted) step to re-enter it
+        _nextStep := Status.Step.Current - 1;
+    END_IF;
+
+    //-------------------------------------------------------------------------
+    // OEE condition codes (Blocked / Starved) — consume the internal latches.
+    // The latches are fed externally via ReportBlocked() / ReportStarved().
+    //-------------------------------------------------------------------------
+    IF _blockedCode = 0 THEN
+        Status.BlockedCondition := 0;
+    END_IF;
+
+    IF _blockedCode <> 0 AND
+       (Status.State = E_SM_State.RUNNING OR Status.State = E_SM_State.STOPPING OR
+        Status.State = E_SM_State.READY) THEN
+        Status.BlockedCondition := _blockedCode;
+        _blockedCode := 0;
+    END_IF;
+
+    IF _starvedCode = 0 THEN
+        Status.StarvedCondition := 0;
+    END_IF;
+
+    IF _starvedCode <> 0 AND
+       (Status.State = E_SM_State.RUNNING OR Status.State = E_SM_State.STOPPING OR
+        Status.State = E_SM_State.READY) THEN
+        Status.StarvedCondition := _starvedCode;
+        _starvedCode := 0;
+    END_IF;
+
+    //-------------------------------------------------------------------------
+    // Common device header (stateString, ready/Busy/Faulted/SourceLocked,
+    // fault codes + strings, timestamps). Published via Status.header.
+    //-------------------------------------------------------------------------
+    _UpdateHeader(
+        header      := Status.header,
+        stateString := _StateToString(state := Status.State),
+        busy     := Status.ActiveState
+    );
+]]></ST>
+    </Implementation>
+    <Folder Name="Public" Id="{f0c10001-0001-0001-0001-000000000001}" />
+    <Folder Name="Internal" Id="{f0c10002-0001-0001-0001-000000000002}" />
+        <Folder Name="Private" Id="{f0c10003-0001-0001-0001-000000000003}" />
+        <Method Name="_ClearStepPermissives" Id="{d4e5f6a7-b8c9-0123-def0-123456789abf}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PRIVATE _ClearStepPermissives
+VAR
+    i : UDINT;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[Status.Step.PermCfg.nBypassable := 0;
+Status.Step.PermStatus.bOK := FALSE;
+Status.Step.PermStatus.nPermissives := 0;
+Status.Step.PermStatus.nBypassMask := 0;
+Status.Step.PermStatus.nFirstFailureBitIndex := 999;
+
+FOR i := 0 TO 63 DO
+    Status.Step.PermCfg.aNames[i]                       := '';
+    Status.Step.PermStatus.aFaceplates[i].name          := '';
+    Status.Step.PermStatus.aFaceplates[i].ok         := FALSE;
+    Status.Step.PermStatus.aFaceplates[i].mapped     := FALSE;
+    Status.Step.PermStatus.aFaceplates[i].bypassed   := FALSE;
+    Status.Step.PermStatus.aFaceplates[i].bypassable := FALSE;
+END_FOR;]]></ST>
+            </Implementation>
+        </Method>
+        <Method Name="_GetFirstStepForState" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac0}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PRIVATE _GetFirstStepForState : DINT
+VAR_INPUT
+        state : E_SM_State;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[CASE state OF
+        E_SM_State.HOMING:     _GetFirstStepForState := HOMING_MIN;
+        E_SM_State.RUNNING:    _GetFirstStepForState := RUNNING_MIN;
+        E_SM_State.STOPPING:   _GetFirstStepForState := STOPPING_MIN;
+        E_SM_State.ABORTING:   _GetFirstStepForState := ABORTING_MIN;
+        E_SM_State.PAUSING:    _GetFirstStepForState := PAUSING_MIN;
+        E_SM_State.PROCEEDING: _GetFirstStepForState := PROCEEDING_MIN;
+ELSE
+        _GetFirstStepForState := 0;
+END_CASE;]]></ST>
+            </Implementation>
+        </Method>
+        <Method Name="_GetLastStepForState" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac1}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PRIVATE _GetLastStepForState : DINT
+VAR_INPUT
+        state : E_SM_State;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[CASE state OF
+        E_SM_State.HOMING:     _GetLastStepForState := HOMING_MAX;
+        E_SM_State.RUNNING:    _GetLastStepForState := RUNNING_MAX;
+        E_SM_State.STOPPING:   _GetLastStepForState := STOPPING_MAX;
+        E_SM_State.ABORTING:   _GetLastStepForState := ABORTING_MAX;
+        E_SM_State.PAUSING:    _GetLastStepForState := PAUSING_MAX;
+        E_SM_State.PROCEEDING: _GetLastStepForState := PROCEEDING_MAX;
+ELSE
+        _GetLastStepForState := 0;
+END_CASE;]]></ST>
+            </Implementation>
+        </Method>
+        <Method Name="_IsStepInStateRange" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac2}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PRIVATE _IsStepInStateRange : BOOL
+VAR_INPUT
+        state : E_SM_State;
+        nStep : DINT;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[_IsStepInStateRange := (nStep >= _GetFirstStepForState(state := state)) AND
+                                             (nStep <= _GetLastStepForState(state := state));]]></ST>
+            </Implementation>
+        </Method>
+        <Method Name="_StateToString" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac3}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PRIVATE _StateToString : STRING(31)
+VAR_INPUT
+    state : E_SM_State;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[CASE state OF
+    E_SM_State.STOPPED:    _StateToString := 'STOPPED';
+    E_SM_State.READY:      _StateToString := 'READY';
+    E_SM_State.PAUSED:     _StateToString := 'PAUSED';
+    E_SM_State.HOMING:     _StateToString := 'HOMING';
+    E_SM_State.RUNNING:    _StateToString := 'RUNNING';
+    E_SM_State.STOPPING:   _StateToString := 'STOPPING';
+    E_SM_State.ABORTING:   _StateToString := 'ABORTING';
+    E_SM_State.PAUSING:    _StateToString := 'PAUSING';
+    E_SM_State.PROCEEDING: _StateToString := 'PROCEEDING';
+ELSE
+    _StateToString := 'UNKNOWN';
+END_CASE;]]></ST>
+            </Implementation>
+        </Method>
+        <Method Name="_ClearCommandFlags" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac5}" FolderPath="Private\">
+            <Declaration><![CDATA[// Reset every pending command-request flag. Each public command method
+// calls this first, then re-sets the single flag it actually requests, so
+// the body only ever sees one active request at a time.
+METHOD PRIVATE _ClearCommandFlags]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[_abortRequested         := FALSE;
+_completeStateRequested := FALSE;
+_homeRequested          := FALSE;
+_pauseRequested         := FALSE;
+_proceedRequested       := FALSE;
+_startRequested         := FALSE;
+_stopRequested          := FALSE;]]></ST>
+            </Implementation>
+        </Method>
+        <Method Name="ResolveFaultString" Id="{d4e5f6a7-b8c9-0123-def0-123456789ac4}" FolderPath="Private\">
+            <Declaration><![CDATA[METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[CASE code OF
+    E_SM_Fault.None:                    ResolveFaultString := 'No Fault';
+    E_SM_Fault.StepTimeout:             ResolveFaultString := 'Step Timeout';
+    E_SM_Fault.OddStepReached:          ResolveFaultString := 'Step Faulted';
+    E_SM_Fault.StepUserFault:           ResolveFaultString := 'Step User Fault';
+    E_SM_Fault.RunningInterlockTripped: ResolveFaultString := 'Running Interlock Tripped';
+    E_SM_Fault.SubmoduleFaulted:        ResolveFaultString := 'Submodule Faulted';
+ELSE
+    ResolveFaultString := 'Unknown Fault';
+END_CASE;]]></ST>
+            </Implementation>
+        </Method>
+    <Method Name="Abort" Id="{c1234567-1234-1234-1234-12345678C001}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// Safety command — always accepted (bypasses source lock and fault check).
+// Rejected only when the machine is already terminally stopped or already
+// running the Abort sequence.
+METHOD Abort : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.ABORTING THEN
+    Abort := E_RpcMethodResponse.REJECTED_WRONG_STATE;
+    RETURN;
+END_IF;
+
+_ClearCommandFlags();
+_abortRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
+Abort := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Home" Id="{c1234567-1234-1234-1234-12345678C002}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD Home : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Home := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted);
+IF Home <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+
+IF NOT (Status.State = E_SM_State.STOPPED) THEN
+    Home := E_RpcMethodResponse.REJECTED_WRONG_STATE;
+    RETURN;
+END_IF;
+
+IF NOT permHome.sts.bOK THEN
+    Home := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
+    RETURN;
+END_IF;
+
+IF NOT permAuto.sts.bOK THEN
+    Home := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
+    RETURN;
+END_IF;
+
+_ClearCommandFlags();
+_homeRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
+Home := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Pause" Id="{c1234567-1234-1234-1234-12345678C003}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD Pause : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Pause := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted);
+IF Pause <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+
+IF NOT (Status.State = E_SM_State.RUNNING) THEN
+    Pause := E_RpcMethodResponse.REJECTED_WRONG_STATE;
+    RETURN;
+END_IF;
+
+_ClearCommandFlags();
+_pauseRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
+Pause := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Proceed" Id="{c1234567-1234-1234-1234-12345678C004}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD Proceed : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Proceed := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted);
+IF Proceed <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+
+IF NOT (Status.State = E_SM_State.PAUSED) THEN
+    Proceed := E_RpcMethodResponse.REJECTED_WRONG_STATE;
+    RETURN;
+END_IF;
+
+IF NOT permProceed.sts.bOK THEN
+    Proceed := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
+    RETURN;
+END_IF;
+
+IF NOT permAuto.sts.bOK THEN
+    Proceed := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
+    RETURN;
+END_IF;
+
+_ClearCommandFlags();
+_proceedRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
+Proceed := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Retry" Id="{c1234567-1234-1234-1234-12345678C005}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD Retry : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Retry := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted);
+IF Retry <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+
+_retryActive := TRUE;
+_AcceptCommand(eRequester := eRequester);
+Retry := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Start" Id="{c1234567-1234-1234-1234-12345678C006}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD Start : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Start := F_ValidateRequester(eRequester, bSourceLockedToProg, Status.Faulted);
+IF Start <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+
+IF NOT (Status.State = E_SM_State.READY) THEN
+    Start := E_RpcMethodResponse.REJECTED_WRONG_STATE;
+    RETURN;
+END_IF;
+
+IF NOT permStart.sts.bOK THEN
+    Start := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
+    RETURN;
+END_IF;
+
+IF NOT permAuto.sts.bOK THEN
+    Start := E_RpcMethodResponse.REJECTED_PERMISSIVE_NOT_MET;
+    RETURN;
+END_IF;
+
+_ClearCommandFlags();
+_startRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
+Start := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Stop" Id="{c1234567-1234-1234-1234-12345678C007}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// Safety-adjacent command — skip source check and fault check. Rejected only
+// when the machine is already terminally stopped or already stopping.
+METHOD Stop : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF Status.State = E_SM_State.STOPPED OR Status.State = E_SM_State.STOPPING THEN
+    Stop := E_RpcMethodResponse.REJECTED_WRONG_STATE;
+    RETURN;
+END_IF;
+
+_ClearCommandFlags();
+_stopRequested := TRUE;
+_AcceptCommand(eRequester := eRequester);
+Stop := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ReportBlocked" Id="{c1234567-1234-1234-1234-12345678C008}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// External hook for OEE condition reporting. Pass a non-zero reason code while
+// the machine is blocked (e.g. downstream buffer full); pass 0 to clear. The
+// body publishes the active code on Status.BlockedCondition in active states.
+METHOD PUBLIC ReportBlocked
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_blockedCode := code;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ReportStarved" Id="{c1234567-1234-1234-1234-12345678C009}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// External hook for OEE condition reporting. Pass a non-zero reason code while
+// the machine is starved (e.g. upstream feeder empty); pass 0 to clear.
+METHOD PUBLIC ReportStarved
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_starvedCode := code;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MapRunningIntlk" Id="{f7a8b9c0-d1e2-4f30-a001-000000000001}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// Map a running interlock bit. Call every cycle. bGood=TRUE means the condition is safe.
+// If bGood goes FALSE from any non-stopped state the machine auto-aborts.
+METHOD MapRunningIntlk
+VAR_INPUT
+    bitIndex : UDINT;
+    bGood    : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[intlkRunning.MapInput(bitIndex := bitIndex, inputValue := bGood);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetRunningIntlk" Id="{f7a8b9c0-d1e2-4f30-a001-000000000002}" FolderPath="Public\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+// Clear latched running interlock bits after the real-world condition has recovered.
+// The machine will still be in STOPPED/ABORTING — issue Home/Start separately.
+METHOD ResetRunningIntlk]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[intlkRunning.Reset();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetNextStep" Id="{d4e5f6a7-b8c9-0123-def0-123456789abc}" FolderPath="Internal\">
+      <Declaration><![CDATA[// INTERNAL: used by FB_Step to advance the sequence. Not part of the user API.
+METHOD INTERNAL SetNextStep
+VAR_INPUT
+    nStep : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_nextStep := nStep;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetStepName" Id="{d4e5f6a7-b8c9-0123-def0-123456789abd}" FolderPath="Internal\">
+      <Declaration><![CDATA[// INTERNAL: used by FB_Step to publish its name to StepInfo. Not part of the user API.
+METHOD INTERNAL SetStepName
+VAR_INPUT
+    sName : STRING(40);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Status.Step.Name := sName;]]></ST>
+      </Implementation>
+    </Method>
+        <Method Name="SetStepPermissives" Id="{d4e5f6a7-b8c9-0123-def0-123456789abe}" FolderPath="Internal\">
+            <Declaration><![CDATA[// INTERNAL: used by FB_Step to publish the active step permissive data for HMI / OPC.
+METHOD INTERNAL SetStepPermissives
+VAR_INPUT
+        cfg : ST_Permissive_Config;
+        sts : ST_Permissive_Status;
+END_VAR]]></Declaration>
+            <Implementation>
+                <ST><![CDATA[Status.Step.PermCfg := cfg;
+Status.Step.PermStatus := sts;]]></ST>
+            </Implementation>
+        </Method>
+    <Method Name="_RaiseStepFault" Id="{e5f6a7b8-c9d0-1234-ef01-23456789abcd}" FolderPath="Internal\">
+      <Declaration><![CDATA[// INTERNAL: unified step-fault entry point used by FB_Step (timeout, user
+// RaiseFault) and by the SM body (OddStepReached auto-raise). Builds a
+// default reason when the caller leaves it empty so the ring never stores
+// blank context, then raises through the inherited fault book-keeping.
+//
+// This method does NOT advance the step; callers do that via SetNextStep
+// when appropriate (e.g. FB_Step's timeout path jumps to nStep + 1).
+METHOD INTERNAL _RaiseStepFault
+VAR_INPUT
+    stepNum  : DINT;
+    stepName : STRING(40);
+    code     : DINT;
+    reason   : STRING(79);
+END_VAR
+VAR
+    srcStr    : STRING(31);
+    reasonStr : STRING(79);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[srcStr := CONCAT(STR1 := 'STEP_', STR2 := DINT_TO_STRING(stepNum));
+
+IF reason <> '' THEN
+    reasonStr := reason;
+ELSE
+    // Default: "Step 3004 [Advance cylinder]: Step Faulted"
+    reasonStr := CONCAT(STR1 := 'Step ', STR2 := DINT_TO_STRING(stepNum));
+    IF stepName <> '' THEN
+        reasonStr := CONCAT(STR1 := reasonStr, STR2 := ' [');
+        reasonStr := CONCAT(STR1 := reasonStr, STR2 := stepName);
+        reasonStr := CONCAT(STR1 := reasonStr, STR2 := ']');
+    END_IF;
+    reasonStr := CONCAT(STR1 := reasonStr, STR2 := ': ');
+    reasonStr := CONCAT(STR1 := reasonStr, STR2 := THIS^.ResolveFaultString(code := code));
+END_IF;
+
+_Raise(
+    code   := code,
+    source := srcStr,
+    reason := reasonStr
+);]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_StateMachine">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+        <LineIds Name="FB_StateMachine._ClearStepPermissives">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+        <LineIds Name="FB_StateMachine._GetFirstStepForState">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+        <LineIds Name="FB_StateMachine._GetLastStepForState">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+        <LineIds Name="FB_StateMachine._IsStepInStateRange">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+        <LineIds Name="FB_StateMachine._StateToString">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+        <LineIds Name="FB_StateMachine.ResolveFaultString">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+    <LineIds Name="FB_StateMachine.Abort">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.Home">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.Pause">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.Proceed">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.Retry">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.Start">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.Stop">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.ReportBlocked">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.ReportStarved">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.MapRunningIntlk">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.ResetRunningIntlk">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.SetNextStep">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StateMachine.SetStepName">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+        <LineIds Name="FB_StateMachine.SetStepPermissives">
+            <LineId Id="1" Count="0" />
+        </LineIds>
+    <LineIds Name="FB_StateMachine._RaiseStepFault">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

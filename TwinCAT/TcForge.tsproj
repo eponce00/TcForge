@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.17">
+	<Project ProjectGUID="{30BC0CFA-4EDA-442C-AB84-5F964B0C9962}" TargetNetId="172.18.236.100.1.1" Target64Bit="true" ShowHideConfigurations="#x6">
+		<System>
+			<Settings MaxCpus="4" NonWinCpus="2">
+				<Cpu LatencyWarning="500"/>
+				<IoIdleTask Priority="6"/>
+			</Settings>
+			<Licenses>
+				<Target>
+					<ManualSelect Instances="1">{87DBEEFC-A548-4B37-9797-C9521D3A43A2}</ManualSelect>
+					<ManualSelect>{BDCC0070-42D5-49AE-ABF1-1D4434813D60}</ManualSelect>
+				</Target>
+			</Licenses>
+			<Tasks>
+				<Task Id="1" Priority="1" CycleTime="100000" AmsPort="350" AutoStart="false" AdtTasks="true">
+					<Name>PlcTask</Name>
+				</Task>
+				<Task Id="2" Priority="2" CycleTime="100000" AmsPort="351" AdtTasks="true">
+					<Name>Testing</Name>
+				</Task>
+			</Tasks>
+		</System>
+		<Plc>
+			<Project GUID="{2C41D41A-2644-4D36-82D2-076E2F9459E3}" Name="TcForgeExample" PrjFilePath="TcForgeExample\TcForgeExample.plcproj" TmcFilePath="TcForgeExample\TcForgeExample.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{11C415B7-EE24-E1CD-9EB7-635363800470}" TmcPath="TcForgeExample\TcForgeExample.tmc">
+					<Name>TcForgeExample Instance</Name>
+					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
+					<UnrestoredVarLinks ImportTime="2025-08-08T16:32:16">
+						<OwnerA Name="InputDst" Prefix="TIPC^HMI-PLC^HMI-PLC Instance" Type="1">
+							<OwnerB Name="TIID^Device 1 (TC3 EIP Scanner)^Box 1 (In-Sight 7000 Series)">
+								<Link VarA="IO_Mapping.inpInspectionResults1" TypeA="BYTE" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Inputs^Inspection Results_1" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.inpInspectionResults10" TypeA="BYTE" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Inputs^Inspection Results_10" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.inpInspectionResults2" TypeA="BYTE" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Inputs^Inspection Results_2" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.inpInspectionResults3" TypeA="BYTE" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Inputs^Inspection Results_3" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.inpInspectionResults4" TypeA="BYTE" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Inputs^Inspection Results_4" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.inpInspectionResults5" TypeA="BYTE" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Inputs^Inspection Results_5" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.inpInspectionResults6" TypeA="BYTE" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Inputs^Inspection Results_6" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.inpInspectionResults7" TypeA="BYTE" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Inputs^Inspection Results_7" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.inpInspectionResults8" TypeA="BYTE" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Inputs^Inspection Results_8" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.inpInspectionResults9" TypeA="BYTE" InOutA="0" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Inputs^Inspection Results_9" RestoreInfo="ANotFound"/>
+							</OwnerB>
+						</OwnerA>
+						<OwnerA Name="OutputSrc" Prefix="TIPC^HMI-PLC^HMI-PLC Instance" Type="2">
+							<OwnerB Name="TIID^Device 1 (TC3 EIP Scanner)^Box 1 (In-Sight 7000 Series)">
+								<Link VarA="IO_Mapping.outUserData1" TypeA="BYTE" InOutA="1" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Outputs^User Data_1" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.outUserData10" TypeA="BYTE" InOutA="1" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Outputs^User Data_10" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.outUserData2" TypeA="BYTE" InOutA="1" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Outputs^User Data_2" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.outUserData3" TypeA="BYTE" InOutA="1" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Outputs^User Data_3" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.outUserData4" TypeA="BYTE" InOutA="1" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Outputs^User Data_4" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.outUserData5" TypeA="BYTE" InOutA="1" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Outputs^User Data_5" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.outUserData6" TypeA="BYTE" InOutA="1" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Outputs^User Data_6" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.outUserData7" TypeA="BYTE" InOutA="1" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Outputs^User Data_7" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.outUserData8" TypeA="BYTE" InOutA="1" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Outputs^User Data_8" RestoreInfo="ANotFound"/>
+								<Link VarA="IO_Mapping.outUserData9" TypeA="BYTE" InOutA="1" GuidA="{18071995-0000-0000-0000-000000000001}" VarB="Connection 1 (Input/Output)^Outputs^User Data_9" RestoreInfo="ANotFound"/>
+							</OwnerB>
+						</OwnerA>
+					</UnrestoredVarLinks>
+					<Contexts>
+						<Context>
+							<Id>0</Id>
+							<Name>PlcTask</Name>
+							<ManualConfig>
+								<OTCID>#x02010010</OTCID>
+							</ManualConfig>
+							<Priority>1</Priority>
+							<CycleTime>10000000</CycleTime>
+						</Context>
+					</Contexts>
+					<TaskPouOids>
+						<TaskPouOid Prio="1" OTCID="#x08502001"/>
+					</TaskPouOids>
+				</Instance>
+			</Project>
+			<Project GUID="{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}" Name="TcForge" PrjFilePath="TcForge\TcForge.plcproj" TmcFilePath="TcForge\TcForge.tmc" ReloadTmc="true" AmsPort="852" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true">
+				<Instance Id="#x08502040" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{378588DE-DCBF-490F-0241-9D9174B4E83C}" TmcPath="TcForge\TcForge.tmc">
+					<Name>TcForge Instance</Name>
+					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
+				</Instance>
+			</Project>
+			<Project GUID="{4C5489A9-B7F5-4985-B678-81475A8FC2DB}" Name="Testing" PrjFilePath="Testing\Testing.plcproj" TmcFilePath="Testing\Testing.tmc" ReloadTmc="true" AmsPort="853" FileArchiveSettings="#x000e" CopyTmcToTarget="true" CopyTpyToTarget="false" SymbolicMapping="true">
+				<Instance Id="#x08502080" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{629C253F-B939-C24F-A41B-331CD69D2C3E}" TmcPath="Testing\Testing.tmc">
+					<Name>Testing Instance</Name>
+					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
+					<Contexts>
+						<Context>
+							<Id>0</Id>
+							<Name>Testing</Name>
+							<ManualConfig>
+								<OTCID>#x02010020</OTCID>
+							</ManualConfig>
+							<Priority>2</Priority>
+							<CycleTime>10000000</CycleTime>
+						</Context>
+					</Contexts>
+					<TaskPouOids>
+						<TaskPouOid Prio="2" OTCID="#x08502081"/>
+					</TaskPouOids>
+				</Instance>
+			</Project>
+		</Plc>
+	</Project>
+</TcSmProject>

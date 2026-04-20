@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_DigitalInput_Cfg" Id="{b0100001-0001-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Configuration for FB_DigitalInput. All fields are configurable; defaults
+// yield a plain pass-through of the physical signal.
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_DigitalInput_Cfg :
+STRUCT
+    // Signal conditioning
+    {attribute 'OPC.UA.DA.Description' := 'Invert input signal (active-low sensors)'}
+    invert            : BOOL := FALSE;
+
+    // Asymmetric debounce: separate delays for each edge so a noisy 24 V
+    // signal can have e.g. a 20 ms ON-delay but 0 ms OFF-delay. Set both to
+    // T#0MS to disable.
+    {attribute 'OPC.UA.DA.Description' := 'Rising-edge debounce delay (ON)'}
+    debounceOn        : TIME := T#0MS;
+    {attribute 'OPC.UA.DA.Description' := 'Falling-edge debounce delay (OFF)'}
+    debounceOff       : TIME := T#0MS;
+
+    // Quality watchdog: if inpQuality stays BAD for this long the FB raises
+    // E_DigitalInput_Fault.BadQuality. T#0MS disables the watchdog.
+    {attribute 'OPC.UA.DA.Description' := 'Raise BadQuality fault after this long in BAD quality (T#0MS = disabled)'}
+    qualityFaultAfter : TIME := T#0MS;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

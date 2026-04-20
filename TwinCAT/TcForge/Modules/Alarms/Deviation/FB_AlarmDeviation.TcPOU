@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AlarmDeviation" Id="{a0200004-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Asymmetric deviation alarm with two operating modes.
+//
+// Absolute:
+//   almRange.cfg.fHighLimit := 95.0;
+//   almRange.cfg.fLowLimit  := 10.0;
+//   almRange(inpPv := tankLevelPct);
+//
+// Setpoint deviation (tracks moving setpoints):
+//   almDev.cfg.bUseSetpoint := TRUE;
+//   almDev.cfg.fHighLimit   := 5.0;       // allow +5 above SP
+//   almDev.cfg.fLowLimit    := 3.0;       // allow -3 below SP
+//   almDev(inpPv := actualT, inpSetpoint := targetT);
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_AlarmDeviation EXTENDS FB_AlarmBase
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg         : ST_AlarmDeviation_Cfg;
+
+    {attribute 'OPC.UA.DA' := '0'}
+    inpPv       : REAL;
+    {attribute 'OPC.UA.DA' := '0'}
+    inpSetpoint : REAL;
+END_VAR
+VAR
+    {attribute 'OPC.UA.DA' := '0'}
+    _raw : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF cfg.bUseSetpoint THEN
+    _raw := (inpPv > (inpSetpoint + cfg.fHighLimit))
+         OR (inpPv < (inpSetpoint - cfg.fLowLimit));
+ELSE
+    _raw := (inpPv > cfg.fHighLimit) OR (inpPv < cfg.fLowLimit);
+END_IF;
+
+_Evaluate(cfgCommon := cfg.common, bRawCondition := _raw);]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

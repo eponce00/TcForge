@@ -1,0 +1,112 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_Permissives" Id="{3468ff58-4b50-4782-bf79-0df0256f5d2f}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+PERMISSIVE - Operational Enabling Function Block
+================================================
+Philosophy: Allows a change in state only when all conditions are met.
+Behavior:   Follows real-time conditions, no latching, can be bypassed for
+            maintenance.
+Logic:      Mapped bits 1 = good, 0 = bad. Unmapped bits default good (1).
+            sts.bOK = TRUE when every active permissive bit is good (or
+            bypassed). Non-latching: status tracks real-time inputs.
+Mapping:    Call MapInput(bitIndex, value) every cycle for each active
+            permissive. Unmapped bits automatically reset to good after
+            FB_BitMatrix64's MAPPING_TIMEOUT cycles.
+
+The 64-bit condition-matrix machinery is shared with FB_Interlock via
+FB_BitMatrix64 — the difference between the two FBs is latching semantics,
+which lives here (or in FB_Interlock) on top of the shared core.
+*)
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK PUBLIC FB_Permissives
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg : ST_Permissive_Config;
+END_VAR
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_Permissive_Status;
+END_VAR
+VAR
+    {attribute 'OPC.UA.DA' := '0'}
+    _core : FB_BitMatrix64;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Drive the shared bit-matrix machinery (cycle counter, cleanup, transitions).
+_core();
+
+// Non-latching rollup: unmapped bits default good, bypassed bits forced good.
+sts.nPermissives          := (_core.nLiveBits OR NOT _core.nActiveMask) OR _core.nBypassMask;
+sts.nBypassMask           := _core.nBypassMask;
+sts.nFirstFailureBitIndex := _core.nFirstFailureBitIndex;
+sts.bOK                   := sts.nPermissives = 16#FFFFFFFFFFFFFFFF;
+
+UpdateFaceplates();]]></ST>
+    </Implementation>
+    <Folder Name="Private" Id="{d08b71e4-603c-4ba4-b11f-19d286c8a91f}" />
+    <Folder Name="Public" Id="{d0d72902-ec14-4a62-8f56-22c21b7f9a30}" />
+    <Method Name="MapInput" Id="{1396195e-9e92-48f3-8821-a07e7aa395af}" FolderPath="Public\">
+      <Declaration><![CDATA[(*
+Map a boolean signal to one permissive bit (0..63). TRUE = good, FALSE = bad.
+Call every cycle for each active permissive condition.
+*)
+METHOD PUBLIC MapInput
+VAR_INPUT
+    bitIndex   : UDINT;
+    inputValue : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_core.MapInput(bitIndex := bitIndex, inputValue := inputValue);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Reset" Id="{7a291227-8f05-487e-993b-111f9f997a1f}" FolderPath="Public\">
+      <Declaration><![CDATA[(*
+Reset - Clear all bypass states. Permissives follow real-time conditions
+(non-latching) so there is nothing else to clear.
+*)
+{attribute 'TcRpcEnable':='1'}
+METHOD Reset]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_core.ClearBypass();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetBypass" Id="{d8a7e3f2-1234-5678-9abc-def012345678}" FolderPath="Public\">
+      <Declaration><![CDATA[(*
+Set or clear bypass for a specific permissive bit. Only bits configured
+as bypassable in cfg.nBypassable can be enabled; clearing is always allowed.
+*)
+{attribute 'TcRpcEnable':='1'}
+METHOD PUBLIC SetBypass : E_RpcMethodResponse
+VAR_INPUT
+    bitIndex : UDINT;
+    bEnable  : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SetBypass := _core.SetBypass(
+    bitIndex        := bitIndex,
+    bEnable         := bEnable,
+    nBypassableMask := cfg.nBypassable);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="UpdateFaceplates" Id="{b9ece0da-daef-4441-bc35-0a5dfeac90e9}" FolderPath="Private\">
+      <Declaration><![CDATA[METHOD PRIVATE UpdateFaceplates
+VAR
+    i       : UDINT;
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR i := 0 TO 63 DO
+    bitMask := SHL(ULINT#1, i);
+    sts.aFaceplates[i].name          := cfg.aNames[i];
+    sts.aFaceplates[i].ok         := (sts.nPermissives AND bitMask) <> 0;
+    sts.aFaceplates[i].mapped     := (_core.nActiveMask AND bitMask) <> 0;
+    sts.aFaceplates[i].bypassed   := (_core.nBypassMask AND bitMask) <> 0;
+    sts.aFaceplates[i].bypassable := (cfg.nBypassable  AND bitMask) <> 0;
+END_FOR;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

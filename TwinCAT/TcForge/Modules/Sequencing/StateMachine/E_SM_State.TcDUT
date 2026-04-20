@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_SM_State" Id="{a1b2c3d4-0001-0001-0001-000000000001}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+{attribute 'to_string'}
+// Minimum useful set of machine states.
+//
+// Waiting states (quiescent, no sequence driving outputs):
+//     STOPPED  - power-on default, not homed. Entry from Abort is STOPPED with Status.Faulted = TRUE.
+//     READY    - homed and either just-homed or just-completed a cycle. LastState distinguishes the two.
+//     PAUSED   - frozen mid-cycle, context held for Proceed.
+//
+// Active states (a step sequence is executing):
+//     HOMING      (steps 1000-1999)
+//     RUNNING     (steps 3000-3999)
+//     STOPPING    (steps 2000-2999) - graceful shutdown sequence
+//     ABORTING    (steps 5000-5999) - fast-safe shutdown sequence
+//     PAUSING     (steps 4000-4999) - park motion / save context
+//     PROCEEDING  (steps 6000-6999) - restore context / resume
+TYPE E_SM_State :
+(
+    STOPPED     := 0,
+    RUNNING     := 1,
+    STOPPING    := 2,
+    HOMING      := 4,
+    ABORTING    := 8,
+    READY       := 16,
+    PAUSING     := 32,
+    PAUSED      := 64,
+    PROCEEDING  := 128
+);
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

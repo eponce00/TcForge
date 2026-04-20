@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_AnalogOutput_Sts" Id="{b0100004-0002-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Status of FB_AnalogOutput. `header` is shared with every device FB;
+// device-specific fields sit below.
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_AnalogOutput_Sts :
+STRUCT
+    header        : ST_DeviceHeader_Sts;
+
+    {attribute 'OPC.UA.DA.Description' := 'Clamped command actually written (EU)'}
+    value      : REAL;
+    {attribute 'OPC.UA.DA.Description' := 'Last commanded value before clamping (EU, survives power cycle)'}
+    commanded  : REAL;
+    {attribute 'OPC.UA.DA.Description' := 'Raw value written to the terminal (REAL view of the UNION)'}
+    rawReal    : REAL;
+    {attribute 'OPC.UA.DA.Description' := 'Echo of cfg.unit for HMI consumption'}
+    unit       : E_Unit := E_Unit.PERCENT;
+    {attribute 'OPC.UA.DA.Description' := 'Signal quality tag'}
+    quality    : E_IO_Quality := E_IO_Quality.UNKNOWN;
+
+    {attribute 'OPC.UA.DA.Description' := 'Command clamped at MinCv'}
+    clampedLow : BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Command clamped at MaxCv'}
+    clampedHigh: BOOL;
+    {attribute 'OPC.UA.DA.Description' := 'Either clamp direction active'}
+    clampActive: BOOL;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

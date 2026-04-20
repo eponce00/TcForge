@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="_1000_PRG_Homing" Id="{12345678-1234-1234-1234-123456789001}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM _1000_PRG_Homing
+VAR_IN_OUT
+    sm : FB_StateMachine;
+END_VAR
+VAR
+    step1000 : FB_Step;
+    step1002 : FB_Step;
+    step1004 : FB_Step;
+
+    // Simulated hardware signals
+    bDriveEnabled      : BOOL;
+    bHomeSensorReached : BOOL;
+    bServoReady        : BOOL;
+    nRetryCount        : INT;
+    tonHomeDelay       : TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+//=============================================================================
+// STEP 1000 - Initialize Homing
+// Demonstrates: Entry (one-shot initialization), Execute (wait for perms),
+//               Exiting (cleanup before advancing)
+//=============================================================================
+step1000(sm := sm, nStep := 1000, nNextStep := 1002, nTimeout := 10, sName := 'Init Homing');
+
+IF step1000.Entry THEN
+    // One-shot: reset state from any prior attempt
+    bDriveEnabled := FALSE;
+    bHomeSensorReached := FALSE;
+    nRetryCount := 0;
+    tonHomeDelay(IN := FALSE);  // reset timer
+END_IF;
+
+IF step1000.Execute THEN
+    // Simulate: enable drive after a short delay
+    tonHomeDelay(IN := TRUE, PT := T#2S);
+    bDriveEnabled := tonHomeDelay.Q;
+
+    // Permissives gate the transition to next step
+    step1000.MapPerm(nIndex := 0, sDescription := 'Drive Enabled',      bValue := bDriveEnabled);
+    step1000.MapPerm(nIndex := 1, sDescription := 'Safety Circuit OK',  bValue := TRUE);
+    step1000.MapPerm(nIndex := 2, sDescription := 'No Active Faults',   bValue := TRUE);
+END_IF;
+
+IF step1000.Exiting THEN
+    // One-shot cleanup: latch that initialization is done
+    tonHomeDelay(IN := FALSE);
+END_IF;
+
+//=============================================================================
+// STEP 1002 - Execute Homing Move
+// Demonstrates: Entry (command actuator), Execute (monitor completion),
+//               SetNextStep (dynamic branching on success/failure)
+//=============================================================================
+step1002(sm := sm, nStep := 1002, nNextStep := 1004, nTimeout := 20, sName := 'Execute Home Move');
+
+IF step1002.Entry THEN
+    // One-shot: command the axis to home
+    bHomeSensorReached := FALSE;
+    bServoReady := FALSE;
+END_IF;
+
+IF step1002.Execute THEN
+    // Simulate homing motion completing after some time
+    bHomeSensorReached := sm.Status.Step.TimerSeconds >= 5.0;
+    bServoReady := bHomeSensorReached;
+
+    step1002.MapPerm(nIndex := 0, sDescription := 'Home Sensor Reached', bValue := bHomeSensorReached);
+    step1002.MapPerm(nIndex := 1, sDescription := 'Servo Settled',       bValue := bServoReady);
+END_IF;
+
+IF step1002.Exiting THEN
+    // Could log completion or capture final position here
+    ;
+END_IF;
+
+//=============================================================================
+// STEP 1004 - Verify Home Position
+// Demonstrates: Simple verification step, nNextStep := 0 ends the sequence
+//=============================================================================
+step1004(sm := sm, nStep := 1004, nNextStep := 0, nTimeout := 5, sName := 'Verify Home Position');
+
+IF step1004.Entry THEN
+    // Nothing special to initialize
+    ;
+END_IF;
+
+IF step1004.Execute THEN
+    // Verify the home position is stable
+    step1004.MapPerm(nIndex := 0, sDescription := 'Position Stable', bValue := sm.Status.Step.TimerSeconds >= 1.0);
+    step1004.MapPerm(nIndex := 1, sDescription := 'Encoder Valid',   bValue := TRUE);
+END_IF;
+]]></ST>
+    </Implementation>
+    <LineIds Name="_1000_PRG_Homing">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

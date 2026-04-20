@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_FaultEntry" Id="{c0000010-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// One entry in a device fault-history ring buffer.
+// code      : device-specific fault code (0 = empty slot)
+// ts        : timestamp when the fault was first raised
+// requester : whoever triggered the command that faulted (PROG / OPERATOR)
+// source    : where inside the device raised it (step number + name, interlock
+//             name, 'SUBMODULE', etc.). Empty => caller didn't supply context.
+// reason    : free-form human-readable detail. Empty => HMI falls back to
+//             ResolveFaultString(code).
+{attribute 'OPC.UA.DA' := '1'}
+{attribute 'OPC.UA.DA.Access' := '1'}
+{attribute 'OPC.UA.DA.StructuredType' := '1'}
+TYPE ST_FaultEntry :
+STRUCT
+    code      : DINT;
+    ts        : LTIME;
+    requester : E_Requester;
+    source    : STRING(31);
+    reason    : STRING(79);
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

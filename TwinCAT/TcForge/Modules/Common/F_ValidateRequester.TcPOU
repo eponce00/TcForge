@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="F_ValidateRequester" Id="{b1234567-1234-1234-1234-12345678C001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Shared RPC gate for device-style commands.
+//   - OPERATOR calls are blocked while bSourceLocked = TRUE (source lock).
+//   - Any call is blocked while bFaulted = TRUE.
+// Reset / acknowledge-style methods that must always be accepted should NOT
+// use this helper — they should accept unconditionally.
+FUNCTION F_ValidateRequester : E_RpcMethodResponse
+VAR_INPUT
+    eRequester    : E_Requester;
+    bSourceLocked : BOOL;
+    bFaulted      : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bSourceLocked AND eRequester = E_Requester.OPERATOR THEN
+    F_ValidateRequester := E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED;
+ELSIF bFaulted THEN
+    F_ValidateRequester := E_RpcMethodResponse.REJECTED_FAULTED;
+ELSE
+    F_ValidateRequester := E_RpcMethodResponse.ACCEPTED;
+END_IF;]]></ST>
+    </Implementation>
+    <LineIds Name="F_ValidateRequester">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

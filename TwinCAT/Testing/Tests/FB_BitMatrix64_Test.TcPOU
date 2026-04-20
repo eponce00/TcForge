@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_BitMatrix64_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Unit tests for FB_BitMatrix64 — the shared 64-bit condition-matrix core
+// consumed by FB_Permissives (non-latching) and FB_Interlock (latching).
+// Covers the behaviours both composers rely on: live bit semantics, active-
+// mask tracking, mapping timeout, "just unmapped while bad" events, first-
+// failure ordering, bypass accept/reject rules, and clear operations.
+//
+// Each test owns a fresh FB_BitMatrix64 instance via METHOD-local VARs so
+// cycle counters and internal state do not leak between tests.
+FUNCTION_BLOCK FB_BitMatrix64_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[InitialStateAllGood();
+MapInputMarksActiveAndValue();
+MapInputBadValueClearsLiveBit();
+MapInputOutOfRangeIsNoOp();
+MappingTimeoutUnmapsAndRestoresGood();
+JustUnmappedBadFiresWhenBadAtUnmap();
+JustUnmappedBadSilentWhenGoodAtUnmap();
+FirstFailureRecordsFirstBadBit();
+SetBypassAcceptsWhenBypassable();
+SetBypassRejectsWhenNotBypassable();
+SetBypassClearAlwaysAllowed();
+SetBypassInvalidBitIndex();
+ClearBypassClearsAll();
+ClearFirstFailureResets();]]></ST>
+    </Implementation>
+    <Method Name="InitialStateAllGood" Id="{b1c2d3e4-f5a6-7890-abcd-000000000010}">
+      <Declaration><![CDATA[METHOD InitialStateAllGood
+VAR
+    fb : TcForge.FB_BitMatrix64;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('InitialStateAllGood');
+
+// Before any body call, default initialisers should mark every bit good
+// and no bit active / bypassed / tripped.
+AssertEquals_ULINT(
+    Expected := 16#FFFFFFFFFFFFFFFF,
+    Actual   := fb.nLiveBits,
+    Message  := 'Fresh instance: nLiveBits should be all-good');
+AssertEquals_ULINT(
+    Expected := 0,
+    Actual   := fb.nActiveMask,
+    Message  := 'Fresh instance: nActiveMask should be empty');
+AssertEquals_ULINT(
+    Expected := 0,
+    Actual   := fb.nBypassMask,
+    Message  := 'Fresh instance: nBypassMask should be empty');
+AssertEquals_UDINT(
+    Expected := 999,
+    Actual   := fb.nFirstFailureBitIndex,
+    Message  := 'Fresh instance: nFirstFailureBitIndex should be sentinel 999');
+AssertEquals_ULINT(
+    Expected := 0,
+    Actual   := fb.nJustUnmappedBad,
+    Message  := 'Fresh instance: nJustUnmappedBad should be empty');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MapInputMarksActiveAndValue" Id="{b1c2d3e4-f5a6-7890-abcd-000000000011}">
+      <Declaration><![CDATA[METHOD MapInputMarksActiveAndValue
+VAR
+    fb      : TcForge.FB_BitMatrix64;
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('MapInputMarksActiveAndValue');
+
+bitMask := SHL(ULINT#1, 5);
+
+fb.MapInput(bitIndex := 5, inputValue := TRUE);
+fb();
+
+AssertTrue(
+    Condition := (fb.nActiveMask AND bitMask) <> 0,
+    Message   := 'Bit 5 should be in nActiveMask after MapInput(5, TRUE)');
+AssertTrue(
+    Condition := (fb.nLiveBits AND bitMask) <> 0,
+    Message   := 'Bit 5 should be good (1) in nLiveBits after MapInput(5, TRUE)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MapInputBadValueClearsLiveBit" Id="{b1c2d3e4-f5a6-7890-abcd-000000000012}">
+      <Declaration><![CDATA[METHOD MapInputBadValueClearsLiveBit
+VAR
+    fb      : TcForge.FB_BitMatrix64;
+    bitMask : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('MapInputBadValueClearsLiveBit');
+
+bitMask := SHL(ULINT#1, 5);
+
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+
+AssertTrue(
+    Condition := (fb.nActiveMask AND bitMask) <> 0,
+    Message   := 'Bit 5 should still be active even when value is FALSE');
+AssertTrue(
+    Condition := (fb.nLiveBits AND bitMask) = 0,
+    Message   := 'Bit 5 should be bad (0) in nLiveBits after MapInput(5, FALSE)');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MapInputOutOfRangeIsNoOp" Id="{b1c2d3e4-f5a6-7890-abcd-000000000013}">
+      <Declaration><![CDATA[METHOD MapInputOutOfRangeIsNoOp
+VAR
+    fb : TcForge.FB_BitMatrix64;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('MapInputOutOfRangeIsNoOp');
+
+// Bit 64 is outside the 0..63 range; MapInput must silently reject it.
+fb.MapInput(bitIndex := 64, inputValue := FALSE);
+fb();
+
+AssertEquals_ULINT(
+    Expected := 0,
+    Actual   := fb.nActiveMask,
+    Message  := 'MapInput with bitIndex > 63 must not touch nActiveMask');
+AssertEquals_ULINT(
+    Expected := 16#FFFFFFFFFFFFFFFF,
+    Actual   := fb.nLiveBits,
+    Message  := 'MapInput with bitIndex > 63 must not touch nLiveBits');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MappingTimeoutUnmapsAndRestoresGood" Id="{b1c2d3e4-f5a6-7890-abcd-000000000014}">
+      <Declaration><![CDATA[METHOD MappingTimeoutUnmapsAndRestoresGood
+VAR
+    fb      : TcForge.FB_BitMatrix64;
+    bitMask : ULINT;
+    i       : UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('MappingTimeoutUnmapsAndRestoresGood');
+
+bitMask := SHL(ULINT#1, 5);
+
+// Map bit 5 once as bad, then stop feeding. After MAPPING_TIMEOUT (=10)
+// unreferenced cycles the bit must be unmapped and snap back to good.
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();  // cycle 1 — freshly mapped
+
+FOR i := 1 TO 12 DO  // run past the 10-cycle timeout
+    fb();
+END_FOR;
+
+AssertTrue(
+    Condition := (fb.nActiveMask AND bitMask) = 0,
+    Message   := 'Bit 5 should be unmapped after MAPPING_TIMEOUT cycles without refresh');
+AssertTrue(
+    Condition := (fb.nLiveBits AND bitMask) <> 0,
+    Message   := 'Bit 5 should snap back to good once unmapped');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="JustUnmappedBadFiresWhenBadAtUnmap" Id="{b1c2d3e4-f5a6-7890-abcd-000000000015}">
+      <Declaration><![CDATA[METHOD JustUnmappedBadFiresWhenBadAtUnmap
+VAR
+    fb        : TcForge.FB_BitMatrix64;
+    bitMask   : ULINT;
+    i         : UDINT;
+    sawEvent  : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('JustUnmappedBadFiresWhenBadAtUnmap');
+
+bitMask := SHL(ULINT#1, 5);
+
+// Map bit 5 as BAD, then stop feeding. Somewhere in the next cycles the
+// cleanup loop will unmap it; that tick must publish the event via
+// nJustUnmappedBad so latching callers (FB_Interlock) can remember it.
+fb.MapInput(bitIndex := 5, inputValue := FALSE);
+fb();
+
+sawEvent := FALSE;
+FOR i := 1 TO 15 DO
+    fb();
+    IF (fb.nJustUnmappedBad AND bitMask) <> 0 THEN
+        sawEvent := TRUE;
+    END_IF;
+END_FOR;
+
+AssertTrue(
+    Condition := sawEvent,
+    Message   := 'nJustUnmappedBad should fire for bit 5 during the timeout-unmap cycle');
+
+// Event must be edge-style: once the unmap cycle passes, subsequent cycles
+// reset the output.
+AssertEquals_ULINT(
+    Expected := 0,
+    Actual   := fb.nJustUnmappedBad,
+    Message  := 'nJustUnmappedBad should clear on cycles after the unmap event');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="JustUnmappedBadSilentWhenGoodAtUnmap" Id="{b1c2d3e4-f5a6-7890-abcd-000000000016}">
+      <Declaration><![CDATA[METHOD JustUnmappedBadSilentWhenGoodAtUnmap
+VAR
+    fb       : TcForge.FB_BitMatrix64;
+    bitMask  : ULINT;
+    i        : UDINT;
+    sawEvent : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('JustUnmappedBadSilentWhenGoodAtUnmap');
+
+bitMask := SHL(ULINT#1, 5);
+
+// Map bit 5 as GOOD then stop feeding. The timeout unmap still happens,
+// but there is no "bad at unmap" memory to expose — event must stay clear.
+fb.MapInput(bitIndex := 5, inputValue := TRUE);
+fb();
+
+sawEvent := FALSE;
+FOR i := 1 TO 15 DO
+    fb();
+    IF (fb.nJustUnmappedBad AND bitMask) <> 0 THEN
+        sawEvent := TRUE;
+    END_IF;
+END_FOR;
+
+AssertFalse(
+    Condition := sawEvent,
+    Message   := 'nJustUnmappedBad must NOT fire when the bit was good at unmap');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FirstFailureRecordsFirstBadBit" Id="{b1c2d3e4-f5a6-7890-abcd-000000000017}">
+      <Declaration><![CDATA[METHOD FirstFailureRecordsFirstBadBit
+VAR
+    fb : TcForge.FB_BitMatrix64;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('FirstFailureRecordsFirstBadBit');
+
+// Cycle 1: bits 3 and 7 both mapped good; baseline is all good.
+fb.MapInput(bitIndex := 3, inputValue := TRUE);
+fb.MapInput(bitIndex := 7, inputValue := TRUE);
+fb();
+
+// Cycle 2: both drop to bad in the same scan. The body scans bits 0..63 in
+// order, so the lower-index bit (3) wins the first-failure slot.
+fb.MapInput(bitIndex := 3, inputValue := FALSE);
+fb.MapInput(bitIndex := 7, inputValue := FALSE);
+fb();
+
+AssertEquals_UDINT(
+    Expected := 3,
+    Actual   := fb.nFirstFailureBitIndex,
+    Message  := 'First-failure index should be the lowest-numbered bit that went bad');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetBypassAcceptsWhenBypassable" Id="{b1c2d3e4-f5a6-7890-abcd-000000000020}">
+      <Declaration><![CDATA[METHOD SetBypassAcceptsWhenBypassable
+VAR
+    fb       : TcForge.FB_BitMatrix64;
+    bitMask  : ULINT;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetBypassAcceptsWhenBypassable');
+
+bitMask := SHL(ULINT#1, 3);
+
+response := fb.SetBypass(
+    bitIndex        := 3,
+    bEnable         := TRUE,
+    nBypassableMask := bitMask);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := response,
+    Message  := 'SetBypass should accept when the bit is configured as bypassable');
+AssertTrue(
+    Condition := (fb.nBypassMask AND bitMask) <> 0,
+    Message   := 'nBypassMask should reflect the accepted bypass');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetBypassRejectsWhenNotBypassable" Id="{b1c2d3e4-f5a6-7890-abcd-000000000021}">
+      <Declaration><![CDATA[METHOD SetBypassRejectsWhenNotBypassable
+VAR
+    fb       : TcForge.FB_BitMatrix64;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetBypassRejectsWhenNotBypassable');
+
+// Caller supplies an empty bypassable mask, so any enable attempt must be
+// rejected regardless of which bit is targeted.
+response := fb.SetBypass(
+    bitIndex        := 3,
+    bEnable         := TRUE,
+    nBypassableMask := 0);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_BYPASS_NOT_ALLOWED,
+    Actual   := response,
+    Message  := 'SetBypass must reject enable when the bit is not configured as bypassable');
+AssertEquals_ULINT(
+    Expected := 0,
+    Actual   := fb.nBypassMask,
+    Message  := 'nBypassMask must stay empty after a rejected SetBypass');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetBypassClearAlwaysAllowed" Id="{b1c2d3e4-f5a6-7890-abcd-000000000022}">
+      <Declaration><![CDATA[METHOD SetBypassClearAlwaysAllowed
+VAR
+    fb       : TcForge.FB_BitMatrix64;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetBypassClearAlwaysAllowed');
+
+// Clearing a bypass is always safe: even if the bit is not configured as
+// bypassable, removing a bypass cannot violate any safety invariant.
+response := fb.SetBypass(
+    bitIndex        := 3,
+    bEnable         := FALSE,
+    nBypassableMask := 0);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+    Actual   := response,
+    Message  := 'Clearing a bypass must always be accepted');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetBypassInvalidBitIndex" Id="{b1c2d3e4-f5a6-7890-abcd-000000000023}">
+      <Declaration><![CDATA[METHOD SetBypassInvalidBitIndex
+VAR
+    fb       : TcForge.FB_BitMatrix64;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SetBypassInvalidBitIndex');
+
+response := fb.SetBypass(
+    bitIndex        := 64,
+    bEnable         := TRUE,
+    nBypassableMask := 16#FFFFFFFFFFFFFFFF);
+
+AssertEquals_DINT(
+    Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER,
+    Actual   := response,
+    Message  := 'SetBypass must reject bitIndex > 63 with REJECTED_INVALID_PARAMETER');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ClearBypassClearsAll" Id="{b1c2d3e4-f5a6-7890-abcd-000000000024}">
+      <Declaration><![CDATA[METHOD ClearBypassClearsAll
+VAR
+    fb : TcForge.FB_BitMatrix64;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ClearBypassClearsAll');
+
+// Bypass two separate bits, then clear them in one call.
+fb.SetBypass(bitIndex := 2, bEnable := TRUE, nBypassableMask := 16#FFFFFFFFFFFFFFFF);
+fb.SetBypass(bitIndex := 9, bEnable := TRUE, nBypassableMask := 16#FFFFFFFFFFFFFFFF);
+fb.ClearBypass();
+
+AssertEquals_ULINT(
+    Expected := 0,
+    Actual   := fb.nBypassMask,
+    Message  := 'ClearBypass must wipe nBypassMask in a single call');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ClearFirstFailureResets" Id="{b1c2d3e4-f5a6-7890-abcd-000000000025}">
+      <Declaration><![CDATA[METHOD ClearFirstFailureResets
+VAR
+    fb : TcForge.FB_BitMatrix64;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ClearFirstFailureResets');
+
+// Produce a real first-failure sequence, then clear it.
+fb.MapInput(bitIndex := 3, inputValue := TRUE);
+fb();
+fb.MapInput(bitIndex := 3, inputValue := FALSE);
+fb();
+
+AssertEquals_UDINT(
+    Expected := 3,
+    Actual   := fb.nFirstFailureBitIndex,
+    Message  := 'Precondition: failure sequence should record bit 3');
+
+fb.ClearFirstFailure();
+
+AssertEquals_UDINT(
+    Expected := 999,
+    Actual   := fb.nFirstFailureBitIndex,
+    Message  := 'ClearFirstFailure must restore the sentinel 999');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
