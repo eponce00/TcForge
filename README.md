@@ -1,4 +1,8 @@
-# TcForge
+<p align="center">
+  <img src="img/banner.png" alt="TcForge" width="800"/>
+</p>
+
+<h1 align="center">TcForge</h1>
 
 A TwinCAT 3 library of reusable function blocks for Beckhoff PLCs, plus an example application that consumes it.
 
