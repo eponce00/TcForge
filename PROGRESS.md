@@ -122,19 +122,21 @@ The user's 2026-09-09 ideas are tracked here; completed foundations remain below
 - [ ] **A8 — Optional event/utility integrations (later).** Review SPT Event Logger
   and utility implementations individually. Keep event sinks outside mandatory
   control dependencies; audit numeric bounds and failure paths before adoption.
-- [ ] **D1 — Documentation website.** Build a navigable site from current Markdown,
+- [x] **D1 — Documentation website.** Build a navigable site from current Markdown,
   validate internal links and keep a single source of truth. Material for MkDocs
   configuration, home page, search, light/dark themes, grouped navigation and
-  Pages deployment workflow are implemented locally. Strict build/link/anchor
-  validation and browser search/navigation checks pass. Documentation publication
-  is proceeding separately from the local PLC update; the site identifies that
-  source/documentation gap. Deployment verification and versioned documentation
-  remain follow-up work. See [site maintenance](docs/documentation-site.md).
+  Pages deployment workflow are implemented. Strict build/link/anchor validation
+  and browser search/navigation checks pass. Published with HTTPS at
+  https://eponce00.github.io/TcForge/ from commit `021b5dd`; GitHub Actions run
+  `34357244998` passed build and deployment. Public home and guide pages return
+  HTTP 200, and the search index is served. Publication is separate from the local
+  PLC update; the site identifies that source/documentation gap. Versioned
+  documentation remains follow-up work. See [site maintenance](docs/documentation-site.md).
 - [ ] **D2 — Company library distribution.** After Q2, replace development publisher
   metadata, define immutable release version/hash identity and generate a TwinCAT
   library repository layout. Test clean-machine installation and a consumer's
   pinned reference; link matching docs and release evidence. No distributable
-  repository or website has been published yet.
+  library repository has been published yet; the documentation website is live.
 
 ## Implemented foundation work
 
