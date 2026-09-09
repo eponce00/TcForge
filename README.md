@@ -4,9 +4,32 @@
 
 <h1 align="center">TcForge</h1>
 
-A TwinCAT 3 library of reusable function blocks for Beckhoff PLCs, plus an example application that consumes it.
+<p align="center">Reusable TwinCAT 3 function blocks for machine control.</p>
 
-[License: MIT](LICENSE)
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"/></a>
+  <img src="https://img.shields.io/badge/platform-TwinCAT%203-0098c7" alt="Platform: TwinCAT 3"/>
+  <img src="https://img.shields.io/badge/language-Structured%20Text-555555" alt="Language: Structured Text"/>
+</p>
+
+<p align="center">
+  <a href="#getting-started">Getting started</a> · <a href="#modules">Modules</a> · <a href="#documentation">Documentation</a> · <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+TcForge is a library for Beckhoff PLC applications, with reusable blocks for sequencing, I/O, pneumatics, and alarms. An example application shows how the modules fit together.
+
+The foundation is under active development; TwinCAT compilation and runtime qualification are pending.
+
+## Getting started
+
+Clone the repository and open the solution in TwinCAT XAE on Windows:
+
+```powershell
+git clone https://github.com/eponce00/TcForge.git
+cd TcForge
+```
+
+Open [`TwinCAT/TcForge.sln`](TwinCAT/TcForge.sln), build the solution, and explore [`TcForgeExample`](TwinCAT/TcForgeExample) for an example consumer. See the [architecture guide](docs/2-Architecture.md) before integrating the library into your application.
 
 ## Modules
 
@@ -32,15 +55,12 @@ The docs below cover these in detail.
 ## Project layout
 
 - `TwinCAT/TcForge.sln`: solution entry point.
-- `TcForge/`: the reusable library.
-- `TcForgeExample/`: an example application that consumes the library.
+- `TwinCAT/TcForge/`: the reusable library.
+- `TwinCAT/TcForgeExample/`: an example application that consumes the library.
+- `TwinCAT/Testing/`: PLC test project.
 - `docs/`: design docs.
 
-## Getting started
-
-Open `TwinCAT/TcForge.sln` in TwinCAT XAE, build it, and browse `TcForgeExample` for a working consumer. Use `TcForge` as the library in your own project.
-
-## Docs
+## Documentation
 
 
 | #   | Document                                                   | Covers                                                          |
@@ -56,8 +76,16 @@ Open `TwinCAT/TcForge.sln` in TwinCAT XAE, build it, and browse `TcForgeExample`
 | 9   | [HMI Integration](docs/9-HMI-Integration.md)               | OPC UA pragmas, cfg/sts exposure, RPC over OPC UA.              |
 
 
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for reporting issues, proposing changes, and documenting validation. Include your TwinCAT build and a minimal example when reporting unexpected behavior.
+
+## Related project
+
+[TwinCAT MCP Server](https://github.com/eponce00/twincat-mcp) connects AI clients to TwinCAT build, deployment, testing, and ADS tools. TcForge can be used independently.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+This is an independent project, not affiliated with or endorsed by Beckhoff Automation.
