@@ -1,8 +1,10 @@
 # 8 Alarms
 
+RPC calls use `OperatorAck(requestId)` through the owning-task mailbox with fixed operator identity. `Ack(eRequester)` and `LockSource` remain program APIs; LockSource is not RPC-enabled. See [HMI integration](9-HMI-Integration.md).
+
 TcForge alarms are process-condition detectors. They live alongside devices but are **not** devices: they do not own I/O, they do not carry a fault code, and they do not extend `FB_DeviceBase`. Instead they expose a small, uniform status surface (`ST_Alarm_Sts`) with debounce, ack/latch, severity tagging, and timestamps — so HMIs, aggregators, and device FBs can consume them identically regardless of the underlying detection rule (boolean, threshold, limit ladder, deviation, rate of change…).
 
-> **Navigation:** [← Sequencing](7-Sequencing.md) · [README / TOC](../README.md) · [HMI Integration →](9-HMI-Integration.md)
+> **Navigation:** [← Sequencing](7-Sequencing.md) · [Documentation home](index.md) · [HMI Integration →](9-HMI-Integration.md)
 
 ---
 

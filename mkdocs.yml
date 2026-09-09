@@ -1,0 +1,83 @@
+site_name: TcForge
+site_description: Reusable TwinCAT 3 function blocks for machine control.
+site_url: https://eponce00.github.io/TcForge/
+repo_url: https://github.com/eponce00/TcForge
+repo_name: eponce00/TcForge
+edit_uri: edit/main/docs/
+strict: true
+
+theme:
+  name: material
+  font: false
+  icon:
+    logo: material/chip
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Using TcForge: 14-Using-TcForge.md
+      - Qualification: 10-Qualification.md
+      - Reference machine: 11-Reference-Machine.md
+  - Architecture:
+      - Overview: 2-Architecture.md
+      - Programming standards: 1-Programming-Standards.md
+      - Command source control: 3-Command-Source-Control.md
+      - RPC method responses: 4-RPC-Method-Response.md
+      - I/O binding: 5-IO-Binding.md
+      - Persistence and restart: 6-Persistent-Variables.md
+  - Modules:
+      - Sequencing: 7-Sequencing.md
+      - Alarms: 8-Alarms.md
+      - HMI integration: 9-HMI-Integration.md
+  - Development:
+      - Simulation: 12-Simulation.md
+      - SPT review: 13-SPT-Review.md
+      - Maintaining this site: documentation-site.md
+
+copyright: MIT licensed. Independent project; not affiliated with Beckhoff Automation.

@@ -1,3 +1,5 @@
+Read the [TcForge documentation site](https://eponce00.github.io/TcForge/) for searchable guides.
+
 <p align="center">
   <img src="img/banner.png" alt="TcForge" width="800"/>
 </p>
