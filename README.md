@@ -18,20 +18,11 @@ Read the [TcForge documentation site](https://eponce00.github.io/TcForge/) for s
   <a href="#getting-started">Getting started</a> · <a href="#modules">Modules</a> · <a href="#documentation">Documentation</a> · <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
+**Foundation under development — local builds and PLC tests are running; production qualification remains open.**
+
+See [Progress tracker](PROGRESS.md) for completed foundation work, remaining architecture gaps, and qualification tasks. Update it as work progresses.
+
 TcForge is a library for Beckhoff PLC applications, with reusable blocks for sequencing, I/O, pneumatics, and alarms. An example application shows how the modules fit together.
-
-The foundation is under active development; TwinCAT compilation and runtime qualification are pending.
-
-## Getting started
-
-Clone the repository and open the solution in TwinCAT XAE on Windows:
-
-```powershell
-git clone https://github.com/eponce00/TcForge.git
-cd TcForge
-```
-
-Open [`TwinCAT/TcForge.sln`](TwinCAT/TcForge.sln), build the solution, and explore [`TcForgeExample`](TwinCAT/TcForgeExample) for an example consumer. See the [architecture guide](docs/2-Architecture.md) before integrating the library into your application.
 
 ## Modules
 
@@ -47,23 +38,41 @@ Open [`TwinCAT/TcForge.sln`](TwinCAT/TcForge.sln), build the solution, and explo
 
 ## Conventions
 
-- **Method-centric commands.** Command logic lives in RPC methods exposed over OPC UA. The FB body only does cyclic monitoring.
-- **Requester tracking.** Every command records its source (`PROG` or `OPERATOR`) and can be locked to program-only while automatic is running.
-- **Unified validation.** `F_ValidateRequester` runs the same source / fault / permission check everywhere.
-- **Permissive system.** `FB_Permissives` evaluates interlocks with `MapReason` and reports through `sts.OK`.
+- **Method-centric commands.** Program methods own command logic; Operator RPC wrappers queue selected commands in a bounded mailbox. The owning cyclic task validates and executes them with fixed operator identity, then applies state and output policy.
+- **Requester tracking.** Accepted commands record source (`PROG` or `OPERATOR`). The application owns program-only source locking.
+- **Shared validation.** `F_ValidateRequester` provides normal source/fault gating; recovery and de-energization commands have explicit device-specific rules.
+- **Permissive system.** `FB_Permissives` evaluates mapped conditions and required-mask freshness, reporting through `sts.bOK`.
 
 The docs below cover these in detail.
 
 ## Project layout
 
-- `TwinCAT/TcForge.sln`: solution entry point.
+- `TwinCAT/TcForge.Library.sln`: library development/export.
+- `TwinCAT/TcForge.sln`: example application.
+- `TwinCAT/TcForge.Tests.sln`: isolated test application.
 - `TwinCAT/TcForge/`: the reusable library.
-- `TwinCAT/TcForgeExample/`: an example application that consumes the library.
-- `TwinCAT/Testing/`: PLC test project.
+- `TwinCAT/TcForgeExample/`: the integrated clamp reference application; see [its operating contract](docs/11-Reference-Machine.md).
+- `TwinCAT/Testing.plcproj`: PLC test project, sharing the reference application source.
+- `TwinCAT/Testing/`: PLC test suites and fixtures.
+- `python/`: deterministic plant simulation primitives and test infrastructure; see [simulation guide](python/README.md).
 - `docs/`: design docs.
+
+## Getting started
+
+Clone the repository and open the solution in TwinCAT XAE on Windows:
+
+```powershell
+git clone https://github.com/eponce00/TcForge.git
+cd TcForge
+```
+
+Start with [foundation qualification](docs/10-Qualification.md). Run `python scripts/check_repository.py` without TwinCAT. After installation, build/export the current TcForge library and use `TwinCAT/TcForge.Tests.sln` for isolated testing. `TwinCAT/TcForge.sln` contains the example application; the test solution runs only tests. Both require an explicit runtime target.
 
 ## Documentation
 
+Read the [TcForge documentation site](https://eponce00.github.io/TcForge/) for searchable guides,
+or browse the Markdown files below. To preview or update the site, see
+[Maintaining this site](docs/documentation-site.md).
 
 | #   | Document                                                   | Covers                                                          |
 | --- | ---------------------------------------------------------- | --------------------------------------------------------------- |
@@ -71,12 +80,16 @@ The docs below cover these in detail.
 | 2   | [Architecture](docs/2-Architecture.md)                     | `FB_DeviceBase`, unified fault model, device header pattern.    |
 | 3   | [Command Source Control](docs/3-Command-Source-Control.md) | Requester validation and source locking.                        |
 | 4   | [RPC Method Response](docs/4-RPC-Method-Response.md)       | Response codes and method inventory.                            |
-| 5   | [I/O Binding](docs/5-IO-Binding.md)                        | `ST_*_IO` pattern, `@AT %I*/%Q*`, scaling to plant-sized I/O.   |
+| 5   | [I/O Binding](docs/5-IO-Binding.md)                        | Public signal boundaries and application-owned hardware mapping.   |
 | 6   | [Persistent Variables](docs/6-Persistent-Variables.md)     | PERSISTENT vs RETAIN and UPS configuration.                     |
 | 7   | [Sequencing](docs/7-Sequencing.md)                         | `FB_StateMachine`, `FB_Step`, authoring sequences, permissives. |
 | 8   | [Alarms](docs/8-Alarms.md)                                 | `FB_AlarmBase`, severity model, ack semantics, alarm catalog.   |
 | 9   | [HMI Integration](docs/9-HMI-Integration.md)               | OPC UA pragmas, cfg/sts exposure, RPC over OPC UA.              |
+| 10  | [Qualification](docs/10-Qualification.md) | Build, PLC tests, restart and commissioning gates. |
+| 11  | [Reference Machine](docs/11-Reference-Machine.md) | Owning task, quality, sequencing, shutdown and cyclic integration tests. |
 
+
+See [toolchain.json](toolchain.json) for the qualification baseline.
 
 ## Contributing
 
@@ -91,3 +104,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for reporting issues, proposing changes, 
 MIT. See [LICENSE](LICENSE).
 
 This is an independent project, not affiliated with or endorsed by Beckhoff Automation.
+The current foundation contracts and acceptance procedure are in [Foundation qualification](docs/10-Qualification.md).
+
+Simulation and development references: [simulation architecture](docs/12-Simulation.md),
+[SPT review](docs/13-SPT-Review.md), and [using TcForge in a project](docs/14-Using-TcForge.md).

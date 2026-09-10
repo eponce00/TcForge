@@ -70,6 +70,8 @@ nav:
       - Command source control: 3-Command-Source-Control.md
       - RPC method responses: 4-RPC-Method-Response.md
       - I/O binding: 5-IO-Binding.md
+      - IO diagnostics: 15-IO-Diagnostics.md
+      - Device lifecycle: 16-Lifecycle.md
       - Persistence and restart: 6-Persistent-Variables.md
   - Modules:
       - Sequencing: 7-Sequencing.md
@@ -77,6 +79,7 @@ nav:
       - HMI integration: 9-HMI-Integration.md
   - Development:
       - Simulation: 12-Simulation.md
+      - OPC UA qualification: 17-OPC-UA-Qualification.md
       - SPT review: 13-SPT-Review.md
       - Maintaining this site: documentation-site.md
 

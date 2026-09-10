@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_ReferenceMachine_Test" Id="{9831a2de-c951-489b-8d25-a86ccedb3045}"><Declaration><![CDATA[FUNCTION_BLOCK FB_ReferenceMachine_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    case0_m : FB_ReferenceMachine;
+    case0_phase, case0_age : UINT;
+    case0_done, case0_seenAdvance, case0_seenRetract : BOOL;
+    case0_watchdog : TON;
+    case1_m : FB_ReferenceMachine;
+    case1_phase, case1_age : UINT;
+    case1_done, case1_seenAdvance, case1_seenRetract : BOOL;
+    case1_watchdog : TON;
+    case2_m : FB_ReferenceMachine;
+    case2_phase, case2_age : UINT;
+    case2_done, case2_seenAdvance, case2_seenRetract : BOOL;
+    case2_watchdog : TON;
+    case3_m : FB_ReferenceMachine;
+    case3_phase, case3_age : UINT;
+    case3_done, case3_seenAdvance, case3_seenRetract : BOOL;
+    case3_watchdog : TON;
+    case4_m : FB_ReferenceMachine;
+    case4_phase, case4_age : UINT;
+    case4_done, case4_seenAdvance, case4_seenRetract : BOOL;
+    case4_watchdog : TON;
+    case5_m : FB_ReferenceMachine;
+    case5_phase, case5_age : UINT;
+    case5_done, case5_seenAdvance, case5_seenRetract : BOOL;
+    case5_watchdog : TON;
+    case6_m : FB_ReferenceMachine;
+    case6_phase, case6_age : UINT;
+    case6_done, case6_seenAdvance, case6_seenRetract : BOOL;
+    case6_watchdog : TON;
+    case7_m : FB_ReferenceMachine;
+    case7_phase, case7_age : UINT;
+    case7_done, case7_seenAdvance, case7_seenRetract : BOOL;
+    case7_watchdog : TON;
+    case8_m : FB_ReferenceMachine;
+    case8_phase, case8_age : UINT;
+    case8_done, case8_seenAdvance, case8_seenRetract : BOOL;
+    case8_watchdog : TON;
+    case9_m : FB_ReferenceMachine;
+    case9_phase, case9_age : UINT;
+    case9_done, case9_seenAdvance, case9_seenRetract : BOOL;
+    case9_watchdog : TON;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[OutputQualityLossRequiresExplicitRecovery();
+AbortRequiresTrustedFeedback();
+ResetRejectedDuringMotion();
+StartupUnknownInhibits();
+HomeAndRunThroughPhysicalBoundary();
+ControlledStopCancelsBeforeRetract();
+AbortWaitsForIndependentFeedback();
+QualityLossRequiresExplicitRecovery();
+ContradictoryFeedbackInhibitsSameScan();
+AbortTimeoutRequiresConfirmedReset();
+]]></ST></Implementation><Method Name="StartupUnknownInhibits" Id="{2ee763ae-8672-4926-a4a4-0c7f3ac32c3a}"><Declaration><![CDATA[METHOD StartupUnknownInhibits]]></Declaration><Implementation><ST><![CDATA[IF case0_done THEN RETURN; END_IF;
+TEST('StartupUnknownInhibits');
+case0_m();
+AssertFalse(Condition := case0_m.outAdvance OR case0_m.outRetract, Message := 'Unknown startup quality inhibits both outputs');
+AssertTrue(Condition := case0_m.outputsInhibited, Message := 'Startup inhibition is visible');
+case0_done := TRUE;
+IF case0_done THEN TEST_FINISHED(); END_IF;]]></ST></Implementation></Method>
+<Method Name="HomeAndRunThroughPhysicalBoundary" Id="{2e492a28-5882-4abf-a89f-19f96fed5df7}"><Declaration><![CDATA[METHOD HomeAndRunThroughPhysicalBoundary]]></Declaration><Implementation><ST><![CDATA[IF case1_done THEN RETURN; END_IF;
+TEST('HomeAndRunThroughPhysicalBoundary');
+case1_age := case1_age + 1;
+case1_m.command := E_ReferenceCommand.None;
+IF case1_phase < 3 THEN
+    case1_m.inputQuality := TcForge.E_IO_Quality.GOOD; case1_m.outputQuality := TcForge.E_IO_Quality.GOOD;
+    case1_m.shutdownQuality := TcForge.E_IO_Quality.GOOD; case1_m.shutdownConfirmed := TRUE; case1_m.inRetracted := TRUE;
+    CASE case1_phase OF
+    0: case1_phase := 1;
+    1: case1_m.command := E_ReferenceCommand.Home; case1_phase := 2;
+    2: IF case1_m.sequence.State = TcForge.E_SM_State.READY THEN case1_phase := 3; END_IF;
+    END_CASE;
+ELSE
+CASE case1_phase OF
+3:
+    case1_m.command := E_ReferenceCommand.Start; case1_phase := 4;
+4:
+    // Hold Start: completing the cycle must not start another one.
+    case1_m.command := E_ReferenceCommand.Start;
+    IF case1_m.outAdvance THEN case1_m.inAdvanced := TRUE; case1_m.inRetracted := FALSE; case1_seenAdvance := TRUE; END_IF;
+    IF case1_m.outRetract THEN case1_m.inRetracted := TRUE; case1_m.inAdvanced := FALSE; case1_seenRetract := TRUE; END_IF;
+    IF case1_seenAdvance AND case1_m.sequence.State = TcForge.E_SM_State.READY THEN case1_phase := 5; END_IF;
+5:
+    case1_m.command := E_ReferenceCommand.Start;
+    IF case1_age > 50 THEN
+        AssertTrue(Condition := case1_seenAdvance AND case1_seenRetract, Message := 'Both real output paths exercised');
+        AssertEquals_DINT(Expected := TcForge.E_SM_State.READY, Actual := case1_m.sequence.State, Message := 'Held Start cannot retrigger');
+        case1_done := TRUE;
+    END_IF;
+END_CASE;
+END_IF;
+case1_m();
+AssertFalse(Condition := case1_m.outAdvance AND case1_m.outRetract, Message := 'Coils must remain mutually exclusive');
+case1_watchdog(IN := TRUE, PT := T#8S);
+IF case1_watchdog.Q AND NOT case1_done THEN AssertTrue(Condition := FALSE, Message := 'Scenario did not reach its expected state'); case1_done := TRUE; END_IF;
+IF case1_done THEN TEST_FINISHED(); END_IF;]]></ST></Implementation></Method>
+<Method Name="ControlledStopCancelsBeforeRetract" Id="{ba260f99-467c-481f-b6a2-6d899961ba6e}"><Declaration><![CDATA[METHOD ControlledStopCancelsBeforeRetract]]></Declaration><Implementation><ST><![CDATA[IF case2_done THEN RETURN; END_IF;
+TEST('ControlledStopCancelsBeforeRetract');
+case2_age := case2_age + 1;
+case2_m.command := E_ReferenceCommand.None;
+IF case2_phase < 3 THEN
+    case2_m.inputQuality := TcForge.E_IO_Quality.GOOD; case2_m.outputQuality := TcForge.E_IO_Quality.GOOD;
+    case2_m.shutdownQuality := TcForge.E_IO_Quality.GOOD; case2_m.shutdownConfirmed := TRUE; case2_m.inRetracted := TRUE;
+    CASE case2_phase OF
+    0: case2_phase := 1;
+    1: case2_m.command := E_ReferenceCommand.Home; case2_phase := 2;
+    2: IF case2_m.sequence.State = TcForge.E_SM_State.READY THEN case2_phase := 3; END_IF;
+    END_CASE;
+ELSE
+CASE case2_phase OF
+3: case2_m.command := E_ReferenceCommand.Start; case2_phase := 4;
+4:
+    IF case2_m.outAdvance THEN case2_m.inRetracted := FALSE; case2_m.command := E_ReferenceCommand.Stop; case2_phase := 5; END_IF;
+5:
+    AssertFalse(Condition := case2_m.outAdvance, Message := 'Stop cancels advance before retracting');
+    IF case2_m.outRetract THEN case2_seenRetract := TRUE; case2_m.inRetracted := TRUE; END_IF;
+    IF case2_m.sequence.State = TcForge.E_SM_State.STOPPED THEN
+        AssertTrue(Condition := case2_seenRetract, Message := 'Controlled Stop physically retracts');
+        AssertFalse(Condition := case2_m.faulted OR case2_m.outAdvance OR case2_m.outRetract, Message := 'Healthy Stop finishes inhibited');
+        case2_done := TRUE;
+    END_IF;
+END_CASE;
+END_IF;
+case2_m();
+AssertFalse(Condition := case2_m.outAdvance AND case2_m.outRetract, Message := 'Coils must remain mutually exclusive');
+case2_watchdog(IN := TRUE, PT := T#8S);
+IF case2_watchdog.Q AND NOT case2_done THEN AssertTrue(Condition := FALSE, Message := 'Scenario did not reach its expected state'); case2_done := TRUE; END_IF;
+IF case2_done THEN TEST_FINISHED(); END_IF;]]></ST></Implementation></Method>
+<Method Name="AbortWaitsForIndependentFeedback" Id="{7d3e4d8b-a62f-489e-ab2f-b7654a18188d}"><Declaration><![CDATA[METHOD AbortWaitsForIndependentFeedback]]></Declaration><Implementation><ST><![CDATA[IF case3_done THEN RETURN; END_IF;
+TEST('AbortWaitsForIndependentFeedback');
+case3_age := case3_age + 1;
+case3_m.command := E_ReferenceCommand.None;
+IF case3_phase < 3 THEN
+    case3_m.inputQuality := TcForge.E_IO_Quality.GOOD; case3_m.outputQuality := TcForge.E_IO_Quality.GOOD;
+    case3_m.shutdownQuality := TcForge.E_IO_Quality.GOOD; case3_m.shutdownConfirmed := TRUE; case3_m.inRetracted := TRUE;
+    CASE case3_phase OF
+    0: case3_phase := 1;
+    1: case3_m.command := E_ReferenceCommand.Home; case3_phase := 2;
+    2: IF case3_m.sequence.State = TcForge.E_SM_State.READY THEN case3_phase := 3; END_IF;
+    END_CASE;
+ELSE
+CASE case3_phase OF
+3: case3_m.command := E_ReferenceCommand.Start; case3_phase := 4;
+4:
+    IF case3_m.outAdvance THEN case3_m.shutdownConfirmed := FALSE; case3_m.command := E_ReferenceCommand.Abort; case3_phase := 5; END_IF;
+5:
+    AssertFalse(Condition := case3_m.outAdvance OR case3_m.outRetract, Message := 'Abort removes both coils');
+    IF case3_age > 35 THEN
+        AssertEquals_DINT(Expected := TcForge.E_SM_State.ABORTING, Actual := case3_m.sequence.State, Message := 'Coil commands do not confirm shutdown');
+        case3_m.shutdownConfirmed := TRUE; case3_phase := 6;
+    END_IF;
+6:
+    IF case3_m.sequence.State = TcForge.E_SM_State.STOPPED THEN case3_done := TRUE; END_IF;
+END_CASE;
+END_IF;
+case3_m();
+AssertFalse(Condition := case3_m.outAdvance AND case3_m.outRetract, Message := 'Coils must remain mutually exclusive');
+case3_watchdog(IN := TRUE, PT := T#8S);
+IF case3_watchdog.Q AND NOT case3_done THEN AssertTrue(Condition := FALSE, Message := 'Scenario did not reach its expected state'); case3_done := TRUE; END_IF;
+IF case3_done THEN TEST_FINISHED(); END_IF;]]></ST></Implementation></Method>
+<Method Name="QualityLossRequiresExplicitRecovery" Id="{de4a6f75-4091-413b-9765-8769be519de5}"><Declaration><![CDATA[METHOD QualityLossRequiresExplicitRecovery]]></Declaration><Implementation><ST><![CDATA[IF case4_done THEN RETURN; END_IF;
+TEST('QualityLossRequiresExplicitRecovery');
+case4_age := case4_age + 1;
+case4_m.command := E_ReferenceCommand.None;
+IF case4_phase < 3 THEN
+    case4_m.inputQuality := TcForge.E_IO_Quality.GOOD; case4_m.outputQuality := TcForge.E_IO_Quality.GOOD;
+    case4_m.shutdownQuality := TcForge.E_IO_Quality.GOOD; case4_m.shutdownConfirmed := TRUE; case4_m.inRetracted := TRUE;
+    CASE case4_phase OF
+    0: case4_phase := 1;
+    1: case4_m.command := E_ReferenceCommand.Home; case4_phase := 2;
+    2: IF case4_m.sequence.State = TcForge.E_SM_State.READY THEN case4_phase := 3; END_IF;
+    END_CASE;
+ELSE
+CASE case4_phase OF
+3: case4_m.command := E_ReferenceCommand.Start; case4_phase := 4;
+4:
+    IF case4_m.outAdvance THEN case4_m.inputQuality := TcForge.E_IO_Quality.BAD; case4_phase := 5; END_IF;
+5:
+    AssertFalse(Condition := case4_m.outAdvance OR case4_m.outRetract, Message := 'Quality loss removes outputs in detecting scan');
+    IF case4_m.sequence.State = TcForge.E_SM_State.STOPPED THEN case4_m.inputQuality := TcForge.E_IO_Quality.GOOD; case4_phase := 6; END_IF;
+6:
+    AssertFalse(Condition := case4_m.outAdvance OR case4_m.outRetract, Message := 'Quality restoration cannot restore motion');
+    case4_m.command := E_ReferenceCommand.Home; case4_phase := 7;
+7:
+    AssertTrue(Condition := case4_m.lastResponse <> TcForge.E_RpcMethodResponse.ACCEPTED, Message := 'Home rejected before recovery');
+    case4_m.command := E_ReferenceCommand.Reset; case4_phase := 8;
+8:
+    AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := case4_m.lastResponse, Message := 'Healthy confirmed reset accepted');
+    AssertFalse(Condition := case4_m.outAdvance OR case4_m.outRetract, Message := 'Reset does not energize outputs');
+    case4_phase := 9;
+9: case4_m.command := E_ReferenceCommand.Home; case4_phase := 10;
+10:
+    IF case4_m.sequence.State = TcForge.E_SM_State.READY THEN
+        AssertFalse(Condition := case4_m.faulted, Message := 'Explicit recovery permits new Home');
+        case4_done := TRUE;
+    END_IF;
+END_CASE;
+END_IF;
+case4_m();
+AssertFalse(Condition := case4_m.outAdvance AND case4_m.outRetract, Message := 'Coils must remain mutually exclusive');
+case4_watchdog(IN := TRUE, PT := T#8S);
+IF case4_watchdog.Q AND NOT case4_done THEN AssertTrue(Condition := FALSE, Message := 'Scenario did not reach its expected state'); case4_done := TRUE; END_IF;
+IF case4_done THEN TEST_FINISHED(); END_IF;]]></ST></Implementation></Method>
+<Method Name="ContradictoryFeedbackInhibitsSameScan" Id="{b3bfb6b5-4322-44de-b850-43be5004e9db}"><Declaration><![CDATA[METHOD ContradictoryFeedbackInhibitsSameScan]]></Declaration><Implementation><ST><![CDATA[IF case5_done THEN RETURN; END_IF;
+TEST('ContradictoryFeedbackInhibitsSameScan');
+case5_age := case5_age + 1;
+case5_m.command := E_ReferenceCommand.None;
+IF case5_phase < 3 THEN
+    case5_m.inputQuality := TcForge.E_IO_Quality.GOOD; case5_m.outputQuality := TcForge.E_IO_Quality.GOOD;
+    case5_m.shutdownQuality := TcForge.E_IO_Quality.GOOD; case5_m.shutdownConfirmed := TRUE; case5_m.inRetracted := TRUE;
+    CASE case5_phase OF
+    0: case5_phase := 1;
+    1: case5_m.command := E_ReferenceCommand.Home; case5_phase := 2;
+    2: IF case5_m.sequence.State = TcForge.E_SM_State.READY THEN case5_phase := 3; END_IF;
+    END_CASE;
+ELSE
+CASE case5_phase OF
+3: case5_m.command := E_ReferenceCommand.Start; case5_phase := 4;
+4:
+    IF case5_m.outAdvance THEN case5_m.inAdvanced := TRUE; case5_m.inRetracted := TRUE; case5_phase := 5; END_IF;
+5:
+    AssertFalse(Condition := case5_m.outAdvance OR case5_m.outRetract, Message := 'Contradictory feedback removes final outputs same scan');
+    AssertTrue(Condition := case5_m.faulted, Message := 'Aggregate status includes fresh actuator fault');
+    case5_done := TRUE;
+END_CASE;
+END_IF;
+case5_m();
+AssertFalse(Condition := case5_m.outAdvance AND case5_m.outRetract, Message := 'Coils must remain mutually exclusive');
+case5_watchdog(IN := TRUE, PT := T#8S);
+IF case5_watchdog.Q AND NOT case5_done THEN AssertTrue(Condition := FALSE, Message := 'Scenario did not reach its expected state'); case5_done := TRUE; END_IF;
+IF case5_done THEN TEST_FINISHED(); END_IF;]]></ST></Implementation></Method>
+<Method Name="AbortTimeoutRequiresConfirmedReset" Id="{18ec9b82-6a10-46ab-9011-66971464abfc}"><Declaration><![CDATA[METHOD AbortTimeoutRequiresConfirmedReset]]></Declaration><Implementation><ST><![CDATA[IF case6_done THEN RETURN; END_IF;
+TEST('AbortTimeoutRequiresConfirmedReset');
+case6_age := case6_age + 1;
+case6_m.command := E_ReferenceCommand.None;
+IF case6_phase < 3 THEN
+    case6_m.inputQuality := TcForge.E_IO_Quality.GOOD; case6_m.outputQuality := TcForge.E_IO_Quality.GOOD;
+    case6_m.shutdownQuality := TcForge.E_IO_Quality.GOOD; case6_m.shutdownConfirmed := TRUE; case6_m.inRetracted := TRUE;
+    CASE case6_phase OF
+    0: case6_phase := 1;
+    1: case6_m.command := E_ReferenceCommand.Home; case6_phase := 2;
+    2: IF case6_m.sequence.State = TcForge.E_SM_State.READY THEN case6_phase := 3; END_IF;
+    END_CASE;
+ELSE
+CASE case6_phase OF
+3: case6_m.command := E_ReferenceCommand.Abort; case6_m.shutdownConfirmed := FALSE; case6_phase := 4;
+4:
+    IF case6_m.sequence.ShutdownFailed THEN case6_phase := 5; END_IF;
+5:
+    IF case6_m.sequence.State = TcForge.E_SM_State.STOPPED THEN case6_m.command := E_ReferenceCommand.Reset; case6_phase := 6; END_IF;
+6:
+    AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED, Actual := case6_m.lastResponse, Message := 'Failed Abort cannot reset without feedback');
+    AssertTrue(Condition := case6_m.sequence.ShutdownFailed, Message := 'Rejected Reset preserves shutdown failure');
+    case6_m.shutdownConfirmed := TRUE; case6_phase := 7;
+7: case6_m.command := E_ReferenceCommand.Reset; case6_phase := 8;
+8:
+    AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := case6_m.lastResponse, Message := 'Independent feedback permits Reset');
+    AssertFalse(Condition := case6_m.faulted OR case6_m.sequence.ShutdownFailed OR case6_m.outAdvance OR case6_m.outRetract, Message := 'Recovered machine stays deenergized');
+    case6_done := TRUE;
+END_CASE;
+END_IF;
+case6_m();
+AssertFalse(Condition := case6_m.outAdvance AND case6_m.outRetract, Message := 'Coils must remain mutually exclusive');
+case6_watchdog(IN := TRUE, PT := T#8S);
+IF case6_watchdog.Q AND NOT case6_done THEN AssertTrue(Condition := FALSE, Message := 'Scenario did not reach its expected state'); case6_done := TRUE; END_IF;
+IF case6_done THEN TEST_FINISHED(); END_IF;]]></ST></Implementation></Method>
+<Method Name="OutputQualityLossRequiresExplicitRecovery" Id="{abc80a95-30b3-41a9-b647-6230b2e240fa}"><Declaration><![CDATA[METHOD OutputQualityLossRequiresExplicitRecovery]]></Declaration><Implementation><ST><![CDATA[IF case7_done THEN RETURN; END_IF;
+TEST('OutputQualityLossRequiresExplicitRecovery');
+case7_age := case7_age + 1;
+case7_m.command := E_ReferenceCommand.None;
+IF case7_phase < 3 THEN
+    case7_m.inputQuality := TcForge.E_IO_Quality.GOOD; case7_m.outputQuality := TcForge.E_IO_Quality.GOOD;
+    case7_m.shutdownQuality := TcForge.E_IO_Quality.GOOD; case7_m.shutdownConfirmed := TRUE; case7_m.inRetracted := TRUE;
+    CASE case7_phase OF
+    0: case7_phase := 1;
+    1: case7_m.command := E_ReferenceCommand.Home; case7_phase := 2;
+    2: IF case7_m.sequence.State = TcForge.E_SM_State.READY THEN case7_phase := 3; END_IF;
+    END_CASE;
+ELSE
+CASE case7_phase OF
+3: case7_m.command := E_ReferenceCommand.Start; case7_phase := 4;
+4:
+    IF case7_m.outAdvance THEN case7_m.outputQuality := TcForge.E_IO_Quality.BAD; case7_phase := 5; END_IF;
+5:
+    AssertFalse(Condition := case7_m.outAdvance OR case7_m.outRetract, Message := 'Quality loss removes outputs in detecting scan');
+    IF case7_m.sequence.State = TcForge.E_SM_State.STOPPED THEN case7_m.outputQuality := TcForge.E_IO_Quality.GOOD; case7_phase := 6; END_IF;
+6:
+    AssertFalse(Condition := case7_m.outAdvance OR case7_m.outRetract, Message := 'Quality restoration cannot restore motion');
+    case7_m.command := E_ReferenceCommand.Home; case7_phase := 7;
+7:
+    AssertTrue(Condition := case7_m.lastResponse <> TcForge.E_RpcMethodResponse.ACCEPTED, Message := 'Home rejected before recovery');
+    case7_m.command := E_ReferenceCommand.Reset; case7_phase := 8;
+8:
+    AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := case7_m.lastResponse, Message := 'Healthy confirmed reset accepted');
+    AssertFalse(Condition := case7_m.outAdvance OR case7_m.outRetract, Message := 'Reset does not energize outputs');
+    case7_phase := 9;
+9: case7_m.command := E_ReferenceCommand.Home; case7_phase := 10;
+10:
+    IF case7_m.sequence.State = TcForge.E_SM_State.READY THEN
+        AssertFalse(Condition := case7_m.faulted, Message := 'Explicit recovery permits new Home');
+        case7_done := TRUE;
+    END_IF;
+END_CASE;
+END_IF;
+case7_m();
+AssertFalse(Condition := case7_m.outAdvance AND case7_m.outRetract, Message := 'Coils must remain mutually exclusive');
+case7_watchdog(IN := TRUE, PT := T#8S);
+IF case7_watchdog.Q AND NOT case7_done THEN AssertTrue(Condition := FALSE, Message := 'Scenario did not reach its expected state'); case7_done := TRUE; END_IF;
+IF case7_done THEN TEST_FINISHED(); END_IF;]]></ST></Implementation></Method>
+<Method Name="AbortRequiresTrustedFeedback" Id="{7f294f4c-b62c-4d01-8f14-3a39a2e6a5d0}"><Declaration><![CDATA[METHOD AbortRequiresTrustedFeedback]]></Declaration><Implementation><ST><![CDATA[IF case8_done THEN RETURN; END_IF;
+TEST('AbortRequiresTrustedFeedback');
+case8_age := case8_age + 1;
+case8_m.command := E_ReferenceCommand.None;
+IF case8_phase < 3 THEN
+    case8_m.inputQuality := TcForge.E_IO_Quality.GOOD; case8_m.outputQuality := TcForge.E_IO_Quality.GOOD;
+    case8_m.shutdownQuality := TcForge.E_IO_Quality.GOOD; case8_m.shutdownConfirmed := TRUE; case8_m.inRetracted := TRUE;
+    CASE case8_phase OF
+    0: case8_phase := 1;
+    1: case8_m.command := E_ReferenceCommand.Home; case8_phase := 2;
+    2: IF case8_m.sequence.State = TcForge.E_SM_State.READY THEN case8_phase := 3; END_IF;
+    END_CASE;
+ELSE
+CASE case8_phase OF
+3: case8_m.command := E_ReferenceCommand.Start; case8_phase := 4;
+4:
+    IF case8_m.outAdvance THEN case8_m.shutdownQuality := TcForge.E_IO_Quality.UNKNOWN; case8_m.command := E_ReferenceCommand.Abort; case8_phase := 5; END_IF;
+5:
+    AssertFalse(Condition := case8_m.outAdvance OR case8_m.outRetract, Message := 'Abort removes both coils');
+    IF case8_age > 35 THEN
+        AssertEquals_DINT(Expected := TcForge.E_SM_State.ABORTING, Actual := case8_m.sequence.State, Message := 'Untrusted feedback cannot confirm shutdown');
+        case8_m.shutdownQuality := TcForge.E_IO_Quality.GOOD; case8_phase := 6;
+    END_IF;
+6:
+    IF case8_m.sequence.State = TcForge.E_SM_State.STOPPED THEN case8_done := TRUE; END_IF;
+END_CASE;
+END_IF;
+case8_m();
+AssertFalse(Condition := case8_m.outAdvance AND case8_m.outRetract, Message := 'Coils must remain mutually exclusive');
+case8_watchdog(IN := TRUE, PT := T#8S);
+IF case8_watchdog.Q AND NOT case8_done THEN AssertTrue(Condition := FALSE, Message := 'Scenario did not reach its expected state'); case8_done := TRUE; END_IF;
+IF case8_done THEN TEST_FINISHED(); END_IF;]]></ST></Implementation></Method>
+<Method Name="ResetRejectedDuringMotion" Id="{8554243b-e398-49d6-94cf-27611dda66b8}"><Declaration><![CDATA[METHOD ResetRejectedDuringMotion]]></Declaration><Implementation><ST><![CDATA[IF case9_done THEN RETURN; END_IF;
+TEST('ResetRejectedDuringMotion');
+case9_age := case9_age + 1;
+case9_m.command := E_ReferenceCommand.None;
+IF case9_phase < 3 THEN
+    case9_m.inputQuality := TcForge.E_IO_Quality.GOOD; case9_m.outputQuality := TcForge.E_IO_Quality.GOOD;
+    case9_m.shutdownQuality := TcForge.E_IO_Quality.GOOD; case9_m.shutdownConfirmed := TRUE; case9_m.inRetracted := TRUE;
+    CASE case9_phase OF
+    0: case9_phase := 1;
+    1: case9_m.command := E_ReferenceCommand.Home; case9_phase := 2;
+    2: IF case9_m.sequence.State = TcForge.E_SM_State.READY THEN case9_phase := 3; END_IF;
+    END_CASE;
+ELSE
+CASE case9_phase OF
+3: case9_m.command := E_ReferenceCommand.Start; case9_phase := 4;
+4:
+    IF case9_m.outAdvance THEN case9_m.command := E_ReferenceCommand.Reset; case9_phase := 5; END_IF;
+5:
+    AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_WRONG_STATE, Actual := case9_m.lastResponse, Message := 'Reset during motion rejected');
+    AssertTrue(Condition := case9_m.outAdvance AND NOT case9_m.faulted, Message := 'Rejected Reset must not alter the ongoing command');
+    case9_m.command := E_ReferenceCommand.Abort;
+    case9_done := TRUE;
+END_CASE;
+END_IF;
+case9_m();
+AssertFalse(Condition := case9_m.outAdvance AND case9_m.outRetract, Message := 'Coils must remain mutually exclusive');
+case9_watchdog(IN := TRUE, PT := T#8S);
+IF case9_watchdog.Q AND NOT case9_done THEN AssertTrue(Condition := FALSE, Message := 'Scenario did not reach its expected state'); case9_done := TRUE; END_IF;
+IF case9_done THEN TEST_FINISHED(); END_IF;]]></ST></Implementation></Method>
+</POU></TcPlcObject>

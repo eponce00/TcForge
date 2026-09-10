@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_CommandValidation_Test" Id="{18abafd1-bc41-40f2-94f1-1901e2fe1e9e}"><Declaration><![CDATA[FUNCTION_BLOCK FB_CommandValidation_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    done : BOOL;
+    raw : DINT := 99;
+    invalid : POINTER TO TcForge.E_Requester;
+    rsp : TcForge.E_RpcMethodResponse;
+    device0 : FB_StateMachine_Probe;
+    device1 : FB_StateMachine_Probe;
+    device2 : FB_StateMachine_Probe;
+    device3 : FB_StateMachine_Probe;
+    device4 : FB_StateMachine_Probe;
+    device5 : FB_StateMachine_Probe;
+    device6 : FB_StateMachine_Probe;
+    device7 : FB_StateMachine_Probe;
+    device8 : TcForge.FB_TwoPosActuator;
+    device9 : TcForge.FB_TwoPosActuator;
+    device10 : TcForge.FB_TwoPosActuator;
+    device11 : TcForge.FB_TwoPosActuator;
+    device12 : TcForge.FB_DigitalOutput;
+    device13 : TcForge.FB_DigitalOutput;
+    device14 : TcForge.FB_DigitalOutput;
+    device15 : TcForge.FB_DigitalOutput;
+    device16 : TcForge.FB_AnalogOutput;
+    device17 : TcForge.FB_AnalogOutput;
+    device18 : TcForge.FB_AnalogOutput;
+    device19 : FB_DeviceBase_Probe;
+    device20 : TcForge.FB_AlarmSimple;
+    device21 : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[IF done THEN RETURN; END_IF;
+invalid := ADR(raw);
+SequenceHomeRejectsInvalidIdentity();
+SequenceStartRejectsInvalidIdentity();
+SequencePauseRejectsInvalidIdentity();
+SequenceProceedRejectsInvalidIdentity();
+SequenceRetryRejectsInvalidIdentity();
+SequenceStopRejectsInvalidIdentity();
+SequenceAbortRejectsInvalidIdentity();
+SequenceResetRejectsInvalidIdentity();
+ActuatorAdvanceRejectsInvalidIdentity();
+ActuatorRetractRejectsInvalidIdentity();
+ActuatorAbortRejectsInvalidIdentity();
+ActuatorResetRejectsInvalidIdentity();
+DigitalSetOnRejectsInvalidIdentity();
+DigitalSetOffRejectsInvalidIdentity();
+DigitalForceSafeRejectsInvalidIdentity();
+DigitalResetRejectsInvalidIdentity();
+AnalogSetValueRejectsInvalidIdentity();
+AnalogForceSafeRejectsInvalidIdentity();
+AnalogResetRejectsInvalidIdentity();
+BaseResetRejectsInvalidIdentity();
+AlarmAckRejectsInvalidIdentity();
+LimitAlarmAckRejectsInvalidIdentity();
+done := TRUE;]]></ST></Implementation><Method Name="SequenceHomeRejectsInvalidIdentity" Id="{12e512a0-6259-45d4-a7fa-1f9166addaf4}"><Declaration><![CDATA[METHOD SequenceHomeRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('SequenceHomeRejectsInvalidIdentity');
+device0.ResetAll(); device0(); rsp := device0.Home();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Valid Home queued before rejected request');
+rsp := device0.Home(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device0();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.HOMING, Actual := device0.Status.State, Message := 'Rejected request preserves queued Home');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="SequenceStartRejectsInvalidIdentity" Id="{d7672a72-7d0a-465d-a863-33a323208802}"><Declaration><![CDATA[METHOD SequenceStartRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('SequenceStartRejectsInvalidIdentity');
+device1.ResetAll(); device1(); rsp := device1.Home();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Valid Home queued before rejected request');
+rsp := device1.Start(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device1();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.HOMING, Actual := device1.Status.State, Message := 'Rejected request preserves queued Home');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="SequencePauseRejectsInvalidIdentity" Id="{eec73760-94e5-4118-8a6a-97e71376495c}"><Declaration><![CDATA[METHOD SequencePauseRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('SequencePauseRejectsInvalidIdentity');
+device2.ResetAll(); device2(); rsp := device2.Home();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Valid Home queued before rejected request');
+rsp := device2.Pause(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device2();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.HOMING, Actual := device2.Status.State, Message := 'Rejected request preserves queued Home');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="SequenceProceedRejectsInvalidIdentity" Id="{f32ccdc3-30bf-457a-8858-f6314931909c}"><Declaration><![CDATA[METHOD SequenceProceedRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('SequenceProceedRejectsInvalidIdentity');
+device3.ResetAll(); device3(); rsp := device3.Home();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Valid Home queued before rejected request');
+rsp := device3.Proceed(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device3();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.HOMING, Actual := device3.Status.State, Message := 'Rejected request preserves queued Home');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="SequenceRetryRejectsInvalidIdentity" Id="{00a3b91d-d850-4a16-bb93-49fd2fe6dc61}"><Declaration><![CDATA[METHOD SequenceRetryRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('SequenceRetryRejectsInvalidIdentity');
+device4.ResetAll(); device4(); rsp := device4.Home();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Valid Home queued before rejected request');
+rsp := device4.Retry(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device4();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.HOMING, Actual := device4.Status.State, Message := 'Rejected request preserves queued Home');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="SequenceStopRejectsInvalidIdentity" Id="{7bd37226-7586-4441-b444-07a964172480}"><Declaration><![CDATA[METHOD SequenceStopRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('SequenceStopRejectsInvalidIdentity');
+device5.ResetAll(); device5(); rsp := device5.Home();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Valid Home queued before rejected request');
+rsp := device5.Stop(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device5();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.HOMING, Actual := device5.Status.State, Message := 'Rejected request preserves queued Home');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="SequenceAbortRejectsInvalidIdentity" Id="{09a36863-eb04-424e-ba7c-7650cc30ea99}"><Declaration><![CDATA[METHOD SequenceAbortRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('SequenceAbortRejectsInvalidIdentity');
+device6.ResetAll(); device6(); rsp := device6.Home();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Valid Home queued before rejected request');
+rsp := device6.Abort(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device6();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.HOMING, Actual := device6.Status.State, Message := 'Rejected request preserves queued Home');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="SequenceResetRejectsInvalidIdentity" Id="{a7f1f748-8b72-4fa5-8d32-af8754721a5c}"><Declaration><![CDATA[METHOD SequenceResetRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('SequenceResetRejectsInvalidIdentity');
+device7.ResetAll(); device7(); rsp := device7.Home();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Valid Home queued before rejected request');
+rsp := device7.Reset(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device7();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.HOMING, Actual := device7.Status.State, Message := 'Rejected request preserves queued Home');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ActuatorAdvanceRejectsInvalidIdentity" Id="{9aaf77f2-f63f-41cf-bead-c1b5c62ac8c4}"><Declaration><![CDATA[METHOD ActuatorAdvanceRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('ActuatorAdvanceRejectsInvalidIdentity');
+device8(inRetracted := TRUE); device8.Advance(); device8();
+rsp := device8.Advance(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device8();
+AssertTrue(Condition := device8.outAdvance AND NOT device8.outRetract, Message := 'Rejected command cannot change motion');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ActuatorRetractRejectsInvalidIdentity" Id="{768dbaef-6a13-48c5-a282-9da127825bd4}"><Declaration><![CDATA[METHOD ActuatorRetractRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('ActuatorRetractRejectsInvalidIdentity');
+device9(inRetracted := TRUE); device9.Advance(); device9();
+rsp := device9.Retract(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device9();
+AssertTrue(Condition := device9.outAdvance AND NOT device9.outRetract, Message := 'Rejected command cannot change motion');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ActuatorAbortRejectsInvalidIdentity" Id="{8f8faab5-a0bd-4364-9ad2-d8dff4925c5f}"><Declaration><![CDATA[METHOD ActuatorAbortRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('ActuatorAbortRejectsInvalidIdentity');
+device10(inRetracted := TRUE); device10.Advance(); device10();
+rsp := device10.Abort(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device10();
+AssertTrue(Condition := device10.outAdvance AND NOT device10.outRetract, Message := 'Rejected command cannot change motion');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ActuatorResetRejectsInvalidIdentity" Id="{3eeee90a-2951-4718-bd16-4b2347ccb230}"><Declaration><![CDATA[METHOD ActuatorResetRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('ActuatorResetRejectsInvalidIdentity');
+device11(inRetracted := TRUE); device11.Advance(); device11();
+rsp := device11.Reset(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device11();
+AssertTrue(Condition := device11.outAdvance AND NOT device11.outRetract, Message := 'Rejected command cannot change motion');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalSetOnRejectsInvalidIdentity" Id="{f81dc806-79c5-4fc5-813d-ea42f8e25715}"><Declaration><![CDATA[METHOD DigitalSetOnRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalSetOnRejectsInvalidIdentity');
+device12();
+rsp := device12.SetOn(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device12();
+AssertTrue(Condition := NOT device12.outSignal, Message := 'Rejected command cannot change output intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalSetOffRejectsInvalidIdentity" Id="{0b7d2988-da29-43e5-80e4-3c66df2ee451}"><Declaration><![CDATA[METHOD DigitalSetOffRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalSetOffRejectsInvalidIdentity');
+device13.SetOn(); device13();
+rsp := device13.SetOff(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device13();
+AssertTrue(Condition := device13.outSignal, Message := 'Rejected command cannot change output intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalForceSafeRejectsInvalidIdentity" Id="{977c5740-c6a5-43a2-a7c7-5dcb0867482b}"><Declaration><![CDATA[METHOD DigitalForceSafeRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalForceSafeRejectsInvalidIdentity');
+device14.SetOn(); device14();
+rsp := device14.ForceSafe(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device14();
+AssertTrue(Condition := device14.outSignal, Message := 'Rejected command cannot change output intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalResetRejectsInvalidIdentity" Id="{6b6e7829-179d-4f1e-a097-6cf84ead778b}"><Declaration><![CDATA[METHOD DigitalResetRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalResetRejectsInvalidIdentity');
+device15.SetOn(); device15();
+rsp := device15.Reset(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device15();
+AssertTrue(Condition := device15.outSignal, Message := 'Rejected command cannot change output intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogSetValueRejectsInvalidIdentity" Id="{a999a821-8535-4f1b-bfa8-30612bab0de9}"><Declaration><![CDATA[METHOD AnalogSetValueRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogSetValueRejectsInvalidIdentity');
+device16.SetValue(rValue := 25.0); device16();
+rsp := device16.SetValue(rValue := 80.0, eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device16();
+AssertEquals_REAL(Expected := 25.0, Actual := device16.sts.commanded, Delta := 0.001, Message := 'Rejected request preserves commanded value');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogForceSafeRejectsInvalidIdentity" Id="{d86f0be7-1ffe-4ad9-9910-0cd4a2a5809a}"><Declaration><![CDATA[METHOD AnalogForceSafeRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogForceSafeRejectsInvalidIdentity');
+device17.SetValue(rValue := 25.0); device17();
+rsp := device17.ForceSafe(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device17();
+AssertEquals_REAL(Expected := 25.0, Actual := device17.sts.commanded, Delta := 0.001, Message := 'Rejected request preserves commanded value');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogResetRejectsInvalidIdentity" Id="{37e00e5a-c355-476f-b606-a9cb09b99cd7}"><Declaration><![CDATA[METHOD AnalogResetRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogResetRejectsInvalidIdentity');
+device18.SetValue(rValue := 25.0); device18();
+rsp := device18.Reset(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+device18();
+AssertEquals_REAL(Expected := 25.0, Actual := device18.sts.commanded, Delta := 0.001, Message := 'Rejected request preserves commanded value');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="BaseResetRejectsInvalidIdentity" Id="{458aff2d-c453-4a9f-8551-e0e83c2efbab}"><Declaration><![CDATA[METHOD BaseResetRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('BaseResetRejectsInvalidIdentity');
+device19.ProbeRaise(code := 42, source := 'TEST', reason := 'Preserve fault');
+rsp := device19.Reset(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+AssertEquals_DINT(Expected := 42, Actual := device19.GetFaultCode(), Message := 'Rejected reset preserves fault');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AlarmAckRejectsInvalidIdentity" Id="{e6c9f693-67e4-4cf9-b228-a1769b854028}"><Declaration><![CDATA[METHOD AlarmAckRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('AlarmAckRejectsInvalidIdentity');
+
+rsp := device20.Ack(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="LimitAlarmAckRejectsInvalidIdentity" Id="{37622f01-4a66-4206-82b4-926c1a155d76}"><Declaration><![CDATA[METHOD LimitAlarmAckRejectsInvalidIdentity]]></Declaration><Implementation><ST><![CDATA[TEST('LimitAlarmAckRejectsInvalidIdentity');
+
+rsp := device21.Ack(eRequester := invalid^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid identity must reject before device-specific logic');
+
+TEST_FINISHED();]]></ST></Implementation></Method>
+</POU></TcPlcObject>

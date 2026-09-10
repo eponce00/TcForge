@@ -181,5 +181,8 @@ FOR i := 0 TO 63 DO
 END_FOR;]]></ST>
       </Implementation>
     </Method>
+    <Method Name="ConstrainBypass" Id="{cd1e6e09-ef5d-4126-827a-7098baf48431}"><Declaration><![CDATA[// Revocation is permanent; allowing the bit again requires a fresh SetBypass.
+METHOD PUBLIC ConstrainBypass
+VAR_INPUT allowedMask : ULINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[nBypassMask := nBypassMask AND allowedMask;]]></ST></Implementation></Method>
   </POU>
 </TcPlcObject>

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_IOQualityMonitor" Id="{3537763b-0379-4636-9258-b0544b7797eb}"><Declaration><![CDATA[// Call once per owning task cycle. Producer sequence advances only on coherent IO updates.
+// No command/reset side effects: the consumer decides how to recover from unusable quality.
+FUNCTION_BLOCK FB_IOQualityMonitor
+VAR_INPUT
+    enabled : BOOL;
+    communicationGood : BOOL;
+    deviceGood : BOOL;
+    sampleValid : BOOL;
+    sampleSequence : ULINT;
+    timeout : TIME := T#250MS;
+END_VAR
+VAR_OUTPUT
+    quality : E_IO_Quality := E_IO_Quality.UNKNOWN;
+    reason : E_IOHealthReason := E_IOHealthReason.Disabled;
+END_VAR
+VAR
+    _timer : TON;
+    _baseline, _haveSample, _configured : BOOL;
+    _sequence : ULINT;
+    _timeout : TIME;
+    _waitingReason : E_IOHealthReason := E_IOHealthReason.NoSample;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[quality := E_IO_Quality.BAD;
+IF NOT enabled THEN
+    _timer(IN := FALSE); _baseline := FALSE; _haveSample := FALSE;
+    _sequence := sampleSequence; _waitingReason := E_IOHealthReason.NoSample;
+    quality := E_IO_Quality.UNKNOWN; reason := E_IOHealthReason.Disabled; RETURN;
+END_IF;
+IF timeout = T#0MS THEN
+    reason := E_IOHealthReason.InvalidConfig;
+ELSIF NOT communicationGood THEN reason := E_IOHealthReason.Communication;
+ELSIF NOT deviceGood THEN reason := E_IOHealthReason.Device;
+ELSIF NOT sampleValid THEN reason := E_IOHealthReason.InvalidSample;
+ELSE reason := E_IOHealthReason.NoSample;
+END_IF;
+IF reason <> E_IOHealthReason.NoSample THEN
+    _timer(IN := FALSE); _baseline := TRUE; _haveSample := FALSE;
+    _sequence := sampleSequence; _waitingReason := reason; RETURN;
+END_IF;
+IF NOT _configured OR _timeout <> timeout THEN
+    _configured := TRUE; _timeout := timeout;
+    _baseline := FALSE; _haveSample := FALSE; _timer(IN := FALSE);
+    _waitingReason := E_IOHealthReason.NoSample;
+END_IF;
+IF NOT _baseline THEN
+    _baseline := TRUE; _sequence := sampleSequence;
+    _timer(IN := TRUE, PT := timeout);
+    quality := E_IO_Quality.UNKNOWN; RETURN;
+END_IF;
+_timer(IN := TRUE, PT := timeout);
+IF sampleSequence < _sequence THEN
+    _sequence := sampleSequence; _haveSample := FALSE;
+    _timer(IN := FALSE); _timer(IN := TRUE, PT := timeout);
+    reason := E_IOHealthReason.SequenceReset; _waitingReason := reason; RETURN;
+END_IF;
+IF _timer.Q THEN
+    _sequence := sampleSequence; _haveSample := FALSE;
+    _timer(IN := FALSE); _timer(IN := TRUE, PT := timeout);
+    reason := E_IOHealthReason.Stale; _waitingReason := reason; RETURN;
+END_IF;
+IF sampleSequence > _sequence THEN
+    _sequence := sampleSequence; _haveSample := TRUE;
+    _timer(IN := FALSE); _timer(IN := TRUE, PT := timeout);
+END_IF;
+IF _haveSample THEN quality := E_IO_Quality.GOOD; reason := E_IOHealthReason.Good;
+ELSE
+    reason := _waitingReason;
+    IF reason = E_IOHealthReason.NoSample THEN quality := E_IO_Quality.UNKNOWN; END_IF;
+END_IF;]]></ST></Implementation></POU></TcPlcObject>

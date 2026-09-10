@@ -11,6 +11,8 @@ Contains all configuration parameters for permissive function block
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_Permissive_Config :
 STRUCT
+    // Required bits cannot disappear when their producer stops running.
+    nRequired : ULINT := 0;
 	{attribute 'OPC.UA.DA.Description' := 'Bypass configuration bitmask (1=bypassable, 0=not bypassable, default: none bypassable)'}
 	nBypassable : ULINT := 0;
 	

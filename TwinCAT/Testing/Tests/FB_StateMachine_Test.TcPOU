@@ -309,14 +309,8 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('AbortFromRunningEntersAborting');
 
-// Abort is accepted from any state except STOPPED / ABORTING. From
-// RUNNING it transitions to ABORTING on the first body scan with
-// Step.Current reset to 0 (the transition sets _nextStep:=0 and
-// step-mgmt propagates it). Auto-init to ABORTING_MIN (5000) happens
-// on the NEXT scan when R_TRIG_1 fires on Current=0 and the
-// "enter-active-state" branch picks the new min. Two scans is the
-// real SM contract — tested explicitly here because it trips up
-// any consumer expecting a one-scan settle.
+// State and the first abort step are published together in the transition scan.
+// A queued running-step advance must not survive the higher-priority Abort.
 sm.ResetAll();
 sm.ForceState(state := TcForge.E_SM_State.RUNNING);
 sm.SetCurrentStep(nStep := 3000);
@@ -334,15 +328,15 @@ AssertEquals_DINT(
     Actual   := sm.Status.State,
     Message  := 'Abort from RUNNING must transition State to ABORTING on first scan');
 AssertEquals_DINT(
-    Expected := DINT#0,
+    Expected := DINT#5000,
     Actual   := sm.Status.Step.Current,
-    Message  := 'Abort from RUNNING must reset Step.Current to 0 on the transition scan');
+    Message  := 'Abort must select ABORTING_MIN on the transition scan');
 
 sm();
 AssertEquals_DINT(
     Expected := DINT#5000,
     Actual   := sm.Status.Step.Current,
-    Message  := 'Second scan after entering ABORTING must auto-init Step.Current to ABORTING_MIN (5000)');
+    Message  := 'Without a completion request the abort step must remain active');
 
 TEST_FINISHED();]]></ST>
       </Implementation>

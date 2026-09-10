@@ -7,7 +7,7 @@
 //
 // When dt or tau are effectively zero the filter passes the input through
 // unchanged and raises bError. _prevOutput_sync persists across scans so the
-// filter state survives restarts; it is zeroed on cold start.
+// filter state carries between calls; it is ordinary non-retained state.
 FUNCTION_BLOCK FB_LPF_FirstOrder_IIR
 VAR_INPUT
     fInput  : LREAL;    // input sample
@@ -23,7 +23,17 @@ VAR
     _prevOutput_sync  : LREAL;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[IF fDt < 1E-38 OR fTau < 1E-38 THEN
+      <ST><![CDATA[// Reject nonfinite values before they can poison retained recurrence history.
+IF NOT F_IsFiniteLReal(value := _prevOutput_sync) THEN
+    _prevOutput_sync := 0.0;
+END_IF;
+IF NOT F_IsFiniteLReal(value := fInput) OR NOT F_IsFiniteLReal(value := fDt) OR NOT F_IsFiniteLReal(value := fTau) THEN
+    fOutput := _prevOutput_sync;
+    bError := TRUE;
+    RETURN;
+END_IF;
+// Preserve the documented finite zero/negative timing pass-through behavior.
+IF fDt < 1E-38 OR fTau < 1E-38 THEN
     fOutput := fInput;
     bError  := TRUE;
     _prevOutput_sync := fOutput;
@@ -32,11 +42,25 @@ END_IF;
 
 bError := FALSE;
 
-_filtAlpha := fDt / (fTau + fDt);
-fOutput    := _prevOutput_sync + _filtAlpha * (fInput - _prevOutput_sync);
+// Ratio form avoids overflow in tau + dt; weighted sum avoids x - previous.
+IF fDt >= fTau THEN
+    _filtAlpha := 1.0 / (1.0 + fTau / fDt);
+ELSE
+    _filtAlpha := fDt / fTau;
+    _filtAlpha := _filtAlpha / (1.0 + _filtAlpha);
+END_IF;
+fOutput := (1.0 - _filtAlpha) * _prevOutput_sync + _filtAlpha * fInput;
 
 _prevOutput_sync := fOutput;]]></ST>
     </Implementation>
+    <Method Name="Seed" Id="{f1b46e49-0a18-4da1-bcc4-f06962221f10}"><Declaration><![CDATA[// Explicit conditioning lifecycle reset, invoked only by the owning task.
+// Invalid seeds leave existing history and output unchanged.
+METHOD PUBLIC Seed : BOOL
+VAR_INPUT value : LREAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[Seed := F_IsFiniteLReal(value := value);
+IF NOT Seed THEN RETURN; END_IF;
+_prevOutput_sync := value;
+fOutput := value;
+bError := FALSE;]]></ST></Implementation></Method>
     <LineIds Name="FB_LPF_FirstOrder_IIR">
       <LineId Id="1" Count="0" />
     </LineIds>

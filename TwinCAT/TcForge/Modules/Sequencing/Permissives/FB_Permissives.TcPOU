@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_Permissives" Id="{3468ff58-4b50-4782-bf79-0df0256f5d2f}" SpecialFunc="None">
     <Declaration><![CDATA[(*
@@ -36,6 +36,7 @@ VAR
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[// Drive the shared bit-matrix machinery (cycle counter, cleanup, transitions).
+_core.ConstrainBypass(allowedMask := cfg.nBypassable);
 _core();
 
 // Non-latching rollup: unmapped bits default good, bypassed bits forced good.
@@ -44,6 +45,9 @@ sts.nBypassMask           := _core.nBypassMask;
 sts.nFirstFailureBitIndex := _core.nFirstFailureBitIndex;
 sts.bOK                   := sts.nPermissives = 16#FFFFFFFFFFFFFFFF;
 
+sts.nMissing := cfg.nRequired AND NOT _core.nActiveMask;
+sts.nPermissives := sts.nPermissives AND NOT sts.nMissing;
+sts.bOK := sts.bOK AND (sts.nMissing = 0);
 UpdateFaceplates();]]></ST>
     </Implementation>
     <Folder Name="Private" Id="{d08b71e4-603c-4ba4-b11f-19d286c8a91f}" />
@@ -67,7 +71,6 @@ END_VAR]]></Declaration>
 Reset - Clear all bypass states. Permissives follow real-time conditions
 (non-latching) so there is nothing else to clear.
 *)
-{attribute 'TcRpcEnable':='1'}
 METHOD Reset]]></Declaration>
       <Implementation>
         <ST><![CDATA[_core.ClearBypass();]]></ST>
@@ -78,7 +81,6 @@ METHOD Reset]]></Declaration>
 Set or clear bypass for a specific permissive bit. Only bits configured
 as bypassable in cfg.nBypassable can be enabled; clearing is always allowed.
 *)
-{attribute 'TcRpcEnable':='1'}
 METHOD PUBLIC SetBypass : E_RpcMethodResponse
 VAR_INPUT
     bitIndex : UDINT;

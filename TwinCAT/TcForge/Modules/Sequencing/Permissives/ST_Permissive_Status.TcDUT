@@ -11,6 +11,7 @@ Contains all status outputs from permissive function block
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_Permissive_Status :
 STRUCT
+    nMissing : ULINT; // Required but not refreshed within the mapping timeout.
 	{attribute 'OPC.UA.DA.Description' := 'Overall status - TRUE when all permissive bits are good'}
 	bOK : BOOL := FALSE;
 	{attribute 'OPC.UA.DA.Description' := 'Current permissive status after logic (1=good, 0=bad)'}

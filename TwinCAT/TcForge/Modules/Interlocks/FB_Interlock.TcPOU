@@ -48,10 +48,11 @@ VAR
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[// Drive the shared bit-matrix machinery (cycle counter, cleanup, transitions).
+_core.ConstrainBypass(allowedMask := cfg.nBypassable);
 _core();
 
 // Carry forward any "bad at unmap" memory — keeps sts.bOK FALSE until Reset().
-_unmappedBadBits := _unmappedBadBits OR _core.nJustUnmappedBad;
+_unmappedBadBits := _unmappedBadBits OR _core.nJustUnmappedBad OR (cfg.nRequired AND NOT _core.nActiveMask);
 
 // Latch once a mapped bit goes bad; inactive/unmapped bits remain good.
 _latchedBits := (_latchedBits AND _core.nLiveBits) OR NOT _core.nActiveMask;
@@ -63,6 +64,9 @@ sts.nBypassMask           := _core.nBypassMask;
 sts.nFirstFailureBitIndex := _core.nFirstFailureBitIndex;
 sts.bOK                   := (sts.nInterlocks = 16#FFFFFFFFFFFFFFFF) AND (_unmappedBadBits = 0);
 
+sts.nMissing := cfg.nRequired AND NOT _core.nActiveMask;
+sts.nInterlocks := sts.nInterlocks AND NOT sts.nMissing;
+sts.bOK := sts.bOK AND (sts.nMissing = 0);
 UpdateFaceplates();]]></ST>
     </Implementation>
     <Folder Name="Private" Id="{a1b2c3d4-1001-4e5f-9000-000000000011}" />
@@ -90,7 +94,6 @@ stay bad. Unmapped bits remain good. Also clears the unmapped-bad memory
 and the first-failure sequence. Bypass states are intentionally preserved
 — use SetBypass(i, FALSE) to clear them.
 *)
-{attribute 'TcRpcEnable':='1'}
 METHOD Reset]]></Declaration>
       <Implementation>
         <ST><![CDATA[// Snap latched bits to current live values on active bits; unmapped stay good.
@@ -105,7 +108,6 @@ Set or clear bypass for a specific interlock bit. Only bits configured as
 bypassable in cfg.nBypassable can be enabled; clearing is always allowed.
 WARNING: bypassing an interlock disables safety protection — use with care.
 *)
-{attribute 'TcRpcEnable':='1'}
 METHOD PUBLIC SetBypass : E_RpcMethodResponse
 VAR_INPUT
     bitIndex : UDINT;

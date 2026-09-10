@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "libraryVersion": "2.0.0.0",
+  "xaeBaseline": "3.1.4026.26",
+  "tcunitVersion": "1.3.0.0",
+  "platform": "TwinCAT RT (x64)",
+  "testSolution": "TwinCAT/TcForge.Tests.sln",
+  "testPlc": "Testing",
+  "testTask": "Testing",
+  "testAdsPort": 853,
+  "qualification": "pending-validation",
+  "resolvedVendorLibraries": {
+    "Tc2_Standard": "3.4.7.0",
+    "Tc2_System": "3.10.2.0",
+    "Tc3_Module": "3.4.7.0",
+    "Tc3_JsonXml": "3.4.9.0"
+  },
+  "notes": "All three consumers compile with zero errors/warnings. Fresh 377/377 PLC tests across 31 suites pass on the dedicated Windows RT bench at 10 ms and 1 ms, bound to immutable build d8a936f9ab514d5b8ea4bcb148b197f7 with exact source/tooling/helper/library hashes and actual resolved dependencies. Earlier assembly, stop/start, ADS reset, XAE cold reset and orderly restart checks pass; reset-origin is verified. Actual online change remains blocked during logged-in full-solution compilation, with baseline restored. Invalid persistent images, power loss, clean engineering environment, broader acceptance evidence binding, OPC UA and physical IO/load acceptance remain open.",
+  "usermodeRuntimeVersion": "1.26.2",
+  "librarySolution": "TwinCAT/TcForge.Library.sln",
+  "buildScript": "scripts/build_twincat.ps1",
+  "testProject": "TwinCAT/Testing.plcproj",
+  "referenceMachine": "TwinCAT/TcForgeExample/Reference/FB_ReferenceMachine.TcPOU",
+  "operatorRpcVerifier": "scripts/verify_operator_rpc.ps1",
+  "testRunScript": "scripts/run_tcunit.ps1",
+  "benchRuntimeVersion": "3.1.4026.17"
+}

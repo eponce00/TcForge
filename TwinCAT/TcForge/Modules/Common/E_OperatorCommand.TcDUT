@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><DUT Name="E_OperatorCommand" Id="{70af89b1-c057-45cd-bb93-9a062b3f77ec}"><Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_OperatorCommand : (Reset, Ack, SetValue, ForceSafe, SetOn, SetOff, Advance, Retract, Abort, Home, Pause, Proceed, Retry, Start, Stop); END_TYPE]]></Declaration></DUT></TcPlcObject>

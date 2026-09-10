@@ -3,6 +3,25 @@
   <POU Name="MAIN" Id="{f2ebe72b-7c64-48f6-9124-533eb91ffd46}">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
+    executionContinuity : FB_ExecutionContinuity_Test;
+    digitalInputLifecycle : FB_DigitalInputLifecycle_Test;
+    alarmValidity : FB_AlarmValidity_Test;
+    filterLifecycle : FB_FilterLifecycle_Test;
+    policyNumeric : FB_PolicyNumeric_Test;
+    outputConfiguration : FB_OutputConfiguration_Test;
+    ioQuality : FB_IOQualityMonitor_Test;
+    inputLifecycle : FB_InputLifecycle_Test;
+    simulation : FB_SimulationBridge;
+    operatorMailbox : FB_OperatorMailbox_Test;
+    rpcOutput : TcForge.FB_DigitalOutput;
+    rpcUninitialized : TcForge.FB_DigitalOutput;
+    enableRpcPump : BOOL := TRUE;
+    commandValidation : FB_CommandValidation_Test;
+    rpcContext : FB_RpcContext_Probe;
+    referenceMachine : FB_ReferenceMachine_Test;
+    sequenceIntegrity : FB_SequenceIntegrity_Test;
+    foundation : FB_Foundation_Test;
+    cyclicFoundation : FB_CyclicFoundation_Test;
     fbValidateRequester_Test : FB_F_ValidateRequester_Test;
     fbBitMatrix64_Test       : FB_BitMatrix64_Test;
     fbPermissives_Test       : FB_Permissives_Test;
@@ -24,7 +43,10 @@ END_VAR
 ]]>
     </Declaration>
     <Implementation>
-      <ST><![CDATA[TcUnit.RUN();
+      <ST><![CDATA[simulation();
+rpcContext();
+IF enableRpcPump THEN rpcOutput(); END_IF;
+TcUnit.RUN();
 ]]>
       </ST>
     </Implementation>

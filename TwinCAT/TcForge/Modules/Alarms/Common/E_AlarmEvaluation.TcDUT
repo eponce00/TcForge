@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><DUT Name="E_AlarmEvaluation" Id="{9517ad39-8120-4daf-9c04-a1633a17cc44}"><Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_AlarmEvaluation :
+(Disabled := 0, Valid := 1, InvalidInput := 2, InvalidConfig := 3, Initializing := 4);
+END_TYPE]]></Declaration></DUT></TcPlcObject>

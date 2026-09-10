@@ -7,6 +7,13 @@ TYPE E_RpcMethodResponse :
 (
     // Success (0)
     ACCEPTED := 0,
+    QUEUED := 1, // Mailbox admission; query the caller-supplied request ID.
+    CANCELLED := 2, // Superseded before execution.
+    REJECTED_NOT_READY := 12,
+    REJECTED_WRONG_TASK := 13,
+    REJECTED_BUSY := 22,
+    REJECTED_UNKNOWN_REQUEST := 34,
+    REJECTED_DUPLICATE_REQUEST := 35,
     
     // Source / Authorization (10-19)
     REJECTED_SOURCE_NOT_ALLOWED := 11,

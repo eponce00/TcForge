@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+<POU Name="FB_InputLifecycle_Test" Id="{82428294-5c09-4e57-af08-8159d834241b}">
+<Declaration><![CDATA[FUNCTION_BLOCK FB_InputLifecycle_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+_done : BOOL;
+_watchDone : BOOL;
+_watch : TcForge.FB_DigitalInput;
+_clock : TON;
+END_VAR]]></Declaration>
+<Implementation><ST><![CDATA[IF NOT _done THEN
+    InvalidInputTypeCannotPublishGood();
+    RawBypassStillValidatesInputType();
+    InvalidScalingFreezesFilterAndRecovers();
+    UnknownQualityFreezesConditionedValue();
+    InvalidConfigCannotReinterpretHeldRaw();
+    RawBypassInvalidNumericConfigIsBad();
+    _done := TRUE;
+END_IF;
+UnknownDigitalQualityExpiresWatchdog();]]></ST></Implementation>
+<Method Name="InvalidInputTypeCannotPublishGood" Id="{fa107625-128e-4e5a-b741-bcfe3bcd0ad8}"><Declaration><![CDATA[METHOD InvalidInputTypeCannotPublishGood
+VAR
+    fb : TcForge.FB_AnalogInput;
+    held : REAL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('InvalidInputTypeCannotPublishGood');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.inRaw.fReal := 80.0;
+fb();
+held := fb.sts.value;
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_BOOL;
+fb.inRaw.fReal := 20.0;
+fb();
+AssertEquals_DINT(Expected := TcForge.E_AnalogInput_Fault.BadConfig, Actual := fb.GetFaultCode(), Message := 'Unsupported input interpretation faults immediately');
+AssertEquals_DINT(Expected := TcForge.E_IO_Quality.BAD, Actual := fb.sts.quality, Message := 'Unsupported interpretation cannot advertise usable quality');
+AssertTrue(Condition := fb.sts.value = held AND fb.sts.rawReal = 80.0, Message := 'Invalid interpretation preserves last usable values');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb();
+AssertFalse(Condition := fb.IsFaulted(), Message := 'Input configuration recovery is automatic');
+AssertTrue(Condition := ABS(fb.sts.value - 20.0) < 0.001, Message := 'Recovered interpretation consumes fresh sample');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RawBypassStillValidatesInputType" Id="{1ba3b95e-1679-4464-a171-7234d57dfe3d}"><Declaration><![CDATA[METHOD RawBypassStillValidatesInputType
+VAR
+    fb : TcForge.FB_AnalogInput;
+    held : REAL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RawBypassStillValidatesInputType');
+fb.cfg.useRawValue := TRUE;
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_BOOL;
+fb.inRaw.fReal := 90.0;
+fb();
+AssertTrue(Condition := fb.IsFaulted(), Message := 'Raw bypass cannot bypass type validation');
+AssertEquals_DINT(Expected := TcForge.E_IO_Quality.BAD, Actual := fb.sts.quality, Message := 'Invalid startup is BAD');
+AssertTrue(Condition := fb.sts.value = 0.0, Message := 'Invalid first scan publishes no fabricated value');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="InvalidScalingFreezesFilterAndRecovers" Id="{4f2ceb89-2899-40e0-8d71-ed7320e430b1}"><Declaration><![CDATA[METHOD InvalidScalingFreezesFilterAndRecovers
+VAR
+    fb : TcForge.FB_AnalogInput;
+    held : REAL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('InvalidScalingFreezesFilterAndRecovers');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.inRaw.fReal := 80.0;
+fb();
+held := fb.sts.value;
+fb.cfg.filterTau := T#1S;
+fb.cfg.rawMax := fb.cfg.rawMin;
+fb.inRaw.fReal := 0.0;
+fb(); fb(); fb();
+AssertTrue(Condition := fb.sts.value = held, Message := 'Invalid scaling cannot move the conditioned output');
+AssertEquals_DINT(Expected := TcForge.E_IO_Quality.BAD, Actual := fb.sts.quality, Message := 'Invalid scaling is BAD');
+fb.cfg.rawMax := 100.0;
+fb.inRaw.fReal := 80.0;
+fb();
+AssertFalse(Condition := fb.IsFaulted(), Message := 'Valid scaling clears configuration fault');
+AssertTrue(Condition := fb.sts.value = held, Message := 'Enabling filtering after prior data reseeds from first valid sample');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="UnknownQualityFreezesConditionedValue" Id="{07d41f7e-5e2e-46c5-be39-da46e2ad7205}"><Declaration><![CDATA[METHOD UnknownQualityFreezesConditionedValue
+VAR
+    fb : TcForge.FB_AnalogInput;
+    held : REAL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('UnknownQualityFreezesConditionedValue');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.inRaw.fReal := 80.0;
+fb.cfg.filterTau := T#1S;
+fb();
+held := fb.sts.value;
+fb.inRaw.fReal := 100.0;
+fb(inpQuality := TcForge.E_IO_Quality.UNKNOWN);
+fb(); fb();
+AssertTrue(Condition := fb.sts.value = held AND fb.sts.rawReal = 80.0, Message := 'Unavailable sample cannot advance the filter');
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(Condition := fb.sts.value > held, Message := 'A fresh valid sample resumes conditioning');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="InvalidConfigCannotReinterpretHeldRaw" Id="{4dc2865d-6a72-4220-a93f-137b9bb70938}"><Declaration><![CDATA[METHOD InvalidConfigCannotReinterpretHeldRaw
+VAR
+    fb : TcForge.FB_AnalogInput;
+    held : REAL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('InvalidConfigCannotReinterpretHeldRaw');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.inRaw.fReal := 80.0;
+fb();
+held := fb.sts.value;
+fb.cfg.euMax := 200.0;
+fb.inRaw.fReal := 20.0;
+fb(inpQuality := TcForge.E_IO_Quality.BAD);
+AssertTrue(Condition := fb.sts.value = held AND fb.sts.scaled = held, Message := 'No fresh sample means no reinterpretation under new scaling');
+fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(Condition := ABS(fb.sts.value - 40.0) < 0.001, Message := 'Valid fresh sample uses current scaling');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RawBypassInvalidNumericConfigIsBad" Id="{6a23da38-7340-4c24-b711-c5b29cb865ee}"><Declaration><![CDATA[METHOD RawBypassInvalidNumericConfigIsBad
+VAR
+    fb : TcForge.FB_AnalogInput;
+    held : REAL;
+    invalid : TcForge.U_IoRaw_In;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RawBypassInvalidNumericConfigIsBad');
+fb.cfg.useRawValue := TRUE;
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.inRaw.fReal := 7.0;
+fb();
+held := fb.sts.value;
+// Infinity via raw IEEE-754 bits, avoiding invalid arithmetic in the test.
+invalid.dw := DWORD#16#7F800000;
+fb.cfg.euMax := invalid.fReal;
+fb.inRaw.fReal := 9.0;
+fb();
+AssertTrue(Condition := fb.IsFaulted(), Message := 'Nonfinite config rejected in bypass too');
+AssertEquals_DINT(Expected := TcForge.E_IO_Quality.BAD, Actual := fb.sts.quality, Message := 'Config fault cannot retain GOOD in bypass');
+AssertTrue(Condition := fb.sts.value = held, Message := 'Invalid numeric config holds last value');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="UnknownDigitalQualityExpiresWatchdog" Id="{371e9f0b-8eb4-438b-bd31-aeb377de8825}"><Declaration><![CDATA[METHOD UnknownDigitalQualityExpiresWatchdog
+]]></Declaration><Implementation><ST><![CDATA[IF _watchDone THEN RETURN; END_IF;
+TEST('UnknownDigitalQualityExpiresWatchdog');
+_watch.cfg.qualityFaultAfter := T#30MS;
+_watch(inpQuality := TcForge.E_IO_Quality.UNKNOWN);
+_clock(IN := TRUE, PT := T#100MS);
+IF _clock.Q THEN
+    AssertEquals_DINT(Expected := TcForge.E_DigitalInput_Fault.BadQuality, Actual := _watch.GetFaultCode(), Message := 'Missing input source expires the configured watchdog');
+    _watch.Reset();
+    _watch(inpQuality := TcForge.E_IO_Quality.GOOD, inSignal := TRUE);
+    AssertFalse(Condition := _watch.IsFaulted(), Message := 'Healthy source with explicit reset recovers');
+    AssertTrue(Condition := _watch.sts.value, Message := 'Recovered source consumes fresh digital input');
+    _watchDone := TRUE;
+    TEST_FINISHED();
+END_IF;]]></ST></Implementation></Method>
+</POU>
+</TcPlcObject>

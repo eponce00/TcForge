@@ -4,7 +4,7 @@
     <Declaration><![CDATA[// Generic digital input conditioner.
 //
 // Pipeline:
-//   terminal bit (io.inSignal) -> quality gate -> invert -> asymmetric
+//   terminal bit (inSignal) -> quality gate -> invert -> asymmetric
 //   debounce -> edge detection -> sts.value / risingEdge / fallingEdge
 //
 // Quality handling: while inpQuality is BAD the raw reading is ignored and
@@ -18,6 +18,8 @@
 {attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_DigitalInput EXTENDS FB_DeviceBase
 VAR_INPUT
+    {attribute 'OPC.UA.DA' := '0'}
+    inSignal : BOOL;
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
     cfg        : ST_DigitalInput_Cfg;
@@ -32,18 +34,17 @@ VAR_OUTPUT
 END_VAR
 
 VAR
-    // Hardware-linked struct (AT %I*). Wired at instance declaration with
-    // {attribute 'TcLinkTo' := '.io.inSignal := TIID^...'}. See docs/5-IO-Binding.md.
-    {attribute 'OPC.UA.DA' := '0'}
-    io              : ST_DigitalInput_IO;
 
     // Debounce timers (asymmetric ON / OFF delays).
     {attribute 'OPC.UA.DA' := '0'}
     _tonOn          : TON;
     {attribute 'OPC.UA.DA' := '0'}
-    _tofOff         : TOF;
+    _tofOff         : TON;
+    _conditioningKnown : BOOL;
+    _previousCfg : ST_DigitalInput_Cfg;
+    _conditioningChanged : BOOL;
 
-    // Quality watchdog — only ticks while inpQuality = BAD.
+    // Quality watchdog — ticks for every unusable quality value.
     {attribute 'OPC.UA.DA' := '0'}
     _tonBadQuality  : TON;
 
@@ -58,46 +59,44 @@ VAR
     _prevDebounced  : BOOL;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[// 1. Quality-gated read. BAD quality holds the previous raw value so
-//    downstream logic does not see glitches while a wire break persists.
+      <ST><![CDATA[_ProcessOperatorCommands();
+// Configuration changes cannot borrow elapsed evidence from the previous interpretation.
+_conditioningChanged := _conditioningKnown AND (cfg.invert <> _previousCfg.invert OR
+    cfg.debounceOn <> _previousCfg.debounceOn OR cfg.debounceOff <> _previousCfg.debounceOff);
+_previousCfg := cfg; _conditioningKnown := TRUE;
+IF _conditioningChanged THEN _tonOn(IN := FALSE); _tofOff(IN := FALSE); END_IF;
 sts.quality := inpQuality;
-
+sts.risingEdge := FALSE; sts.fallingEdge := FALSE;
 IF inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED THEN
-    _rawBool := io.inSignal;
+    _rawBool := inSignal;
+    _invertedBool := _rawBool XOR cfg.invert;
+    // Time each transition from fresh evidence, holding the established state meanwhile.
+    IF _invertedBool THEN
+        _tofOff(IN := FALSE);
+        IF NOT _debouncedBool THEN
+            _tonOn(IN := TRUE, PT := cfg.debounceOn);
+            IF _tonOn.Q THEN _debouncedBool := TRUE; END_IF;
+        ELSE _tonOn(IN := FALSE); END_IF;
+    ELSE
+        _tonOn(IN := FALSE);
+        IF _debouncedBool THEN
+            _tofOff(IN := TRUE, PT := cfg.debounceOff);
+            IF _tofOff.Q THEN _debouncedBool := FALSE; END_IF;
+        ELSE _tofOff(IN := FALSE); END_IF;
+    END_IF;
+    sts.risingEdge := _debouncedBool AND NOT _prevDebounced;
+    sts.fallingEdge := NOT _debouncedBool AND _prevDebounced;
+    _prevDebounced := _debouncedBool;
+    sts.value := _debouncedBool;
+    sts.rawValue := _rawBool;
 ELSE
-    _rawBool := sts.rawValue;
+    // Invalid elapsed time is not debounce evidence. Keep published value/raw unchanged.
+    _tonOn(IN := FALSE); _tofOff(IN := FALSE);
 END_IF;
-
-// 2. Invert if the sensor is active-low.
-IF cfg.invert THEN
-    _invertedBool := NOT _rawBool;
-ELSE
-    _invertedBool := _rawBool;
-END_IF;
-
-// 3. Asymmetric debounce. TON confirms rising edges; TOF confirms falling
-//    edges. Q on either timer encodes "input has held that state long enough".
-_tonOn(IN := _invertedBool, PT := cfg.debounceOn);
-_tofOff(IN := _invertedBool, PT := cfg.debounceOff);
-
-IF _invertedBool AND _tonOn.Q THEN
-    _debouncedBool := TRUE;
-ELSIF NOT _invertedBool AND NOT _tofOff.Q THEN
-    _debouncedBool := FALSE;
-END_IF;
-
-// 4. Edge pulses are one-scan wide and fire on the debounced value.
-sts.risingEdge  :=      _debouncedBool AND NOT _prevDebounced;
-sts.fallingEdge := NOT _debouncedBool AND     _prevDebounced;
-_prevDebounced     := _debouncedBool;
-
-// 5. Publish processed + raw values.
-sts.value    := _debouncedBool;
-sts.rawValue := _rawBool;
 
 // 6. Quality watchdog. Enabled only when qualityFaultAfter > 0.
 _tonBadQuality(
-    IN := inpQuality = E_IO_Quality.BAD AND cfg.qualityFaultAfter > T#0MS,
+    IN := NOT (inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED) AND cfg.qualityFaultAfter > T#0MS,
     PT := cfg.qualityFaultAfter
 );
 
@@ -105,7 +104,7 @@ IF _tonBadQuality.Q THEN
     _Raise(
         code   := E_DigitalInput_Fault.BadQuality,
         source := 'QUALITY',
-        reason := 'inpQuality stayed BAD past qualityFaultAfter'
+        reason := 'inpQuality stayed unusable past qualityFaultAfter'
     );
 END_IF;
 
@@ -134,6 +133,13 @@ ELSE
 END_CASE;]]></ST>
       </Implementation>
     </Method>
+<Method Name="ReassignInput" Id="{12ac6b6a-0413-42ab-9c83-4f96d95c119c}"><Declaration><![CDATA[// Owning-task application API: invalidate history before binding a different source.
+METHOD PUBLIC ReassignInput]]></Declaration><Implementation><ST><![CDATA[_tonOn(IN := FALSE); _tofOff(IN := FALSE); _tonBadQuality(IN := FALSE);
+_debouncedBool := FALSE; _prevDebounced := FALSE; _rawBool := FALSE;
+sts.value := FALSE; sts.rawValue := FALSE;
+sts.risingEdge := FALSE; sts.fallingEdge := FALSE;
+sts.quality := E_IO_Quality.UNKNOWN;
+_conditioningKnown := FALSE;]]></ST></Implementation></Method>
     <LineIds Name="FB_DigitalInput">
       <LineId Id="1" Count="0" />
     </LineIds>

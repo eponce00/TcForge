@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_LifecycleFixture" Id="{e5706303-0742-47bf-b4ce-0be1a0e020d1}"><Declaration><![CDATA[// Standalone qualification fixture: no physical IO mapping, no RPC methods.
+// ADS client writes commandCode first, then a strictly increasing commandSequence.
+// Read completedSequence before issuing another command. One owner task calls once/scan.
+// These PERSISTENT declarations require actual runtime validation; they promise no
+// sudden-power-loss durability. No automatic writes to the persistent image are requested.
+FUNCTION_BLOCK FB_LifecycleFixture
+VAR_INPUT
+    commandCode : UINT;
+    commandSequence : UDINT;
+END_VAR
+VAR_OUTPUT
+    completedSequence : UDINT;
+    commandAccepted : BOOL;
+    initialized : BOOL;
+    cycles : ULINT;
+    markerAtInitialization : UINT;
+    bootDataLoadedAtInitialization : BOOL;
+    oldBootDataAtInitialization : BOOL;
+    onlineChangeCount : UDINT;
+    defaultOutput : BOOL;
+    defaultInhibited : BOOL;
+    restoreOutput : BOOL;
+    restoreInhibited : BOOL;
+    analogRaw : REAL;
+    analogInhibited : BOOL;
+    alarmActive : BOOL;
+    alarmLatched : BOOL;
+    alarmAcked : BOOL;
+    diagnosticFaulted : BOOL;
+    diagnosticLastFault : DINT;
+    lastDefaultResponse : TcForge.E_RpcMethodResponse;
+    lastRestoreResponse : TcForge.E_RpcMethodResponse;
+    lastAnalogResponse : TcForge.E_RpcMethodResponse;
+END_VAR
+VAR PERSISTENT
+    applicationMarker : UINT;
+    // Application-owned configuration is restored before device first observation.
+    defaultConfig : TcForge.ST_DigitalOutput_Cfg;
+    restoreConfig : TcForge.ST_DigitalOutput_Cfg := (restoreCommandOnRestart := TRUE, invert := TRUE);
+    analogConfig : TcForge.ST_AnalogOutput_Cfg := (restoreCommandOnRestart := TRUE, useRawValue := TRUE, safeRaw := 17.0);
+    alarmConfig : TcForge.ST_AlarmSimple_Cfg := (common := (bEnable := TRUE, bRequireAck := TRUE, eSeverity := TcForge.E_AlarmSeverity.WARNING));
+END_VAR
+VAR
+    defaultDevice : TcForge.FB_DigitalOutput;
+    restoreDevice : TcForge.FB_DigitalOutput;
+    analogDevice : TcForge.FB_AnalogOutput;
+    alarmDevice : TcForge.FB_AlarmSimple;
+    diagnosticDevice : TcForge.FB_TwoPosActuator;
+    seedPulse : BOOL;
+    observedSequence : UDINT;
+    observedCode : UINT;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[IF NOT initialized THEN
+    markerAtInitialization := applicationMarker;
+    bootDataLoadedAtInitialization := TwinCAT_SystemInfoVarList._AppInfo.BootDataLoaded;
+    oldBootDataAtInitialization := TwinCAT_SystemInfoVarList._AppInfo.OldBootData;
+    initialized := TRUE;
+END_IF;
+cycles := cycles + 1;
+onlineChangeCount := TwinCAT_SystemInfoVarList._AppInfo.OnlineChangeCnt;
+defaultDevice.cfg := defaultConfig;
+restoreDevice.cfg := restoreConfig;
+analogDevice.cfg := analogConfig;
+alarmDevice.cfg := alarmConfig;
+seedPulse := FALSE;
+observedSequence := commandSequence;
+observedCode := commandCode;
+IF observedSequence > completedSequence THEN
+    commandAccepted := TRUE;
+    CASE observedCode OF
+    1: // Seed diagnostic history, an unacknowledged latch and real operating commands.
+        applicationMarker := UINT#49374;
+        lastDefaultResponse := defaultDevice.SetOn();
+        lastRestoreResponse := restoreDevice.SetOff(); // Inverted electrical TRUE is intentional.
+        lastAnalogResponse := analogDevice.SetValue(rValue := 42.0);
+        seedPulse := TRUE;
+    2: // Invalidate saved output intent; diagnostic/alarm history is deliberately untouched.
+        lastDefaultResponse := defaultDevice.ForceSafe();
+        lastRestoreResponse := restoreDevice.ForceSafe();
+        lastAnalogResponse := analogDevice.ForceSafe();
+    3: // Reset outputs/active diagnostic fault; preserve history and the alarm latch.
+        lastDefaultResponse := defaultDevice.Reset();
+        lastRestoreResponse := restoreDevice.Reset();
+        lastAnalogResponse := analogDevice.Reset();
+        diagnosticDevice.Reset();
+    4: // Acknowledge while this scan supplies valid clear evidence.
+        alarmDevice.Ack();
+    ELSE
+        commandAccepted := FALSE;
+    END_CASE;
+END_IF;
+defaultDevice();
+restoreDevice();
+analogDevice();
+alarmDevice(inpValid := TRUE, inpActive := seedPulse);
+diagnosticDevice(inAdvanced := seedPulse, inRetracted := seedPulse);
+defaultOutput := defaultDevice.outSignal;
+defaultInhibited := defaultDevice.sts.outputInhibited;
+restoreOutput := restoreDevice.outSignal;
+restoreInhibited := restoreDevice.sts.outputInhibited;
+analogRaw := analogDevice.sts.rawReal;
+analogInhibited := analogDevice.sts.outputInhibited;
+alarmActive := alarmDevice.sts.active;
+alarmLatched := alarmDevice.sts.latched;
+alarmAcked := alarmDevice.sts.acked;
+diagnosticFaulted := diagnosticDevice.IsFaulted();
+diagnosticLastFault := diagnosticDevice.sts.header.lastFaultCode;
+// Publish command completion only after owner-task evaluation and output publication.
+IF observedSequence > completedSequence THEN completedSequence := observedSequence; END_IF;]]></ST></Implementation></POU></TcPlcObject>

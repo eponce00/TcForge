@@ -4,24 +4,36 @@
     <Declaration><![CDATA[{attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_TwoPosActuator EXTENDS FB_DeviceBase
 VAR_INPUT
+    {attribute 'OPC.UA.DA' := '0'}
+    inAdvanced : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    inRetracted : BOOL;
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
     cfg : ST_TwoPosActuator_Cfg;
+    cfgAdvancePermissives : ST_Permissive_Config;
+    cfgRetractPermissives : ST_Permissive_Config;
 END_VAR
 
 VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    outAdvance : BOOL;
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    outRetract : BOOL;
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
     sts : ST_TwoPosActuator_Sts;
 END_VAR
 
 VAR
-    // Allocated I/O struct. The AT %I* / %Q* primitives inside ST_TwoPosActuator_IO
-    // are linked at the FB instance declaration using {attribute 'TcLinkTo' := ...}
-    // — see docs/5-IO-Binding.md. The struct is VAR (not VAR_IN_OUT) so the FB
-    // owns its wiring and callers don't need to pass an external struct.
-    {attribute 'OPC.UA.DA' := '0'}
-    io : ST_TwoPosActuator_IO;
+    _configurationKnown : BOOL;
+    _lastConfiguration : ST_TwoPosActuator_Cfg;
+    _inhibited : BOOL := TRUE;
+    _abortPending : BOOL;
+    _advancedFeedback : BOOL;
+    _retractedFeedback : BOOL;
 
     // Composed permissive handlers (visible on OPC under the FB instance).
     advancePermissives : FB_Permissives;
@@ -49,23 +61,32 @@ VAR
     bothFeedbackActive : BOOL;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[//-----------------------------------------------------------------------------
+      <ST><![CDATA[_SyncConfiguration();
+_ProcessOperatorCommands();
+//-----------------------------------------------------------------------------
 // Cyclic monitoring. Commands are issued via methods; this body only watches
 // for completion/faults and keeps sts in sync. Fault latching + last-fault
 // history live in FB_DeviceBase (_Raise / _ClearFault).
 //-----------------------------------------------------------------------------
-advancePermissives();
-retractPermissives();
+_advancedFeedback := inAdvanced;
+_retractedFeedback := inRetracted;
+advancePermissives(cfg := cfgAdvancePermissives);
+retractPermissives(cfg := cfgRetractPermissives);
 
-bothFeedbackActive := io.inFbkAdvanced AND io.inFbkRetracted;
+bothFeedbackActive := _advancedFeedback AND _retractedFeedback;
 
 previousState := currentState;
+IF (currentState = E_TwoPosActuator_State.Advancing AND NOT advancePermissives.sts.bOK) OR
+   (currentState = E_TwoPosActuator_State.Retracting AND NOT retractPermissives.sts.bOK) THEN
+    _Raise(code := E_TwoPosActuator_Fault.PermissivesNotOK, source := 'PERMISSIVES', reason := 'Travel condition missing or false');
+    currentState := E_TwoPosActuator_State.Fault;
+END_IF;
 
 CASE currentState OF
 
     E_TwoPosActuator_State.Undefined:
-        io.outValveAdvance := FALSE;
-        io.outValveRetract := FALSE;
+        outAdvance := FALSE;
+        outRetract := FALSE;
 
         IF bothFeedbackActive THEN
             currentState := E_TwoPosActuator_State.Fault;
@@ -74,19 +95,19 @@ CASE currentState OF
                 source := 'FEEDBACK',
                 reason := 'Both advanced and retracted feedback asserted simultaneously'
             );
-        ELSIF io.inFbkAdvanced AND NOT io.inFbkRetracted THEN
+        ELSIF _advancedFeedback AND NOT _retractedFeedback THEN
             currentState := E_TwoPosActuator_State.Advanced;
-        ELSIF io.inFbkRetracted AND NOT io.inFbkAdvanced THEN
+        ELSIF _retractedFeedback AND NOT _advancedFeedback THEN
             currentState := E_TwoPosActuator_State.Retracted;
         END_IF;
 
     E_TwoPosActuator_State.Retracted:
         IF cfg.holdAtRetracted THEN
-            io.outValveRetract := TRUE;
+            outRetract := TRUE;
         ELSE
-            io.outValveRetract := FALSE;
+            outRetract := FALSE;
         END_IF;
-        io.outValveAdvance := FALSE;
+        outAdvance := FALSE;
 
         IF bothFeedbackActive THEN
             currentState := E_TwoPosActuator_State.Fault;
@@ -95,7 +116,7 @@ CASE currentState OF
                 source := 'FEEDBACK',
                 reason := 'Both advanced and retracted feedback asserted simultaneously'
             );
-        ELSIF NOT io.inFbkRetracted THEN
+        ELSIF NOT _retractedFeedback THEN
             currentState := E_TwoPosActuator_State.Fault;
             _Raise(
                 code   := E_TwoPosActuator_Fault.UndefinedState,
@@ -105,11 +126,11 @@ CASE currentState OF
         END_IF;
 
     E_TwoPosActuator_State.Advancing:
-        io.outValveAdvance := TRUE;
-        io.outValveRetract := FALSE;
-        advanceTimer(IN := TRUE, PT := DINT_TO_TIME(cfg.advTimeoutS * 1000));
+        outAdvance := TRUE;
+        outRetract := FALSE;
+        advanceTimer(IN := TRUE, PT := DINT_TO_TIME(INT_TO_DINT(cfg.advTimeoutS) * 1000));
 
-        IF io.inFbkAdvanced AND NOT io.inFbkRetracted THEN
+        IF _advancedFeedback AND NOT _retractedFeedback THEN
             currentState := E_TwoPosActuator_State.Advanced;
             advanceTimer(IN := FALSE);
         ELSIF advanceTimer.Q THEN
@@ -140,11 +161,11 @@ CASE currentState OF
 
     E_TwoPosActuator_State.Advanced:
         IF cfg.holdAtAdvanced THEN
-            io.outValveAdvance := TRUE;
+            outAdvance := TRUE;
         ELSE
-            io.outValveAdvance := FALSE;
+            outAdvance := FALSE;
         END_IF;
-        io.outValveRetract := FALSE;
+        outRetract := FALSE;
 
         IF bothFeedbackActive THEN
             currentState := E_TwoPosActuator_State.Fault;
@@ -153,7 +174,7 @@ CASE currentState OF
                 source := 'FEEDBACK',
                 reason := 'Both advanced and retracted feedback asserted simultaneously'
             );
-        ELSIF NOT io.inFbkAdvanced THEN
+        ELSIF NOT _advancedFeedback THEN
             currentState := E_TwoPosActuator_State.Fault;
             _Raise(
                 code   := E_TwoPosActuator_Fault.UndefinedState,
@@ -163,11 +184,11 @@ CASE currentState OF
         END_IF;
 
     E_TwoPosActuator_State.Retracting:
-        io.outValveRetract := TRUE;
-        io.outValveAdvance := FALSE;
-        retractTimer(IN := TRUE, PT := DINT_TO_TIME(cfg.retTimeoutS * 1000));
+        outRetract := TRUE;
+        outAdvance := FALSE;
+        retractTimer(IN := TRUE, PT := DINT_TO_TIME(INT_TO_DINT(cfg.retTimeoutS) * 1000));
 
-        IF io.inFbkRetracted AND NOT io.inFbkAdvanced THEN
+        IF _retractedFeedback AND NOT _advancedFeedback THEN
             currentState := E_TwoPosActuator_State.Retracted;
             retractTimer(IN := FALSE);
         ELSIF retractTimer.Q THEN
@@ -197,14 +218,33 @@ CASE currentState OF
         END_IF;
 
     E_TwoPosActuator_State.Fault:
-        io.outValveAdvance := FALSE;
-        io.outValveRetract := FALSE;
+        outAdvance := FALSE;
+        outRetract := FALSE;
         advanceTimer(IN := FALSE);
         retractTimer(IN := FALSE);
 END_CASE;
 
+IF cfg.advTimeoutS <= 0 OR cfg.retTimeoutS <= 0 THEN
+    _Raise(code := E_TwoPosActuator_Fault.BadConfig, source := 'CONFIG', reason := 'Travel timeouts must be positive');
+    currentState := E_TwoPosActuator_State.Fault;
+END_IF;
+IF NOT _inhibited AND ((currentState = E_TwoPosActuator_State.Advanced AND cfg.holdAtAdvanced AND NOT advancePermissives.sts.bOK) OR
+   (currentState = E_TwoPosActuator_State.Retracted AND cfg.holdAtRetracted AND NOT retractPermissives.sts.bOK)) THEN
+    _Raise(code := E_TwoPosActuator_Fault.PermissivesNotOK, source := 'PERMISSIVES', reason := 'Hold permissive missing');
+    currentState := E_TwoPosActuator_State.Fault;
+END_IF;
+// Apply outputs from the FINAL state so a trip removes coils in the detecting scan.
+IF IsFaulted() OR _inhibited OR currentState = E_TwoPosActuator_State.Undefined THEN
+    outAdvance := FALSE; outRetract := FALSE;
+ELSE
+    outAdvance := currentState = E_TwoPosActuator_State.Advancing OR (currentState = E_TwoPosActuator_State.Advanced AND cfg.holdAtAdvanced);
+    outRetract := currentState = E_TwoPosActuator_State.Retracting OR (currentState = E_TwoPosActuator_State.Retracted AND cfg.holdAtRetracted);
+END_IF;
+
 //-------------------------------------------------------------------------
 // Device-specific status
+// Abort priority lasts through application of the next scan.
+_abortPending := FALSE;
 //-------------------------------------------------------------------------
 sts.state        := currentState;
 sts.advanced  := (currentState = E_TwoPosActuator_State.Advanced);
@@ -231,16 +271,27 @@ _UpdateHeader(
     <Folder Name="Public" Id="{f0a10001-0001-0001-0001-000000000001}" />
     <Folder Name="Private" Id="{f0a10002-0001-0001-0001-000000000002}" />
     <Method Name="Advance" Id="{a1234567-1234-1234-1234-12345678A001}" FolderPath="Public\">
-      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
-METHOD PUBLIC Advance : E_RpcMethodResponse
+      <Declaration><![CDATA[METHOD PUBLIC Advance : E_RpcMethodResponse
 VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Advance := F_ValidateRequester(eRequester, bSourceLockedToProg, IsFaulted());
+        <ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+Advance := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
 IF Advance <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+IF _abortPending THEN
+    Advance := E_RpcMethodResponse.REJECTED_INTERLOCKED;
+    RETURN;
+END_IF;
+Advance := F_ValidateRequester(eRequester, bSourceLockedToProg, IsFaulted());
+IF Advance <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+IF currentState = E_TwoPosActuator_State.Retracting THEN
+    Advance := E_RpcMethodResponse.REJECTED_WRONG_STATE;
+    RETURN;
+END_IF;
 
-IF currentState = E_TwoPosActuator_State.Advanced OR currentState = E_TwoPosActuator_State.Advancing THEN
+IF (currentState = E_TwoPosActuator_State.Advanced AND NOT _inhibited) OR currentState = E_TwoPosActuator_State.Advancing THEN
     Advance := E_RpcMethodResponse.REJECTED_ALREADY_AT_TARGET;
     RETURN;
 END_IF;
@@ -250,6 +301,7 @@ IF NOT advancePermissives.sts.bOK THEN
     RETURN;
 END_IF;
 
+_inhibited := FALSE;
 currentState := E_TwoPosActuator_State.Advancing;
 advanceTimer(IN := FALSE);
 _AcceptCommand(eRequester := eRequester);
@@ -257,16 +309,27 @@ Advance := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
     <Method Name="Retract" Id="{a1234567-1234-1234-1234-12345678A002}" FolderPath="Public\">
-      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
-METHOD PUBLIC Retract : E_RpcMethodResponse
+      <Declaration><![CDATA[METHOD PUBLIC Retract : E_RpcMethodResponse
 VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Retract := F_ValidateRequester(eRequester, bSourceLockedToProg, IsFaulted());
+        <ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+Retract := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
 IF Retract <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+IF _abortPending THEN
+    Retract := E_RpcMethodResponse.REJECTED_INTERLOCKED;
+    RETURN;
+END_IF;
+Retract := F_ValidateRequester(eRequester, bSourceLockedToProg, IsFaulted());
+IF Retract <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+IF currentState = E_TwoPosActuator_State.Advancing THEN
+    Retract := E_RpcMethodResponse.REJECTED_WRONG_STATE;
+    RETURN;
+END_IF;
 
-IF currentState = E_TwoPosActuator_State.Retracted OR currentState = E_TwoPosActuator_State.Retracting THEN
+IF (currentState = E_TwoPosActuator_State.Retracted AND NOT _inhibited) OR currentState = E_TwoPosActuator_State.Retracting THEN
     Retract := E_RpcMethodResponse.REJECTED_ALREADY_AT_TARGET;
     RETURN;
 END_IF;
@@ -276,6 +339,7 @@ IF NOT retractPermissives.sts.bOK THEN
     RETURN;
 END_IF;
 
+_inhibited := FALSE;
 currentState := E_TwoPosActuator_State.Retracting;
 retractTimer(IN := FALSE);
 _AcceptCommand(eRequester := eRequester);
@@ -283,26 +347,32 @@ Retract := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
     <Method Name="Abort" Id="{a1234567-1234-1234-1234-12345678A003}" FolderPath="Public\">
-      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
-// Safety command — always accepted (bypasses source lock and fault check).
+      <Declaration><![CDATA[// Safety command — always accepted (bypasses source lock and fault check).
 // De-energizes both valves and returns to Undefined for re-evaluation.
 METHOD PUBLIC Abort : E_RpcMethodResponse
 VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[io.outValveAdvance := FALSE;
-io.outValveRetract := FALSE;
+        <ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+Abort := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF Abort <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+_operatorMailbox.CancelNormal();
+outAdvance := FALSE;
+outRetract := FALSE;
 advanceTimer(IN := FALSE);
 retractTimer(IN := FALSE);
+_abortPending := TRUE;
+_inhibited := TRUE;
+outAdvance := FALSE; outRetract := FALSE;
 currentState := E_TwoPosActuator_State.Undefined;
 _AcceptCommand(eRequester := eRequester);
 Abort := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
     <Method Name="Reset" Id="{a1234567-1234-1234-1234-12345678A004}" FolderPath="Public\">
-      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
-// Safety invariant: Reset is always accepted from any requester regardless
+      <Declaration><![CDATA[// Safety invariant: Reset is always accepted from any requester regardless
 // of source lock or current state. Clears the active fault via the base and
 // returns the device to Undefined so the body can re-evaluate feedback.
 METHOD PUBLIC Reset : E_RpcMethodResponse
@@ -310,11 +380,19 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[SUPER^.Reset(eRequester := eRequester);
+        <ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+Reset := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF Reset <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+_operatorMailbox.CancelNormal();
+SUPER^.Reset(eRequester := eRequester);
 
+_abortPending := TRUE;
+_inhibited := TRUE;
+outAdvance := FALSE; outRetract := FALSE;
 currentState := E_TwoPosActuator_State.Undefined;
-io.outValveAdvance := FALSE;
-io.outValveRetract := FALSE;
+outAdvance := FALSE;
+outRetract := FALSE;
 advanceTimer(IN := FALSE);
 retractTimer(IN := FALSE);
 Reset := E_RpcMethodResponse.ACCEPTED;]]></ST>
@@ -329,6 +407,7 @@ VAR_INPUT
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[CASE code OF
+    E_TwoPosActuator_Fault.BadConfig: ResolveFaultString := 'Actuator timeouts must be positive';
     E_TwoPosActuator_Fault.None:                ResolveFaultString := 'No Fault';
     E_TwoPosActuator_Fault.AdvanceTimeout:      ResolveFaultString := 'Advance Timeout';
     E_TwoPosActuator_Fault.RetractTimeout:      ResolveFaultString := 'Retract Timeout';
@@ -360,7 +439,74 @@ ELSE
 END_CASE;]]></ST>
       </Implementation>
     </Method>
-    <LineIds Name="FB_TwoPosActuator">
+    <Method Name="OperatorAdvance" Id="{1b88e6f8-21de-4249-9afc-0846301a1c78}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorAdvance : E_RpcMethodResponse
+
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+      <Implementation><ST><![CDATA[OperatorAdvance := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.Advance, value := 0.0);]]></ST></Implementation>
+    </Method>
+    <Method Name="OperatorRetract" Id="{f0bb6e07-590f-4aee-a079-767877cae79a}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorRetract : E_RpcMethodResponse
+
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+      <Implementation><ST><![CDATA[OperatorRetract := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.Retract, value := 0.0);]]></ST></Implementation>
+    </Method>
+    <Method Name="OperatorAbort" Id="{3880eb4d-1dce-4b8d-8dcb-1060ad2418f5}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorAbort : E_RpcMethodResponse
+
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+      <Implementation><ST><![CDATA[OperatorAbort := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.Abort, value := 0.0);]]></ST></Implementation>
+    </Method>
+    <Method Name="OperatorReset" Id="{1b513401-3042-4e49-84ad-a734b0072144}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorReset : E_RpcMethodResponse
+
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+      <Implementation><ST><![CDATA[OperatorReset := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.Reset, value := 0.0);]]></ST></Implementation>
+    </Method>
+<Method Name="MapAdvanceCondition" Id="{847b3518-70c7-4d13-95ad-c29cc84da555}"><Declaration><![CDATA[METHOD PUBLIC MapAdvanceCondition
+VAR_INPUT
+    bitIndex : UDINT;
+    bGood : BOOL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[advancePermissives.MapInput(bitIndex := bitIndex, inputValue := bGood);]]></ST></Implementation></Method>
+<Method Name="MapRetractCondition" Id="{0680c05a-5f43-4f65-ba99-35cba55dc483}"><Declaration><![CDATA[METHOD PUBLIC MapRetractCondition
+VAR_INPUT
+    bitIndex : UDINT;
+    bGood : BOOL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[retractPermissives.MapInput(bitIndex := bitIndex, inputValue := bGood);]]></ST></Implementation></Method>
+    <Method Name="_DispatchOperatorCommand" Id="{532e7d41-7b82-4578-a7af-46a3a1f44593}"><Declaration><![CDATA[METHOD PROTECTED _DispatchOperatorCommand : E_RpcMethodResponse
+VAR_INPUT command : E_OperatorCommand; value : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[CASE command OF
+E_OperatorCommand.Advance: _DispatchOperatorCommand := THIS^.Advance(eRequester := E_Requester.OPERATOR);
+E_OperatorCommand.Retract: _DispatchOperatorCommand := THIS^.Retract(eRequester := E_Requester.OPERATOR);
+E_OperatorCommand.Abort: _DispatchOperatorCommand := THIS^.Abort(eRequester := E_Requester.OPERATOR);
+ELSE _DispatchOperatorCommand := SUPER^._DispatchOperatorCommand(command := command, value := value);
+END_CASE;]]></ST></Implementation></Method>
+<Method Name="_SyncConfiguration" Id="{93100aa1-f8e1-4bf7-8a93-e78ed8681240}"><Declaration><![CDATA[METHOD PRIVATE _SyncConfiguration]]></Declaration><Implementation><ST><![CDATA[// Configuration is owned by the same cyclic task as this device.
+// The first observation establishes a baseline and preserves first-scan commands.
+IF NOT _configurationKnown THEN
+    _lastConfiguration := cfg;
+    _configurationKnown := TRUE;
+    RETURN;
+END_IF;
+IF cfg.advTimeoutS <> _lastConfiguration.advTimeoutS OR
+   cfg.retTimeoutS <> _lastConfiguration.retTimeoutS OR
+   cfg.holdAtAdvanced <> _lastConfiguration.holdAtAdvanced OR
+   cfg.holdAtRetracted <> _lastConfiguration.holdAtRetracted THEN
+    // Discard old operating intent before interpreting it under a new configuration.
+    _operatorMailbox.CancelNormal();
+    _inhibited := TRUE;
+    advanceTimer(IN := FALSE);
+    retractTimer(IN := FALSE);
+    outAdvance := FALSE;
+    outRetract := FALSE;
+    // Re-observe position without retaining travel or hold intent; faults remain latched.
+    currentState := E_TwoPosActuator_State.Undefined;
+END_IF;
+_lastConfiguration := cfg;]]></ST></Implementation></Method>
+<LineIds Name="FB_TwoPosActuator">
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_TwoPosActuator.Advance">

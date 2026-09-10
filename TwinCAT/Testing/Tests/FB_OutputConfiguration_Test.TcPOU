@@ -1,0 +1,498 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_OutputConfiguration_Test" Id="{b9ebe176-50eb-4030-9486-c65162739348}"><Declaration><![CDATA[FUNCTION_BLOCK FB_OutputConfiguration_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    done : BOOL;
+    trustDigitalBackupImageRejected : FB_OutputRestart_Probe;
+    trustDigitalMissingImageRejected : FB_OutputRestart_Probe;
+    trustDigitalFreshCommandWithUntrustedImage : FB_OutputRestart_Probe;
+    trustAnalogBackupImageRejected : FB_AnalogOutputRestart_Probe;
+    trustAnalogMissingImageRejected : FB_AnalogOutputRestart_Probe;
+    trustAnalogFreshCommandWithUntrustedImage : FB_AnalogOutputRestart_Probe;
+
+    restartDigitalNoSavedIntent : FB_OutputRestart_Probe;
+    restartDigitalValidZeroIntent : FB_OutputRestart_Probe;
+    restartDigitalResetDiscardsSavedIntent : FB_OutputRestart_Probe;
+    restartDigitalForceSafeDiscardsSavedIntent : FB_OutputRestart_Probe;
+    restartDigitalConfigDiscardsSavedIntent : FB_OutputRestart_Probe;
+    restartAnalogNoSavedIntent : FB_AnalogOutputRestart_Probe;
+    restartAnalogValidZeroIntent : FB_AnalogOutputRestart_Probe;
+    restartAnalogResetDiscardsSavedIntent : FB_AnalogOutputRestart_Probe;
+    restartAnalogForceSafeDiscardsSavedIntent : FB_AnalogOutputRestart_Probe;
+    restartAnalogConfigDiscardsSavedIntent : FB_AnalogOutputRestart_Probe;
+
+    nanConfigOutput : TcForge.FB_AnalogOutput;
+    nanFallbackOutput : TcForge.FB_AnalogOutput;
+    nanCommandOutput : TcForge.FB_AnalogOutput;
+    infiniteOutput : TcForge.FB_AnalogOutput;
+    delayedMailbox : TcForge.FB_OperatorMailbox;
+    urgentMailbox : TcForge.FB_OperatorMailbox;
+    device0 : TcForge.FB_DigitalOutput;
+    device1 : TcForge.FB_DigitalOutput;
+    device2 : TcForge.FB_DigitalOutput;
+    device3 : TcForge.FB_DigitalOutput;
+    device4 : TcForge.FB_DigitalOutput;
+    device5 : TcForge.FB_DigitalOutput;
+    device6 : TcForge.FB_AnalogOutput;
+    device7 : TcForge.FB_AnalogOutput;
+    device8 : TcForge.FB_AnalogOutput;
+    device9 : TcForge.FB_AnalogOutput;
+    device10 : TcForge.FB_AnalogOutput;
+    device11 : TcForge.FB_TwoPosActuator;
+    device12 : TcForge.FB_TwoPosActuator;
+    device13 : TcForge.FB_TwoPosActuator;
+    device14 : TcForge.FB_TwoPosActuator;
+    device15 : TcForge.FB_TwoPosActuator;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[IF done THEN RETURN; END_IF;
+DigitalInvertDiscardsOff();
+DigitalTimingDiscardsPulse();
+DigitalFreshCommandBeforeScan();
+DigitalFallbackOverridesQualityHold();
+DigitalQueuedOffCancelled();
+DigitalSafeLevelIsElectrical();
+AnalogScalingDiscardsCommand();
+AnalogFreshTypeCommand();
+AnalogQueuedValueCancelled();
+AnalogUnitMetadataPreservesIntent();
+AnalogConfigRecoveryKeepsFault();
+ActuatorHoldChangeRequiresCommand();
+ActuatorTimeoutChangeStopsTravel();
+ActuatorFreshCommandBeforeScan();
+ActuatorQueuedTravelCancelled();
+ActuatorConfigRecoveryKeepsFault();
+DelayedSetOffCancellation();
+UrgentCommandsSurviveConfigurationBarrier();
+AnalogNaNConfigurationAndRecovery();
+AnalogNaNSafeRawUsesZero();
+AnalogNaNCommandsRejected();
+AnalogInfinityRejected();
+DigitalNoSavedIntent();
+DigitalValidZeroIntent();
+DigitalResetDiscardsSavedIntent();
+DigitalForceSafeDiscardsSavedIntent();
+DigitalConfigDiscardsSavedIntent();
+AnalogNoSavedIntent();
+AnalogValidZeroIntent();
+AnalogResetDiscardsSavedIntent();
+AnalogForceSafeDiscardsSavedIntent();
+AnalogConfigDiscardsSavedIntent();
+DigitalBackupImageRejected();
+DigitalMissingImageRejected();
+DigitalFreshCommandWithUntrustedImage();
+AnalogBackupImageRejected();
+AnalogMissingImageRejected();
+AnalogFreshCommandWithUntrustedImage();
+done := TRUE;]]></ST></Implementation>
+<Method Name="DigitalInvertDiscardsOff" Id="{79625e09-1536-49f5-b627-1568fd328090}"><Declaration><![CDATA[METHOD PRIVATE DigitalInvertDiscardsOff
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalInvertDiscardsOff');
+device0.SetOff(); device0();
+device0.cfg.invert := TRUE; device0();
+AssertFalse(device0.outSignal, 'Inversion change cannot reinterpret previous SetOff');
+AssertTrue(device0.sts.outputInhibited, 'Changed output remains inhibited');
+device0.SetOff(); device0();
+AssertTrue(device0.outSignal, 'Fresh SetOff explicitly commands inverted electrical high');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalTimingDiscardsPulse" Id="{89079abf-a25f-42f2-b4e0-98dbb77452a2}"><Declaration><![CDATA[METHOD PRIVATE DigitalTimingDiscardsPulse
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalTimingDiscardsPulse');
+device1.cfg.mode := TcForge.E_DigitalOutput_Mode.SinglePulse;
+device1.cfg.pulseOn := T#10S;
+device1.SetOn(); device1();
+AssertTrue(device1.outSignal, 'Initial pulse is active');
+device1.cfg.pulseOn := T#20S; device1();
+AssertFalse(device1.outSignal, 'Changed timing discards pulse intent');
+device1.SetOn(); device1();
+AssertTrue(device1.outSignal, 'Fresh command creates a fresh pulse edge');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalFreshCommandBeforeScan" Id="{9be68c93-314e-437b-ac44-d36b7bc34210}"><Declaration><![CDATA[METHOD PRIVATE DigitalFreshCommandBeforeScan
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalFreshCommandBeforeScan');
+device2(); device2.cfg.invert := TRUE;
+rsp := device2.SetOff(); device2();
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.ACCEPTED, rsp, 'New-config command accepted before cycle');
+AssertTrue(device2.outSignal, 'Cycle preserves newly accepted command');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalFallbackOverridesQualityHold" Id="{fd708fd9-e374-4d5d-9549-8669bd048834}"><Declaration><![CDATA[METHOD PRIVATE DigitalFallbackOverridesQualityHold
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalFallbackOverridesQualityHold');
+device3.cfg.holdOnBadQuality := TRUE;
+device3.SetOn(); device3(); device3(inpQuality := TcForge.E_IO_Quality.BAD);
+AssertTrue(device3.outSignal, 'Explicit quality hold retains previous terminal level');
+device3.cfg.debounceOn := T#1S; device3();
+AssertFalse(device3.outSignal, 'Configuration invalidation overrides quality hold');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalQueuedOffCancelled" Id="{8d6f4f09-48c3-4077-96c2-d2c96ffac510}"><Declaration><![CDATA[METHOD PRIVATE DigitalQueuedOffCancelled
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalQueuedOffCancelled');
+device4();
+rsp := device4.OperatorSetOff(requestId := 901);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.QUEUED, rsp, 'Off queued under old config');
+device4.cfg.invert := TRUE; device4();
+rsp := device4.OperatorCommandResult(requestId := 901);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.CANCELLED, rsp, 'Old inverted-off interpretation is cancelled');
+AssertFalse(device4.outSignal, 'Queued off cannot energize after inversion changes');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalSafeLevelIsElectrical" Id="{4be73506-42c2-4e6f-ab7c-a76144b2bac3}"><Declaration><![CDATA[METHOD PRIVATE DigitalSafeLevelIsElectrical
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalSafeLevelIsElectrical');
+device5.SetOn(); device5(); device5.cfg.safeOutput := TRUE; device5();
+AssertTrue(device5.outSignal, 'Explicit safe electrical level applies');
+AssertTrue(device5.sts.outputInhibited, 'Electrical high fallback is still inhibited operating intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogScalingDiscardsCommand" Id="{beed1c9f-faaa-4764-adaa-57fc602ef54e}"><Declaration><![CDATA[METHOD PRIVATE AnalogScalingDiscardsCommand
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogScalingDiscardsCommand');
+device6.cfg.rawMax := 1000.0;
+device6.SetValue(rValue := 50.0); device6();
+AssertEquals_REAL(500.0, device6.sts.rawReal, 0.01, 'Initial scaling');
+device6.cfg.rawMax := 2000.0; device6();
+AssertEquals_REAL(0.0, device6.sts.rawReal, 0.01, 'Changed scale uses fallback');
+AssertTrue(device6.sts.outputInhibited, 'Scaling change disarms');
+device6.SetValue(rValue := 50.0); device6();
+AssertEquals_REAL(1000.0, device6.sts.rawReal, 0.01, 'Fresh command uses new scaling');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogFreshTypeCommand" Id="{b403bed6-7a30-4845-9544-447f7407ff14}"><Declaration><![CDATA[METHOD PRIVATE AnalogFreshTypeCommand
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogFreshTypeCommand');
+device7.SetValue(rValue := 50.0); device7();
+device7.cfg.outputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+device7.cfg.useRawValue := TRUE;
+device7.SetValue(rValue := 12.5); device7();
+AssertEquals_REAL(12.5, device7.outRaw.fReal, 0.001, 'Fresh pre-cycle command uses new type');
+AssertFalse(device7.sts.outputInhibited, 'New intent remains armed');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogQueuedValueCancelled" Id="{3b2f1549-7e42-45bf-a94d-15b93313e8c6}"><Declaration><![CDATA[METHOD PRIVATE AnalogQueuedValueCancelled
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogQueuedValueCancelled');
+device8(); device8.OperatorSetValue(requestId := 902, rValue := 50.0);
+device8.cfg.useRawValue := TRUE; device8();
+rsp := device8.OperatorCommandResult(requestId := 902);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.CANCELLED, rsp, 'Queued old-scale value cancelled');
+AssertTrue(device8.sts.outputInhibited, 'Cancelled queue cannot arm output');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogUnitMetadataPreservesIntent" Id="{4155d405-ea9a-4588-bb89-de9c93eac73f}"><Declaration><![CDATA[METHOD PRIVATE AnalogUnitMetadataPreservesIntent
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogUnitMetadataPreservesIntent');
+device9.cfg.useRawValue := TRUE; device9.SetValue(rValue := 25.0); device9();
+device9.cfg.unit := TcForge.E_Unit.DEGREE_CELSIUS; device9();
+AssertEquals_REAL(25.0, device9.sts.rawReal, 0.01, 'Display unit metadata does not alter electrical intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogConfigRecoveryKeepsFault" Id="{cd68ff26-6ff3-4597-8510-c63d4f333edb}"><Declaration><![CDATA[METHOD PRIVATE AnalogConfigRecoveryKeepsFault
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogConfigRecoveryKeepsFault');
+device10.cfg.euMax := 0.0; device10();
+AssertTrue(device10.IsFaulted(), 'Invalid config faults');
+device10.cfg.euMax := 100.0; device10();
+AssertTrue(device10.IsFaulted(), 'Correcting config does not acknowledge latched fault');
+AssertTrue(device10.sts.outputInhibited, 'Fault recovery cannot restart output');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ActuatorHoldChangeRequiresCommand" Id="{8d22b6a3-f9e1-487b-a0ae-89ca9e39dc82}"><Declaration><![CDATA[METHOD PRIVATE ActuatorHoldChangeRequiresCommand
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('ActuatorHoldChangeRequiresCommand');
+device11(inAdvanced := TRUE); device11.Advance(); device11();
+AssertFalse(device11.outAdvance, 'No hold after reaching advanced');
+device11.cfg.holdAtAdvanced := TRUE; device11();
+AssertFalse(device11.outAdvance, 'Enabling hold cannot revive completed travel intent');
+rsp := device11.Advance(); device11();
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.ACCEPTED, rsp, 'Fresh command at inhibited position accepted');
+AssertTrue(device11.outAdvance, 'Explicit new hold intent energizes advanced coil');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ActuatorTimeoutChangeStopsTravel" Id="{d1887e37-727e-4b6e-b0be-02ee0cadbe48}"><Declaration><![CDATA[METHOD PRIVATE ActuatorTimeoutChangeStopsTravel
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('ActuatorTimeoutChangeStopsTravel');
+device12(); device12.Advance(); device12();
+AssertTrue(device12.outAdvance, 'Motion initially energized');
+device12.cfg.advTimeoutS := 8; device12();
+AssertFalse(device12.outAdvance, 'Timeout edits cancel active travel');
+AssertFalse(device12.sts.moving, 'No stale travel state survives');
+device12.Advance(); device12();
+AssertTrue(device12.outAdvance, 'Fresh command starts travel again');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ActuatorFreshCommandBeforeScan" Id="{ef46da45-3fc2-452f-9337-fd82ba8abd71}"><Declaration><![CDATA[METHOD PRIVATE ActuatorFreshCommandBeforeScan
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('ActuatorFreshCommandBeforeScan');
+device13(); device13.cfg.holdAtRetracted := TRUE;
+rsp := device13.Retract(); device13(inRetracted := TRUE);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.ACCEPTED, rsp, 'New-config retract accepted');
+AssertTrue(device13.outRetract, 'New command remains valid through cycle');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ActuatorQueuedTravelCancelled" Id="{fe1b0544-50cd-46f9-905f-c4874200a6f6}"><Declaration><![CDATA[METHOD PRIVATE ActuatorQueuedTravelCancelled
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('ActuatorQueuedTravelCancelled');
+device14(); device14.OperatorAdvance(requestId := 903);
+device14.cfg.advTimeoutS := 8; device14();
+rsp := device14.OperatorCommandResult(requestId := 903);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.CANCELLED, rsp, 'Old queued motion cancelled');
+AssertFalse(device14.outAdvance, 'Cancelled command cannot move');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ActuatorConfigRecoveryKeepsFault" Id="{d222b244-1216-4fa9-98c6-140790272abe}"><Declaration><![CDATA[METHOD PRIVATE ActuatorConfigRecoveryKeepsFault
+VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('ActuatorConfigRecoveryKeepsFault');
+device15(inAdvanced := TRUE, inRetracted := TRUE);
+AssertTrue(device15.IsFaulted(), 'Contradictory feedback faults');
+device15.cfg.holdAtAdvanced := TRUE; device15(inRetracted := FALSE);
+AssertTrue(device15.IsFaulted(), 'Config change preserves latched feedback fault');
+AssertFalse(device15.outAdvance, 'No hold while fault remains latched');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DelayedSetOffCancellation" Id="{97559eae-5c28-4bb9-ae07-57dfe3c298c0}"><Declaration><![CDATA[METHOD PRIVATE DelayedSetOffCancellation
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+    consumed : BOOL;
+    cmd : TcForge.E_OperatorCommand;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DelayedSetOffCancellation');
+delayedMailbox.BeginConsume();
+rsp := delayedMailbox.Submit(requestId := 910, command := TcForge.E_OperatorCommand.SetOff, value := 0.0);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.QUEUED, rsp, 'Queue SetOff before configuration invalidation');
+delayedMailbox.CancelNormal(includeSetOff := TRUE);
+// Delaying reconciliation and another ordinary cancellation cannot erase the barrier.
+delayedMailbox.CancelNormal();
+rsp := delayedMailbox.Submit(requestId := 911, command := TcForge.E_OperatorCommand.SetOff, value := 0.0);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.REJECTED_BUSY, rsp, 'New SetOff cannot cross unreconciled barrier');
+consumed := delayedMailbox.BeginConsume(command => cmd);
+AssertFalse(consumed, 'Old SetOff is cancelled before eventual consumption');
+IF consumed THEN delayedMailbox.EndConsume(result := TcForge.E_RpcMethodResponse.ACCEPTED); END_IF;
+rsp := delayedMailbox.GetResult(requestId := 910);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.CANCELLED, rsp, 'Cancelled result retained');
+rsp := delayedMailbox.Submit(requestId := 912, command := TcForge.E_OperatorCommand.SetOff, value := 0.0);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.QUEUED, rsp, 'Fresh SetOff accepted after barrier reconciles');
+consumed := delayedMailbox.BeginConsume(command => cmd);
+AssertTrue(consumed, 'Fresh SetOff can execute');
+IF consumed THEN delayedMailbox.EndConsume(result := TcForge.E_RpcMethodResponse.ACCEPTED); END_IF;
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="UrgentCommandsSurviveConfigurationBarrier" Id="{ff0bdf5d-49f0-481f-be32-469762c4c852}"><Declaration><![CDATA[METHOD PRIVATE UrgentCommandsSurviveConfigurationBarrier
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+    consumed : BOOL;
+    cmd : TcForge.E_OperatorCommand;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('UrgentCommandsSurviveConfigurationBarrier');
+urgentMailbox.BeginConsume();
+urgentMailbox.CancelNormal(includeSetOff := TRUE);
+rsp := urgentMailbox.Submit(requestId := 913, command := TcForge.E_OperatorCommand.ForceSafe, value := 0.0);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.QUEUED, rsp, 'ForceSafe crosses cancellation barrier');
+consumed := urgentMailbox.BeginConsume(command => cmd);
+AssertTrue(consumed, 'ForceSafe survives reconciliation');
+AssertEquals_DINT(TcForge.E_OperatorCommand.ForceSafe, cmd, 'Correct urgent command');
+IF consumed THEN urgentMailbox.EndConsume(result := TcForge.E_RpcMethodResponse.ACCEPTED); END_IF;
+urgentMailbox.CancelNormal(includeSetOff := TRUE);
+rsp := urgentMailbox.Submit(requestId := 914, command := TcForge.E_OperatorCommand.Abort, value := 0.0);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.QUEUED, rsp, 'Abort crosses cancellation barrier');
+consumed := urgentMailbox.BeginConsume(command => cmd);
+AssertTrue(consumed, 'Abort survives reconciliation');
+AssertEquals_DINT(TcForge.E_OperatorCommand.Abort, cmd, 'Correct abort command');
+IF consumed THEN urgentMailbox.EndConsume(result := TcForge.E_RpcMethodResponse.ACCEPTED); END_IF;
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogNaNConfigurationAndRecovery" Id="{4dcd3a3e-4efe-40bf-af1b-04785cc30bd1}"><Declaration><![CDATA[METHOD PRIVATE AnalogNaNConfigurationAndRecovery
+VAR
+    bits : TcForge.U_IoRaw_Out;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogNaNConfigurationAndRecovery');
+nanConfigOutput.SetValue(rValue := 50.0); nanConfigOutput();
+bits.dw := DWORD#16#7FC00000;
+nanConfigOutput.cfg.euMax := bits.fReal;
+nanConfigOutput();
+AssertTrue(nanConfigOutput.IsFaulted(), 'NaN scaling faults without FPU exception');
+AssertEquals_REAL(0.0, nanConfigOutput.sts.rawReal, 0.001, 'NaN scaling uses finite fallback');
+nanConfigOutput(); // Both current and prior snapshots contain NaN.
+nanConfigOutput.cfg.euMax := 100.0;
+nanConfigOutput(); // Previous snapshot contains NaN during recovery.
+AssertTrue(nanConfigOutput.IsFaulted(), 'Finite recovery preserves configuration fault');
+AssertTrue(nanConfigOutput.sts.outputInhibited, 'Finite recovery does not restart old intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogNaNSafeRawUsesZero" Id="{65a1f9da-00cb-430e-9ff0-c47bc680208c}"><Declaration><![CDATA[METHOD PRIVATE AnalogNaNSafeRawUsesZero
+VAR
+    bits : TcForge.U_IoRaw_Out;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogNaNSafeRawUsesZero');
+bits.dw := DWORD#16#7FC00000;
+nanFallbackOutput.cfg.safeRaw := bits.fReal;
+nanFallbackOutput(); nanFallbackOutput();
+AssertTrue(nanFallbackOutput.IsFaulted(), 'NaN fallback is invalid configuration');
+AssertEquals_DINT(0, nanFallbackOutput.outRaw.nInt, 'Unrepresentable fallback writes finite zero');
+nanFallbackOutput.cfg.safeRaw := 12.0; nanFallbackOutput();
+AssertEquals_DINT(12, nanFallbackOutput.outRaw.nInt, 'Corrected finite electrical fallback applies while faulted');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogNaNCommandsRejected" Id="{465f03a9-a2a2-433a-a92f-dd306f415336}"><Declaration><![CDATA[METHOD PRIVATE AnalogNaNCommandsRejected
+VAR
+    bits : TcForge.U_IoRaw_Out;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogNaNCommandsRejected');
+nanCommandOutput.cfg.useRawValue := TRUE;
+nanCommandOutput.SetValue(rValue := 12.0); nanCommandOutput();
+bits.dw := DWORD#16#7FC00000;
+rsp := nanCommandOutput.SetValue(rValue := bits.fReal);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, rsp, 'Direct NaN rejected before float comparison');
+rsp := nanCommandOutput.OperatorSetValue(requestId := 920, rValue := bits.fReal);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, rsp, 'Mailbox NaN rejected before float comparison');
+nanCommandOutput();
+AssertEquals_REAL(12.0, nanCommandOutput.sts.rawReal, 0.001, 'Rejected NaN commands preserve valid prior intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogInfinityRejected" Id="{701dee6f-efec-4b04-84d9-9f720412ab0c}"><Declaration><![CDATA[METHOD PRIVATE AnalogInfinityRejected
+VAR
+    bits : TcForge.U_IoRaw_Out;
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogInfinityRejected');
+infiniteOutput();
+bits.dw := DWORD#16#7F800000;
+rsp := infiniteOutput.SetValue(rValue := bits.fReal);
+AssertEquals_DINT(TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, rsp, 'Infinite command rejected');
+infiniteOutput.cfg.rawMax := bits.fReal; infiniteOutput();
+AssertTrue(infiniteOutput.IsFaulted(), 'Infinite scale faults before arithmetic');
+AssertEquals_REAL(0.0, infiniteOutput.sts.rawReal, 0.001, 'Infinite scale writes finite fallback');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalNoSavedIntent" Id="{dc5084cf-df83-4821-b6c6-b0d8d9298275}"><Declaration><![CDATA[METHOD PRIVATE DigitalNoSavedIntent]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalNoSavedIntent');
+restartDigitalNoSavedIntent.cfg.restoreCommandOnRestart := TRUE;
+restartDigitalNoSavedIntent.cfg.invert := TRUE;
+restartDigitalNoSavedIntent();
+AssertTrue(restartDigitalNoSavedIntent.sts.outputInhibited, 'Missing or invalidated saved intent cannot arm after startup');
+AssertFalse(restartDigitalNoSavedIntent.outSignal, 'Inversion cannot turn absent intent into electrical high');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalValidZeroIntent" Id="{6ed36f4b-2660-4e7a-bccb-3179343bcfa0}"><Declaration><![CDATA[METHOD PRIVATE DigitalValidZeroIntent]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalValidZeroIntent');
+restartDigitalValidZeroIntent.cfg.restoreCommandOnRestart := TRUE;
+restartDigitalValidZeroIntent.cfg.invert := TRUE;
+restartDigitalValidZeroIntent.SetOff(); restartDigitalValidZeroIntent();
+AssertFalse(restartDigitalValidZeroIntent.sts.outputInhibited, 'Accepted command initially arms output');
+restartDigitalValidZeroIntent.SimulateStartup(); restartDigitalValidZeroIntent();
+AssertFalse(restartDigitalValidZeroIntent.sts.outputInhibited, 'Saved zero command is valid intent');
+AssertTrue(restartDigitalValidZeroIntent.outSignal, 'Accepted inverted SetOff restores electrical high');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalResetDiscardsSavedIntent" Id="{ce2dd79b-e153-459d-b44c-bc151372b607}"><Declaration><![CDATA[METHOD PRIVATE DigitalResetDiscardsSavedIntent]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalResetDiscardsSavedIntent');
+restartDigitalResetDiscardsSavedIntent.cfg.restoreCommandOnRestart := TRUE;
+restartDigitalResetDiscardsSavedIntent.cfg.invert := TRUE;
+restartDigitalResetDiscardsSavedIntent.SetOff(); restartDigitalResetDiscardsSavedIntent();
+AssertFalse(restartDigitalResetDiscardsSavedIntent.sts.outputInhibited, 'Accepted command initially arms output');
+restartDigitalResetDiscardsSavedIntent.Reset(); restartDigitalResetDiscardsSavedIntent();
+restartDigitalResetDiscardsSavedIntent.SimulateStartup(); restartDigitalResetDiscardsSavedIntent();
+AssertTrue(restartDigitalResetDiscardsSavedIntent.sts.outputInhibited, 'Missing or invalidated saved intent cannot arm after startup');
+AssertFalse(restartDigitalResetDiscardsSavedIntent.outSignal, 'Inversion cannot turn absent intent into electrical high');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalForceSafeDiscardsSavedIntent" Id="{816eea1d-17e7-4908-b001-57cbf75417d6}"><Declaration><![CDATA[METHOD PRIVATE DigitalForceSafeDiscardsSavedIntent]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalForceSafeDiscardsSavedIntent');
+restartDigitalForceSafeDiscardsSavedIntent.cfg.restoreCommandOnRestart := TRUE;
+restartDigitalForceSafeDiscardsSavedIntent.cfg.invert := TRUE;
+restartDigitalForceSafeDiscardsSavedIntent.SetOff(); restartDigitalForceSafeDiscardsSavedIntent();
+AssertFalse(restartDigitalForceSafeDiscardsSavedIntent.sts.outputInhibited, 'Accepted command initially arms output');
+restartDigitalForceSafeDiscardsSavedIntent.ForceSafe(); restartDigitalForceSafeDiscardsSavedIntent();
+restartDigitalForceSafeDiscardsSavedIntent.SimulateStartup(); restartDigitalForceSafeDiscardsSavedIntent();
+AssertTrue(restartDigitalForceSafeDiscardsSavedIntent.sts.outputInhibited, 'Missing or invalidated saved intent cannot arm after startup');
+AssertFalse(restartDigitalForceSafeDiscardsSavedIntent.outSignal, 'Inversion cannot turn absent intent into electrical high');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalConfigDiscardsSavedIntent" Id="{ba90b16a-3f31-4bda-9593-0ce1362953e8}"><Declaration><![CDATA[METHOD PRIVATE DigitalConfigDiscardsSavedIntent]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalConfigDiscardsSavedIntent');
+restartDigitalConfigDiscardsSavedIntent.cfg.restoreCommandOnRestart := TRUE;
+restartDigitalConfigDiscardsSavedIntent.cfg.invert := TRUE;
+restartDigitalConfigDiscardsSavedIntent.SetOff(); restartDigitalConfigDiscardsSavedIntent();
+AssertFalse(restartDigitalConfigDiscardsSavedIntent.sts.outputInhibited, 'Accepted command initially arms output');
+restartDigitalConfigDiscardsSavedIntent.cfg.qualityFaultAfter := T#2S; restartDigitalConfigDiscardsSavedIntent();
+restartDigitalConfigDiscardsSavedIntent.SimulateStartup(); restartDigitalConfigDiscardsSavedIntent();
+AssertTrue(restartDigitalConfigDiscardsSavedIntent.sts.outputInhibited, 'Missing or invalidated saved intent cannot arm after startup');
+AssertFalse(restartDigitalConfigDiscardsSavedIntent.outSignal, 'Inversion cannot turn absent intent into electrical high');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogNoSavedIntent" Id="{6b0d4958-0483-43df-8fce-4b0eaff7c2a4}"><Declaration><![CDATA[METHOD PRIVATE AnalogNoSavedIntent]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogNoSavedIntent');
+restartAnalogNoSavedIntent.cfg.restoreCommandOnRestart := TRUE;
+restartAnalogNoSavedIntent.cfg.useRawValue := TRUE; restartAnalogNoSavedIntent.cfg.safeRaw := 17.0;
+restartAnalogNoSavedIntent();
+AssertTrue(restartAnalogNoSavedIntent.sts.outputInhibited, 'Missing or invalidated saved intent cannot arm after startup');
+AssertEquals_REAL(17.0, restartAnalogNoSavedIntent.sts.rawReal, 0.001, 'Absent intent applies nonzero electrical fallback');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogValidZeroIntent" Id="{191b566c-9cb7-4cc6-9588-ded20cd632ca}"><Declaration><![CDATA[METHOD PRIVATE AnalogValidZeroIntent]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogValidZeroIntent');
+restartAnalogValidZeroIntent.cfg.restoreCommandOnRestart := TRUE;
+restartAnalogValidZeroIntent.cfg.useRawValue := TRUE; restartAnalogValidZeroIntent.cfg.safeRaw := 17.0;
+restartAnalogValidZeroIntent.SetValue(rValue := 0.0); restartAnalogValidZeroIntent();
+AssertFalse(restartAnalogValidZeroIntent.sts.outputInhibited, 'Accepted command initially arms output');
+restartAnalogValidZeroIntent.SimulateStartup(); restartAnalogValidZeroIntent();
+AssertFalse(restartAnalogValidZeroIntent.sts.outputInhibited, 'Saved zero command is valid intent');
+AssertEquals_REAL(0.0, restartAnalogValidZeroIntent.sts.rawReal, 0.001, 'Accepted zero restores as a command');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogResetDiscardsSavedIntent" Id="{12fa5219-07c3-4e40-968a-8cd0de2784de}"><Declaration><![CDATA[METHOD PRIVATE AnalogResetDiscardsSavedIntent]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogResetDiscardsSavedIntent');
+restartAnalogResetDiscardsSavedIntent.cfg.restoreCommandOnRestart := TRUE;
+restartAnalogResetDiscardsSavedIntent.cfg.useRawValue := TRUE; restartAnalogResetDiscardsSavedIntent.cfg.safeRaw := 17.0;
+restartAnalogResetDiscardsSavedIntent.SetValue(rValue := 0.0); restartAnalogResetDiscardsSavedIntent();
+AssertFalse(restartAnalogResetDiscardsSavedIntent.sts.outputInhibited, 'Accepted command initially arms output');
+restartAnalogResetDiscardsSavedIntent.Reset(); restartAnalogResetDiscardsSavedIntent();
+restartAnalogResetDiscardsSavedIntent.SimulateStartup(); restartAnalogResetDiscardsSavedIntent();
+AssertTrue(restartAnalogResetDiscardsSavedIntent.sts.outputInhibited, 'Missing or invalidated saved intent cannot arm after startup');
+AssertEquals_REAL(17.0, restartAnalogResetDiscardsSavedIntent.sts.rawReal, 0.001, 'Absent intent applies nonzero electrical fallback');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogForceSafeDiscardsSavedIntent" Id="{919b93ed-6ed9-448e-9cd0-c3cad5a0430f}"><Declaration><![CDATA[METHOD PRIVATE AnalogForceSafeDiscardsSavedIntent]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogForceSafeDiscardsSavedIntent');
+restartAnalogForceSafeDiscardsSavedIntent.cfg.restoreCommandOnRestart := TRUE;
+restartAnalogForceSafeDiscardsSavedIntent.cfg.useRawValue := TRUE; restartAnalogForceSafeDiscardsSavedIntent.cfg.safeRaw := 17.0;
+restartAnalogForceSafeDiscardsSavedIntent.SetValue(rValue := 0.0); restartAnalogForceSafeDiscardsSavedIntent();
+AssertFalse(restartAnalogForceSafeDiscardsSavedIntent.sts.outputInhibited, 'Accepted command initially arms output');
+restartAnalogForceSafeDiscardsSavedIntent.ForceSafe(); restartAnalogForceSafeDiscardsSavedIntent();
+restartAnalogForceSafeDiscardsSavedIntent.SimulateStartup(); restartAnalogForceSafeDiscardsSavedIntent();
+AssertTrue(restartAnalogForceSafeDiscardsSavedIntent.sts.outputInhibited, 'Missing or invalidated saved intent cannot arm after startup');
+AssertEquals_REAL(17.0, restartAnalogForceSafeDiscardsSavedIntent.sts.rawReal, 0.001, 'Absent intent applies nonzero electrical fallback');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogConfigDiscardsSavedIntent" Id="{c4bdbe07-c1e1-4b3f-8f8e-0deb2bae6711}"><Declaration><![CDATA[METHOD PRIVATE AnalogConfigDiscardsSavedIntent]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogConfigDiscardsSavedIntent');
+restartAnalogConfigDiscardsSavedIntent.cfg.restoreCommandOnRestart := TRUE;
+restartAnalogConfigDiscardsSavedIntent.cfg.useRawValue := TRUE; restartAnalogConfigDiscardsSavedIntent.cfg.safeRaw := 17.0;
+restartAnalogConfigDiscardsSavedIntent.SetValue(rValue := 0.0); restartAnalogConfigDiscardsSavedIntent();
+AssertFalse(restartAnalogConfigDiscardsSavedIntent.sts.outputInhibited, 'Accepted command initially arms output');
+restartAnalogConfigDiscardsSavedIntent.cfg.qualityFaultAfter := T#2S; restartAnalogConfigDiscardsSavedIntent();
+restartAnalogConfigDiscardsSavedIntent.SimulateStartup(); restartAnalogConfigDiscardsSavedIntent();
+AssertTrue(restartAnalogConfigDiscardsSavedIntent.sts.outputInhibited, 'Missing or invalidated saved intent cannot arm after startup');
+AssertEquals_REAL(17.0, restartAnalogConfigDiscardsSavedIntent.sts.rawReal, 0.001, 'Absent intent applies nonzero electrical fallback');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalBackupImageRejected" Id="{0f5a859f-4cad-414a-8165-ac8a738f02c4}"><Declaration><![CDATA[METHOD PRIVATE DigitalBackupImageRejected]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalBackupImageRejected');
+trustDigitalBackupImageRejected.cfg.restoreCommandOnRestart := TRUE;
+trustDigitalBackupImageRejected.cfg.invert := TRUE;
+trustDigitalBackupImageRejected.SeedSavedCommand(value := FALSE);
+trustDigitalBackupImageRejected.simulatedBootDataLoaded := TRUE;
+trustDigitalBackupImageRejected.simulatedOldBootData := TRUE;
+trustDigitalBackupImageRejected();
+AssertTrue(trustDigitalBackupImageRejected.sts.outputInhibited, 'Untrusted persistent image cannot restore output');
+AssertFalse(trustDigitalBackupImageRejected.outSignal, 'Electrical output honors startup trust');
+trustDigitalBackupImageRejected.simulatedBootDataLoaded := TRUE; trustDigitalBackupImageRejected.simulatedOldBootData := FALSE;
+trustDigitalBackupImageRejected.SimulateStartup(); trustDigitalBackupImageRejected();
+AssertTrue(trustDigitalBackupImageRejected.sts.outputInhibited, 'Later trust cannot revive previously rejected saved intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalMissingImageRejected" Id="{b8ac2919-9c93-437d-bb95-77ae53288589}"><Declaration><![CDATA[METHOD PRIVATE DigitalMissingImageRejected]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalMissingImageRejected');
+trustDigitalMissingImageRejected.cfg.restoreCommandOnRestart := TRUE;
+trustDigitalMissingImageRejected.cfg.invert := TRUE;
+trustDigitalMissingImageRejected.SeedSavedCommand(value := FALSE);
+trustDigitalMissingImageRejected.simulatedBootDataLoaded := FALSE;
+trustDigitalMissingImageRejected.simulatedOldBootData := FALSE;
+trustDigitalMissingImageRejected();
+AssertTrue(trustDigitalMissingImageRejected.sts.outputInhibited, 'Untrusted persistent image cannot restore output');
+AssertFalse(trustDigitalMissingImageRejected.outSignal, 'Electrical output honors startup trust');
+trustDigitalMissingImageRejected.simulatedBootDataLoaded := TRUE; trustDigitalMissingImageRejected.simulatedOldBootData := FALSE;
+trustDigitalMissingImageRejected.SimulateStartup(); trustDigitalMissingImageRejected();
+AssertTrue(trustDigitalMissingImageRejected.sts.outputInhibited, 'Later trust cannot revive previously rejected saved intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DigitalFreshCommandWithUntrustedImage" Id="{e9db745b-6ab2-4540-8253-065aaf13c744}"><Declaration><![CDATA[METHOD PRIVATE DigitalFreshCommandWithUntrustedImage]]></Declaration><Implementation><ST><![CDATA[TEST('DigitalFreshCommandWithUntrustedImage');
+trustDigitalFreshCommandWithUntrustedImage.cfg.restoreCommandOnRestart := TRUE;
+trustDigitalFreshCommandWithUntrustedImage.cfg.invert := TRUE;
+trustDigitalFreshCommandWithUntrustedImage.SeedSavedCommand(value := FALSE);
+trustDigitalFreshCommandWithUntrustedImage.simulatedBootDataLoaded := TRUE;
+trustDigitalFreshCommandWithUntrustedImage.simulatedOldBootData := TRUE;
+trustDigitalFreshCommandWithUntrustedImage.SetOff();
+trustDigitalFreshCommandWithUntrustedImage();
+AssertFalse(trustDigitalFreshCommandWithUntrustedImage.sts.outputInhibited, 'Fresh command is independent of image trust');
+AssertTrue(trustDigitalFreshCommandWithUntrustedImage.outSignal, 'Electrical output honors startup trust');
+trustDigitalFreshCommandWithUntrustedImage.simulatedBootDataLoaded := TRUE; trustDigitalFreshCommandWithUntrustedImage.simulatedOldBootData := FALSE;
+trustDigitalFreshCommandWithUntrustedImage.SimulateStartup(); trustDigitalFreshCommandWithUntrustedImage();
+AssertFalse(trustDigitalFreshCommandWithUntrustedImage.sts.outputInhibited, 'Fresh command remains valid for later trusted restoration');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogBackupImageRejected" Id="{d288710f-ab38-4932-80ff-56a12a28a947}"><Declaration><![CDATA[METHOD PRIVATE AnalogBackupImageRejected]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogBackupImageRejected');
+trustAnalogBackupImageRejected.cfg.restoreCommandOnRestart := TRUE;
+trustAnalogBackupImageRejected.cfg.useRawValue := TRUE; trustAnalogBackupImageRejected.cfg.safeRaw := 17.0;
+trustAnalogBackupImageRejected.SeedSavedCommand(value := 42.0);
+trustAnalogBackupImageRejected.simulatedBootDataLoaded := TRUE;
+trustAnalogBackupImageRejected.simulatedOldBootData := TRUE;
+trustAnalogBackupImageRejected();
+AssertTrue(trustAnalogBackupImageRejected.sts.outputInhibited, 'Untrusted persistent image cannot restore output');
+AssertEquals_REAL(17.0, trustAnalogBackupImageRejected.sts.rawReal, 0.001, 'Analog output honors startup trust');
+trustAnalogBackupImageRejected.simulatedBootDataLoaded := TRUE; trustAnalogBackupImageRejected.simulatedOldBootData := FALSE;
+trustAnalogBackupImageRejected.SimulateStartup(); trustAnalogBackupImageRejected();
+AssertTrue(trustAnalogBackupImageRejected.sts.outputInhibited, 'Later trust cannot revive previously rejected saved intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogMissingImageRejected" Id="{517fdb3e-a73c-414e-a670-3ff794335dd1}"><Declaration><![CDATA[METHOD PRIVATE AnalogMissingImageRejected]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogMissingImageRejected');
+trustAnalogMissingImageRejected.cfg.restoreCommandOnRestart := TRUE;
+trustAnalogMissingImageRejected.cfg.useRawValue := TRUE; trustAnalogMissingImageRejected.cfg.safeRaw := 17.0;
+trustAnalogMissingImageRejected.SeedSavedCommand(value := 42.0);
+trustAnalogMissingImageRejected.simulatedBootDataLoaded := FALSE;
+trustAnalogMissingImageRejected.simulatedOldBootData := FALSE;
+trustAnalogMissingImageRejected();
+AssertTrue(trustAnalogMissingImageRejected.sts.outputInhibited, 'Untrusted persistent image cannot restore output');
+AssertEquals_REAL(17.0, trustAnalogMissingImageRejected.sts.rawReal, 0.001, 'Analog output honors startup trust');
+trustAnalogMissingImageRejected.simulatedBootDataLoaded := TRUE; trustAnalogMissingImageRejected.simulatedOldBootData := FALSE;
+trustAnalogMissingImageRejected.SimulateStartup(); trustAnalogMissingImageRejected();
+AssertTrue(trustAnalogMissingImageRejected.sts.outputInhibited, 'Later trust cannot revive previously rejected saved intent');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AnalogFreshCommandWithUntrustedImage" Id="{c9e300d9-0069-4a61-b154-c56049091568}"><Declaration><![CDATA[METHOD PRIVATE AnalogFreshCommandWithUntrustedImage]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogFreshCommandWithUntrustedImage');
+trustAnalogFreshCommandWithUntrustedImage.cfg.restoreCommandOnRestart := TRUE;
+trustAnalogFreshCommandWithUntrustedImage.cfg.useRawValue := TRUE; trustAnalogFreshCommandWithUntrustedImage.cfg.safeRaw := 17.0;
+trustAnalogFreshCommandWithUntrustedImage.SeedSavedCommand(value := 42.0);
+trustAnalogFreshCommandWithUntrustedImage.simulatedBootDataLoaded := TRUE;
+trustAnalogFreshCommandWithUntrustedImage.simulatedOldBootData := TRUE;
+trustAnalogFreshCommandWithUntrustedImage.SetValue(rValue := 42.0);
+trustAnalogFreshCommandWithUntrustedImage();
+AssertFalse(trustAnalogFreshCommandWithUntrustedImage.sts.outputInhibited, 'Fresh command is independent of image trust');
+AssertEquals_REAL(42.0, trustAnalogFreshCommandWithUntrustedImage.sts.rawReal, 0.001, 'Analog output honors startup trust');
+trustAnalogFreshCommandWithUntrustedImage.simulatedBootDataLoaded := TRUE; trustAnalogFreshCommandWithUntrustedImage.simulatedOldBootData := FALSE;
+trustAnalogFreshCommandWithUntrustedImage.SimulateStartup(); trustAnalogFreshCommandWithUntrustedImage();
+AssertFalse(trustAnalogFreshCommandWithUntrustedImage.sts.outputInhibited, 'Fresh command remains valid for later trusted restoration');
+TEST_FINISHED();]]></ST></Implementation></Method>
+</POU></TcPlcObject>

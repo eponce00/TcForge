@@ -8,6 +8,9 @@
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_Alarm_Sts :
 STRUCT
+    // Valid fresh evaluation; active may remain held while validity is false.
+    valid : BOOL;
+    evaluationState : E_AlarmEvaluation := E_AlarmEvaluation.Disabled;
     {attribute 'OPC.UA.DA.Description' := 'Echo of cfg.bEnable'}
     enabled    : BOOL;
 

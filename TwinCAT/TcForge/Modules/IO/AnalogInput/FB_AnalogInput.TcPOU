@@ -7,18 +7,20 @@
 //   UNION terminal -> type select -> quality gate -> clamp to scaling range
 //   -> linear EU scaling -> optional first-order LPF -> sts
 //
-// The UNION input (io.inRaw) means one FB instance handles any raw form the
-// hardware produces — 0-10 V (INT), 4-20 mA (INT), 32-bit counter (UDINT),
+// The UNION input (inRaw) means one FB instance handles any raw form the
+// hardware produces â€” 0-10 V (INT), 4-20 mA (INT), 32-bit counter (UDINT),
 // scaled REAL, bit-packed WORD, etc. Pick the interpretation with
 // cfg.inputType.
 //
 // Scope: conditioning only. Process-alarm limits (HH / HI / LO / LL),
-// latching, severity, and ack all live on FB_AlarmLimit — compose it with
+// latching, severity, and ack all live on FB_AlarmLimit â€” compose it with
 // sts.value if you need that behaviour. Faults here are restricted to
 // ground truths about the signal itself (quality, clamp, bad config).
 {attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_AnalogInput EXTENDS FB_DeviceBase
 VAR_INPUT
+    {attribute 'OPC.UA.DA' := '0'}
+    inRaw : U_IoRaw_In;
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
     cfg        : ST_AnalogInput_Cfg;
@@ -33,11 +35,11 @@ VAR_OUTPUT
 END_VAR
 
 VAR
-    // Hardware-linked struct (UNION; dw member AT %I*). Wired at instance
-    // declaration with
-    //   {attribute 'TcLinkTo' := '.io.inRaw.dw := TIID^...'}.
-    {attribute 'OPC.UA.DA' := '0'}
-    io             : ST_AnalogInput_IO;
+    _inputSnapshot : U_IoRaw_In;
+    _lastConditioningCfg : ST_AnalogInput_Cfg;
+    _conditioningCfgKnown : BOOL;
+    _hasValidSample : BOOL;
+    _reseedPending : BOOL;
 
     // Commissioning state.
     {attribute 'OPC.UA.DA' := '0'}
@@ -56,6 +58,8 @@ VAR
     // Scratch values (reset every scan).
     {attribute 'OPC.UA.DA' := '0'}
     _rawReal       : REAL;
+    _scaledWide    : LREAL;
+    _signalBad     : BOOL;
     {attribute 'OPC.UA.DA' := '0'}
     _clampedRaw    : REAL;
     {attribute 'OPC.UA.DA' := '0'}
@@ -64,36 +68,74 @@ VAR
     _finalReal     : REAL;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[// 1. First scan: config validation + task dt cache for the filter.
+      <ST><![CDATA[_ProcessOperatorCommands();
+// 1. First scan: config validation + task dt cache for the filter.
 IF _firstScan THEN
     _firstScan := FALSE;
     _taskDtSec := TIME_TO_REAL(F_GetTaskCycleTime()) / 1000.0;
-    _configBad := cfg.rawMin >= cfg.rawMax OR cfg.euMin > cfg.euMax;
+
+END_IF;
+
+// Classify representations before comparisons; NaN comparisons can stop the PLC.
+_configBad := NOT F_IsFiniteReal(value := cfg.euMin) OR NOT F_IsFiniteReal(value := cfg.euMax) OR
+              NOT F_IsFiniteReal(value := cfg.rawMin) OR NOT F_IsFiniteReal(value := cfg.rawMax);
+IF NOT _configBad THEN
+    _configBad := NOT cfg.useRawValue AND (cfg.rawMin >= cfg.rawMax OR cfg.euMin >= cfg.euMax);
+END_IF;
+_configBad := _configBad OR NOT (
+    cfg.inputType = __SYSTEM.TYPE_CLASS.TYPE_INT OR cfg.inputType = __SYSTEM.TYPE_CLASS.TYPE_UINT OR
+    cfg.inputType = __SYSTEM.TYPE_CLASS.TYPE_WORD OR cfg.inputType = __SYSTEM.TYPE_CLASS.TYPE_DINT OR
+    cfg.inputType = __SYSTEM.TYPE_CLASS.TYPE_UDINT OR cfg.inputType = __SYSTEM.TYPE_CLASS.TYPE_DWORD OR
+    cfg.inputType = __SYSTEM.TYPE_CLASS.TYPE_REAL);
+
+// Only compare validated configurations; previous snapshots contain finite values.
+IF NOT _configBad THEN
+    IF _conditioningCfgKnown AND _hasValidSample THEN
+        IF cfg.inputType <> _lastConditioningCfg.inputType OR
+           cfg.useRawValue <> _lastConditioningCfg.useRawValue OR
+           cfg.rawMin <> _lastConditioningCfg.rawMin OR cfg.rawMax <> _lastConditioningCfg.rawMax OR
+           cfg.euMin <> _lastConditioningCfg.euMin OR cfg.euMax <> _lastConditioningCfg.euMax OR
+           ((cfg.filterTau = T#0MS) <> (_lastConditioningCfg.filterTau = T#0MS)) THEN
+            _reseedPending := TRUE;
+        END_IF;
+    END_IF;
+    _lastConditioningCfg := cfg;
+    _conditioningCfgKnown := TRUE;
 END_IF;
 
 sts.unit    := cfg.unit;
 sts.quality := inpQuality;
 
-// 2. Read correct UNION member.
+// 2. Snapshot the selected source.
+_inputSnapshot := inRaw;
 CASE cfg.inputType OF
-    __SYSTEM.TYPE_CLASS.TYPE_INT:   _rawReal := TO_REAL(io.inRaw.nInt);
-    __SYSTEM.TYPE_CLASS.TYPE_UINT:  _rawReal := TO_REAL(io.inRaw.ui);
-    __SYSTEM.TYPE_CLASS.TYPE_WORD:  _rawReal := TO_REAL(io.inRaw.w);
-    __SYSTEM.TYPE_CLASS.TYPE_DINT:  _rawReal := TO_REAL(io.inRaw.di);
-    __SYSTEM.TYPE_CLASS.TYPE_UDINT: _rawReal := TO_REAL(io.inRaw.udi);
-    __SYSTEM.TYPE_CLASS.TYPE_DWORD: _rawReal := TO_REAL(io.inRaw.dw);
+    __SYSTEM.TYPE_CLASS.TYPE_INT:   _rawReal := TO_REAL(_inputSnapshot.nInt);
+    __SYSTEM.TYPE_CLASS.TYPE_UINT:  _rawReal := TO_REAL(_inputSnapshot.ui);
+    __SYSTEM.TYPE_CLASS.TYPE_WORD:  _rawReal := TO_REAL(_inputSnapshot.w);
+    __SYSTEM.TYPE_CLASS.TYPE_DINT:  _rawReal := TO_REAL(_inputSnapshot.di);
+    __SYSTEM.TYPE_CLASS.TYPE_UDINT: _rawReal := TO_REAL(_inputSnapshot.udi);
+    __SYSTEM.TYPE_CLASS.TYPE_DWORD: _rawReal := TO_REAL(_inputSnapshot.dw);
+    __SYSTEM.TYPE_CLASS.TYPE_REAL:
+    _rawReal := _inputSnapshot.fReal;
 ELSE
-    _rawReal := io.inRaw.fReal;
+    _rawReal := sts.rawReal;
 END_CASE;
 
 // 3. Quality-gated hold. Ignore the freshly read value while BAD.
-IF inpQuality = E_IO_Quality.BAD THEN
+_signalBad := NOT F_IsFiniteReal(value := _rawReal);
+IF _signalBad OR _configBad THEN sts.quality := E_IO_Quality.BAD; END_IF;
+IF _signalBad OR _configBad OR NOT (inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED) THEN
     _rawReal := sts.rawReal;
 END_IF;
 
 sts.rawReal := _rawReal;
 
-// 4. Raw-value bypass — no clamp / scale / filter.
+// Unusable samples cannot advance conditioning state or reinterpret held raw data.
+// Preserve the last published value and filter history until a valid sample arrives.
+_finalReal := sts.value;
+IF NOT _configBad AND NOT _signalBad AND
+   (inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED) THEN
+// 4. Raw-value bypass â€” no clamp / scale / filter.
 IF cfg.useRawValue THEN
     _finalReal         := _rawReal;
     sts.scaled      := _rawReal;
@@ -120,19 +162,24 @@ ELSE
         sts.quality := E_IO_Quality.CLAMPED;
     END_IF;
 
-    // 4b. Linear scaling — safe because first-scan validated the range.
-    IF cfg.rawMax - cfg.rawMin <> 0 THEN
-        _scaledReal := cfg.euMin
-                     + (_clampedRaw - cfg.rawMin)
-                       * (cfg.euMax - cfg.euMin)
-                       / (cfg.rawMax - cfg.rawMin);
+    // Wide intermediate math avoids overflow before range checks can act.
+    IF NOT _configBad THEN
+        _scaledWide := REAL_TO_LREAL(cfg.euMin)
+            + (REAL_TO_LREAL(_clampedRaw) - REAL_TO_LREAL(cfg.rawMin))
+            * (REAL_TO_LREAL(cfg.euMax) - REAL_TO_LREAL(cfg.euMin))
+            / (REAL_TO_LREAL(cfg.rawMax) - REAL_TO_LREAL(cfg.rawMin));
+        _scaledReal := LREAL_TO_REAL(LIMIT(LREAL#-3.402823E38, _scaledWide, LREAL#3.402823E38));
     ELSE
-        _scaledReal := cfg.euMin;
+        _scaledReal := sts.value;
+        sts.quality := E_IO_Quality.BAD;
     END_IF;
     sts.scaled := _scaledReal;
 
     // 4c. Optional first-order LPF. Pass-through when tau is 0.
     IF cfg.filterTau <> T#0MS THEN
+        IF _reseedPending THEN
+            _filter.Seed(value := REAL_TO_LREAL(_scaledReal));
+        END_IF;
         _filter(
             fInput := _scaledReal,
             fDt    := _taskDtSec,
@@ -143,12 +190,19 @@ ELSE
         _finalReal := _scaledReal;
     END_IF;
 END_IF;
+_hasValidSample := TRUE;
+_reseedPending := FALSE;
+ELSE
+    sts.clampedLow := FALSE;
+    sts.clampedHigh := FALSE;
+    sts.clampActive := FALSE;
+END_IF;
 
 sts.value := _finalReal;
 
 // 5. Quality watchdog.
 _tonBadQuality(
-    IN := inpQuality = E_IO_Quality.BAD AND cfg.qualityFaultAfter > T#0MS,
+    IN := (_signalBad OR NOT (inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED)) AND cfg.qualityFaultAfter > T#0MS,
     PT := cfg.qualityFaultAfter
 );
 
@@ -229,6 +283,18 @@ ELSE
 END_CASE;]]></ST>
       </Implementation>
     </Method>
+    <Method Name="ReassignInput" Id="{6556c42d-9c68-4e18-b0bd-a1246f50908a}"><Declaration><![CDATA[// Owning-task application API: invalidate history when binding a different source.
+// Call before supplying its first fresh sample; this is not a remote command.
+METHOD PUBLIC ReassignInput]]></Declaration><Implementation><ST><![CDATA[_hasValidSample := FALSE;
+_reseedPending := TRUE;
+sts.value := 0.0;
+sts.scaled := 0.0;
+sts.rawReal := 0.0;
+sts.quality := E_IO_Quality.UNKNOWN;
+sts.clampedLow := FALSE;
+sts.clampedHigh := FALSE;
+sts.clampActive := FALSE;
+_tonBadQuality(IN := FALSE);]]></ST></Implementation></Method>
     <LineIds Name="FB_AnalogInput">
       <LineId Id="1" Count="0" />
     </LineIds>

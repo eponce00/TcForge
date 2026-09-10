@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="F_IsFiniteLReal" Id="{e99e098c-d348-4bae-883d-35f396b7f476}"><Declaration><![CDATA[// IEEE-754 classification by integer exponent bits; no floating-point operation.
+// Safe with runtime floating-point exceptions enabled, including signaling NaNs.
+FUNCTION F_IsFiniteLReal : BOOL
+VAR_INPUT value : LREAL; END_VAR
+VAR bits : LWORD; END_VAR]]></Declaration><Implementation><ST><![CDATA[Tc2_System.MEMCPY(destAddr := ADR(bits), srcAddr := ADR(value), n := SIZEOF(bits));
+F_IsFiniteLReal := (bits AND LWORD#16#7FF0000000000000) <> LWORD#16#7FF0000000000000;]]></ST></Implementation></POU></TcPlcObject>

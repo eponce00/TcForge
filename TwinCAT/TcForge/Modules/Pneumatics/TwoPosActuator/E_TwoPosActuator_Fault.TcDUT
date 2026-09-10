@@ -22,6 +22,7 @@ TYPE E_TwoPosActuator_Fault :
     UndefinedState      := 20,    // lost feedback after being Advanced/Retracted
     ConflictingCommands := 21,    // both valves commanded simultaneously
 
+    BadConfig := 40,
     PermissivesNotOK    := 50     // a required permissive went FALSE during motion
 );
 END_TYPE]]></Declaration>

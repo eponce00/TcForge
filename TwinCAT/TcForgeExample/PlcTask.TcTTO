@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <Task Name="PlcTask" Id="{c81cc412-d02c-4565-8766-8f5e4dafe058}">
     <!--CycleTime in micro seconds.-->

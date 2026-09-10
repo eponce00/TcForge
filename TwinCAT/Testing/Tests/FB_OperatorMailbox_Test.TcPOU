@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_OperatorMailbox_Test" Id="{3cd9791b-5cac-4779-b000-0386877546ab}"><Declaration><![CDATA[FUNCTION_BLOCK FB_OperatorMailbox_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+ extra0 : TcForge.FB_AnalogOutput;
+ extra1 : TcForge.FB_TwoPosActuator;
+ extra2 : TcForge.FB_StateMachine;
+ extra3 : TcForge.FB_StateMachine;
+ extra4 : TcForge.FB_AlarmSimple;
+ extra5 : TcForge.FB_AlarmLimit;
+ done : BOOL;
+ rsp : TcForge.E_RpcMethodResponse;
+ ready : BOOL;
+ cmd : TcForge.E_OperatorCommand;
+ i : INT;
+ box0 : TcForge.FB_OperatorMailbox;
+ device0 : TcForge.FB_DigitalOutput;
+ box1 : TcForge.FB_OperatorMailbox;
+ device1 : TcForge.FB_DigitalOutput;
+ box2 : TcForge.FB_OperatorMailbox;
+ device2 : TcForge.FB_DigitalOutput;
+ box3 : TcForge.FB_OperatorMailbox;
+ device3 : TcForge.FB_DigitalOutput;
+ box4 : TcForge.FB_OperatorMailbox;
+ device4 : TcForge.FB_DigitalOutput;
+ box5 : TcForge.FB_OperatorMailbox;
+ device5 : TcForge.FB_DigitalOutput;
+ box6 : TcForge.FB_OperatorMailbox;
+ device6 : TcForge.FB_DigitalOutput;
+ box7 : TcForge.FB_OperatorMailbox;
+ device7 : TcForge.FB_DigitalOutput;
+ box8 : TcForge.FB_OperatorMailbox;
+ device8 : TcForge.FB_DigitalOutput;
+ box9 : TcForge.FB_OperatorMailbox;
+ device9 : TcForge.FB_DigitalOutput;
+ box10 : TcForge.FB_OperatorMailbox;
+ device10 : TcForge.FB_DigitalOutput;
+ box11 : TcForge.FB_OperatorMailbox;
+ device11 : TcForge.FB_DigitalOutput;
+ box12 : TcForge.FB_OperatorMailbox;
+ device12 : TcForge.FB_DigitalOutput;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[IF done THEN RETURN; END_IF;
+RejectBeforeOwner();
+RejectZeroId();
+RejectDuplicate();
+BoundedAdmission();
+AbortCancelsStart();
+StopCannotReplaceAbort();
+DispatchExcludesRpc();
+ProgramBarrierCancelsNormal();
+ProgramBarrierPreservesUrgent();
+BoundedResultRetention();
+OwnerDispatchChangesOutput();
+OwnerRechecksSourceLock();
+ProgramSafeCancelsQueuedOn();
+AnalogOwnerDispatch();
+ActuatorOwnerDispatch();
+SequenceOwnerDispatch();
+InheritedResetUsesConcreteOverride();
+AlarmOwnerDispatch();
+CompositeAlarmOwnerDispatch();
+done := TRUE;]]></ST></Implementation><Method Name="RejectBeforeOwner" Id="{237f0002-9d52-4b6d-bc9f-e90590371014}"><Declaration><![CDATA[METHOD RejectBeforeOwner]]></Declaration><Implementation><ST><![CDATA[TEST('RejectBeforeOwner');
+rsp := box0.Submit(1, TcForge.E_OperatorCommand.SetOn, 0);
+Check(TcForge.E_RpcMethodResponse.REJECTED_NOT_READY);
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RejectZeroId" Id="{75b14f4e-d0a5-473e-af61-e40c76c0ecf9}"><Declaration><![CDATA[METHOD RejectZeroId]]></Declaration><Implementation><ST><![CDATA[TEST('RejectZeroId');
+ready := box1.BeginConsume(); rsp := box1.Submit(0, TcForge.E_OperatorCommand.SetOn, 0);
+Check(TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER);
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RejectDuplicate" Id="{9eaf26f6-2a70-4fbf-95a6-c5541c4a952d}"><Declaration><![CDATA[METHOD RejectDuplicate]]></Declaration><Implementation><ST><![CDATA[TEST('RejectDuplicate');
+ready := box2.BeginConsume(); rsp := box2.Submit(1, TcForge.E_OperatorCommand.SetOn, 0); rsp := box2.Submit(1, TcForge.E_OperatorCommand.Abort, 0);
+Check(TcForge.E_RpcMethodResponse.REJECTED_DUPLICATE_REQUEST);
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="BoundedAdmission" Id="{2414b5d9-f5b4-4ca2-b0c6-9187938fef2b}"><Declaration><![CDATA[METHOD BoundedAdmission]]></Declaration><Implementation><ST><![CDATA[TEST('BoundedAdmission');
+ready := box3.BeginConsume(); rsp := box3.Submit(1, TcForge.E_OperatorCommand.SetOn, 0); Check(TcForge.E_RpcMethodResponse.QUEUED); rsp := box3.Submit(2, TcForge.E_OperatorCommand.SetOn, 0); Check(TcForge.E_RpcMethodResponse.REJECTED_BUSY);
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AbortCancelsStart" Id="{70d9cf0a-c7bf-41cf-a6b4-30fdc2a79ae4}"><Declaration><![CDATA[METHOD AbortCancelsStart]]></Declaration><Implementation><ST><![CDATA[TEST('AbortCancelsStart');
+ready := box4.BeginConsume(); rsp := box4.Submit(1, TcForge.E_OperatorCommand.Start, 0); rsp := box4.Submit(2, TcForge.E_OperatorCommand.Abort, 0); Check(TcForge.E_RpcMethodResponse.QUEUED); rsp := box4.GetResult(1); Check(TcForge.E_RpcMethodResponse.CANCELLED); ready := box4.BeginConsume(command => cmd); AssertTrue(ready, 'Abort available'); AssertEquals_DINT(TcForge.E_OperatorCommand.Abort, cmd, 'Urgent command selected'); box4.EndConsume(TcForge.E_RpcMethodResponse.ACCEPTED);
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="StopCannotReplaceAbort" Id="{151515c2-8f5d-48c4-a223-30b0e467e7c8}"><Declaration><![CDATA[METHOD StopCannotReplaceAbort]]></Declaration><Implementation><ST><![CDATA[TEST('StopCannotReplaceAbort');
+ready := box5.BeginConsume(); rsp := box5.Submit(1, TcForge.E_OperatorCommand.Abort, 0); rsp := box5.Submit(2, TcForge.E_OperatorCommand.Stop, 0); Check(TcForge.E_RpcMethodResponse.REJECTED_BUSY);
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DispatchExcludesRpc" Id="{3c63e117-479a-472c-ae22-d8195da300e9}"><Declaration><![CDATA[METHOD DispatchExcludesRpc]]></Declaration><Implementation><ST><![CDATA[TEST('DispatchExcludesRpc');
+ready := box6.BeginConsume(); rsp := box6.Submit(1, TcForge.E_OperatorCommand.SetOn, 0); ready := box6.BeginConsume(); rsp := box6.Submit(2, TcForge.E_OperatorCommand.Abort, 0); Check(TcForge.E_RpcMethodResponse.REJECTED_BUSY); rsp := box6.GetResult(1); Check(TcForge.E_RpcMethodResponse.REJECTED_BUSY); box6.EndConsume(TcForge.E_RpcMethodResponse.REJECTED_FAULTED); rsp := box6.GetResult(1); Check(TcForge.E_RpcMethodResponse.REJECTED_FAULTED); AssertEquals_DINT(box6.ownerTask, box6.lastExecutionTask, 'Only owning task executed');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ProgramBarrierCancelsNormal" Id="{9df608a7-cbf1-46e5-aa4a-12bfab0392a6}"><Declaration><![CDATA[METHOD ProgramBarrierCancelsNormal]]></Declaration><Implementation><ST><![CDATA[TEST('ProgramBarrierCancelsNormal');
+ready := box7.BeginConsume(); rsp := box7.Submit(1, TcForge.E_OperatorCommand.Start, 0); box7.CancelNormal(); ready := box7.BeginConsume(); AssertFalse(ready, 'Cancelled normal command cannot execute'); rsp := box7.GetResult(1); Check(TcForge.E_RpcMethodResponse.CANCELLED);
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ProgramBarrierPreservesUrgent" Id="{6e805ae6-d4bf-4aa6-83ff-562f5cfd22af}"><Declaration><![CDATA[METHOD ProgramBarrierPreservesUrgent]]></Declaration><Implementation><ST><![CDATA[TEST('ProgramBarrierPreservesUrgent');
+ready := box8.BeginConsume(); box8.CancelNormal(); rsp := box8.Submit(1, TcForge.E_OperatorCommand.Start, 0); Check(TcForge.E_RpcMethodResponse.REJECTED_BUSY); rsp := box8.Submit(2, TcForge.E_OperatorCommand.Abort, 0); Check(TcForge.E_RpcMethodResponse.QUEUED); ready := box8.BeginConsume(); AssertTrue(ready, 'Abort survives barrier'); box8.EndConsume(TcForge.E_RpcMethodResponse.ACCEPTED);
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="BoundedResultRetention" Id="{d6fae18b-78e5-4489-9fbd-0ce3266c1502}"><Declaration><![CDATA[METHOD BoundedResultRetention]]></Declaration><Implementation><ST><![CDATA[TEST('BoundedResultRetention');
+ready := box9.BeginConsume(); FOR i := 1 TO 9 DO rsp := box9.Submit(INT_TO_ULINT(i), TcForge.E_OperatorCommand.SetOn, 0); ready := box9.BeginConsume(); box9.EndConsume(TcForge.E_RpcMethodResponse.ACCEPTED); END_FOR; rsp := box9.GetResult(1); Check(TcForge.E_RpcMethodResponse.REJECTED_UNKNOWN_REQUEST); rsp := box9.GetResult(2); Check(TcForge.E_RpcMethodResponse.ACCEPTED); rsp := box9.GetResult(9); Check(TcForge.E_RpcMethodResponse.ACCEPTED);
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="OwnerDispatchChangesOutput" Id="{a2f9e762-49ce-4208-b3d9-888d523f0113}"><Declaration><![CDATA[METHOD OwnerDispatchChangesOutput]]></Declaration><Implementation><ST><![CDATA[TEST('OwnerDispatchChangesOutput');
+device10(); rsp := device10.OperatorSetOn(1); Check(TcForge.E_RpcMethodResponse.QUEUED); AssertFalse(device10.outSignal, 'RPC admission cannot energize'); device10(); AssertTrue(device10.outSignal, 'Owner executes accepted output'); rsp := device10.OperatorCommandResult(1); Check(TcForge.E_RpcMethodResponse.ACCEPTED);
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="OwnerRechecksSourceLock" Id="{e1209164-49ca-465f-be20-d248d49a72db}"><Declaration><![CDATA[METHOD OwnerRechecksSourceLock]]></Declaration><Implementation><ST><![CDATA[TEST('OwnerRechecksSourceLock');
+device11(); rsp := device11.OperatorSetOn(1); device11.LockSource(TRUE); device11(); rsp := device11.OperatorCommandResult(1); Check(TcForge.E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED); AssertFalse(device11.outSignal, 'Lock applied after submission blocks execution');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ProgramSafeCancelsQueuedOn" Id="{0f5973d4-df99-4cbb-ba15-4a0e8de4fcec}"><Declaration><![CDATA[METHOD ProgramSafeCancelsQueuedOn]]></Declaration><Implementation><ST><![CDATA[TEST('ProgramSafeCancelsQueuedOn');
+device12(); rsp := device12.OperatorSetOn(1); device12.ForceSafe(); device12(); rsp := device12.OperatorCommandResult(1); Check(TcForge.E_RpcMethodResponse.CANCELLED); AssertFalse(device12.outSignal, 'Queued command cannot undo program shutdown');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="Check" Id="{e323c20f-12c6-4c42-b0e8-d73c6ebaf7a0}"><Declaration><![CDATA[METHOD PRIVATE Check
+VAR_INPUT expected : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[AssertEquals_DINT(expected, rsp, 'Mailbox response');]]></ST></Implementation></Method><Method Name="AnalogOwnerDispatch" Id="{1c2bcda9-2717-4704-965a-2125e7839663}"><Declaration><![CDATA[METHOD AnalogOwnerDispatch]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogOwnerDispatch');
+extra0(); rsp := extra0.OperatorSetValue(rValue := 25.0, requestId := 1); Check(TcForge.E_RpcMethodResponse.QUEUED); extra0(); rsp := extra0.OperatorCommandResult(1); Check(TcForge.E_RpcMethodResponse.ACCEPTED); AssertEquals_REAL(25.0, extra0.sts.commanded, 0.001, 'Analog value crosses mailbox');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="ActuatorOwnerDispatch" Id="{2dda01f3-d4bd-455f-adc8-9bb986cda195}"><Declaration><![CDATA[METHOD ActuatorOwnerDispatch]]></Declaration><Implementation><ST><![CDATA[TEST('ActuatorOwnerDispatch');
+extra1(inRetracted := TRUE); rsp := extra1.OperatorAdvance(1); extra1(); rsp := extra1.OperatorCommandResult(1); Check(TcForge.E_RpcMethodResponse.ACCEPTED); AssertTrue(extra1.outAdvance, 'Owner starts actuator'); rsp := extra1.OperatorAbort(2); extra1(); AssertFalse(extra1.outAdvance OR extra1.outRetract, 'Remote abort drops both coils');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="SequenceOwnerDispatch" Id="{8aa3eaeb-9014-4256-99cd-67993eb0fd2d}"><Declaration><![CDATA[METHOD SequenceOwnerDispatch]]></Declaration><Implementation><ST><![CDATA[TEST('SequenceOwnerDispatch');
+extra2(); rsp := extra2.OperatorHome(1); extra2(); rsp := extra2.OperatorCommandResult(1); Check(TcForge.E_RpcMethodResponse.ACCEPTED); AssertEquals_DINT(TcForge.E_SM_State.HOMING, extra2.Status.State, 'Owner starts homing');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="InheritedResetUsesConcreteOverride" Id="{63bfaaac-6554-40e3-bd01-3381a2cb706d}"><Declaration><![CDATA[METHOD InheritedResetUsesConcreteOverride]]></Declaration><Implementation><ST><![CDATA[TEST('InheritedResetUsesConcreteOverride');
+extra3(); extra3.Home(); extra3(); rsp := extra3.OperatorReset(1); extra3(); rsp := extra3.OperatorCommandResult(1); Check(TcForge.E_RpcMethodResponse.REJECTED_WRONG_STATE); AssertEquals_DINT(TcForge.E_SM_State.HOMING, extra3.Status.State, 'Base RPC does not bypass concrete Reset');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="AlarmOwnerDispatch" Id="{088cde17-bce5-4b01-ab11-6a7af0c291d1}"><Declaration><![CDATA[METHOD AlarmOwnerDispatch]]></Declaration><Implementation><ST><![CDATA[TEST('AlarmOwnerDispatch');
+extra4.cfg.common.bEnable := TRUE; extra4.cfg.common.bRequireAck := TRUE; extra4(inpActive := TRUE); extra4(inpActive := FALSE); AssertTrue(extra4.sts.latched, 'Alarm latched before RPC'); rsp := extra4.OperatorAck(1); extra4(); rsp := extra4.OperatorCommandResult(1); Check(TcForge.E_RpcMethodResponse.ACCEPTED); AssertFalse(extra4.sts.active, 'Owner acknowledges cleared alarm');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="CompositeAlarmOwnerDispatch" Id="{3225545b-0323-4289-9c9b-88f916d67aca}"><Declaration><![CDATA[METHOD CompositeAlarmOwnerDispatch]]></Declaration><Implementation><ST><![CDATA[TEST('CompositeAlarmOwnerDispatch');
+extra5.cfg.Hi.common.bEnable := TRUE; extra5.cfg.Hi.common.bRequireAck := TRUE; extra5.cfg.Hi.bFailHigh := TRUE; extra5(inpPv := 10.0); extra5(inpPv := 0.0); AssertTrue(extra5.sts.Hi.latched, 'Composite alarm latched before RPC'); rsp := extra5.OperatorAck(1); extra5(); rsp := extra5.OperatorCommandResult(1); Check(TcForge.E_RpcMethodResponse.ACCEPTED); AssertFalse(extra5.sts.Hi.active, 'Owner acknowledges composite alarm');
+TEST_FINISHED();]]></ST></Implementation></Method></POU></TcPlcObject>

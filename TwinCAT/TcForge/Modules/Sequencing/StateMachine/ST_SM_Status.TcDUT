@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.13">
   <DUT Name="ST_SM_Status" Id="{39a199e7-258a-40bd-9b50-d87ecba1041b}">
     <Declaration><![CDATA[(*
@@ -23,8 +23,11 @@ STRUCT
     WaitingState : BOOL;
 
     // Computed fault flags
-    Faulted : BOOL;
+    Faulted : BOOL; // Always the base device fault state.
+    AtRecoveryStep : BOOL; // Odd-numbered recovery step, independent of fault storage.
     SubmoduleFaulted : BOOL;
+    ShutdownFailed : BOOL; // Abort failed; STOPPED does not imply confirmed physical shutdown.
+    FailedStep : DINT; // Last failed step, cleared only by a successful Reset.
 
     // Permission-derived readiness
     ReadyToHome : BOOL;
@@ -32,7 +35,6 @@ STRUCT
     ReadyToProceed : BOOL;
 
     // Auto-run tracking
-    AutoStartRequest : BOOL;
     AutoCycleRequest : BOOL;
 
     // OEE condition codes (0 = clear, non-zero = active reason code)

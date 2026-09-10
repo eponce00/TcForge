@@ -1,20 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_DigitalInput_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000900}" SpecialFunc="None">
-    <Declaration><![CDATA[// Tests for FB_DigitalInput. The production FB keeps its hardware-linked
-// `io` struct in a private VAR section, so tests drive the raw wire
-// through FB_DigitalInput_Probe.SetRawInput() — an injection method that
-// the probe subclass exposes without changing the production API.
-//
-// Each test calls SetRawInput() to simulate a physical transition, then
-// invokes the cyclic body with inpQuality and asserts on fb.sts.
-//
-// Time-dependent paths (debounce) use PT = T#1S so _tonOn.Q / _tofOff.Q
-// stay in their pre-elapsed branch for the duration of the synchronous
-// test, keeping assertions deterministic without real-time waits.
-//
-// The BadQuality fault itself requires real time on the watchdog TON and
-// is covered by FB_DeviceBase_Test at the fault-bookkeeping level.
+    <Declaration><![CDATA[// Tests exercise the public input/output and command contracts.
 FUNCTION_BLOCK FB_DigitalInput_Test EXTENDS TcUnit.FB_TestSuite]]></Declaration>
     <Implementation>
       <ST><![CDATA[InitialStateClean();
@@ -31,7 +18,7 @@ ClampedQualityReadsAsGood();]]></ST>
     <Method Name="InitialStateClean" Id="{b1c2d3e4-f5a6-7890-abcd-000000000901}">
       <Declaration><![CDATA[METHOD InitialStateClean
 VAR
-    fb : FB_DigitalInput_Probe;
+    fb : TcForge.FB_DigitalInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('InitialStateClean');
@@ -60,14 +47,14 @@ TEST_FINISHED();]]></ST>
     <Method Name="RawSignalPassthroughWithNoDebounce" Id="{b1c2d3e4-f5a6-7890-abcd-000000000902}">
       <Declaration><![CDATA[METHOD RawSignalPassthroughWithNoDebounce
 VAR
-    fb : FB_DigitalInput_Probe;
+    fb : TcForge.FB_DigitalInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('RawSignalPassthroughWithNoDebounce');
 
 // Default cfg: no debounce, no invert. Raw hardware bit flushes through
 // to value in one cycle.
-fb.SetRawInput(bValue := TRUE);
+fb.inSignal := TRUE;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
@@ -83,7 +70,7 @@ TEST_FINISHED();]]></ST>
     <Method Name="InvertFlipsDebouncedValueNotRaw" Id="{b1c2d3e4-f5a6-7890-abcd-000000000903}">
       <Declaration><![CDATA[METHOD InvertFlipsDebouncedValueNotRaw
 VAR
-    fb : FB_DigitalInput_Probe;
+    fb : TcForge.FB_DigitalInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('InvertFlipsDebouncedValueNotRaw');
@@ -92,7 +79,7 @@ END_VAR]]></Declaration>
 // reading should stay true-to-the-wire so troubleshooters can see what
 // the hardware is actually doing.
 fb.cfg.invert := TRUE;
-fb.SetRawInput(bValue := TRUE);
+fb.inSignal := TRUE;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
@@ -108,15 +95,15 @@ TEST_FINISHED();]]></ST>
     <Method Name="RisingEdgePulseOneScan" Id="{b1c2d3e4-f5a6-7890-abcd-000000000904}">
       <Declaration><![CDATA[METHOD RisingEdgePulseOneScan
 VAR
-    fb : FB_DigitalInput_Probe;
+    fb : TcForge.FB_DigitalInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('RisingEdgePulseOneScan');
 
-fb.SetRawInput(bValue := FALSE);
+fb.inSignal := FALSE;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
-fb.SetRawInput(bValue := TRUE);
+fb.inSignal := TRUE;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
     Condition := fb.sts.risingEdge,
@@ -133,15 +120,15 @@ TEST_FINISHED();]]></ST>
     <Method Name="FallingEdgePulseOneScan" Id="{b1c2d3e4-f5a6-7890-abcd-000000000905}">
       <Declaration><![CDATA[METHOD FallingEdgePulseOneScan
 VAR
-    fb : FB_DigitalInput_Probe;
+    fb : TcForge.FB_DigitalInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('FallingEdgePulseOneScan');
 
-fb.SetRawInput(bValue := TRUE);
+fb.inSignal := TRUE;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
-fb.SetRawInput(bValue := FALSE);
+fb.inSignal := FALSE;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
     Condition := fb.sts.fallingEdge,
@@ -158,14 +145,14 @@ TEST_FINISHED();]]></ST>
     <Method Name="DebounceOnBlocksRisingEdgeUntilElapsed" Id="{b1c2d3e4-f5a6-7890-abcd-000000000906}">
       <Declaration><![CDATA[METHOD DebounceOnBlocksRisingEdgeUntilElapsed
 VAR
-    fb : FB_DigitalInput_Probe;
+    fb : TcForge.FB_DigitalInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('DebounceOnBlocksRisingEdgeUntilElapsed');
 
 // debounceOn = T#1S — the _tonOn.Q won't fire inside this test frame.
 fb.cfg.debounceOn := T#1S;
-fb.SetRawInput(bValue := TRUE);
+fb.inSignal := TRUE;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
@@ -184,7 +171,7 @@ TEST_FINISHED();]]></ST>
     <Method Name="DebounceOffHoldsSignalHighAfterRawGoesLow" Id="{b1c2d3e4-f5a6-7890-abcd-000000000907}">
       <Declaration><![CDATA[METHOD DebounceOffHoldsSignalHighAfterRawGoesLow
 VAR
-    fb : FB_DigitalInput_Probe;
+    fb : TcForge.FB_DigitalInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('DebounceOffHoldsSignalHighAfterRawGoesLow');
@@ -193,13 +180,13 @@ END_VAR]]></Declaration>
 // debounced signal HIGH immediately, then flip the raw bit LOW and
 // expect the TOF to hold the debounced value HIGH.
 fb.cfg.debounceOff := T#1S;
-fb.SetRawInput(bValue := TRUE);
+fb.inSignal := TRUE;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
     Condition := fb.sts.value,
     Message   := 'Precondition: raw HIGH with zero ON-debounce must latch the debounced value HIGH');
 
-fb.SetRawInput(bValue := FALSE);
+fb.inSignal := FALSE;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertFalse(
@@ -218,13 +205,13 @@ TEST_FINISHED();]]></ST>
     <Method Name="BadQualityHoldsLastRawValue" Id="{b1c2d3e4-f5a6-7890-abcd-000000000908}">
       <Declaration><![CDATA[METHOD BadQualityHoldsLastRawValue
 VAR
-    fb : FB_DigitalInput_Probe;
+    fb : TcForge.FB_DigitalInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('BadQualityHoldsLastRawValue');
 
 // Latch a known-good HIGH reading.
-fb.SetRawInput(bValue := TRUE);
+fb.inSignal := TRUE;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
     Condition := fb.sts.rawValue,
@@ -232,7 +219,7 @@ AssertTrue(
 
 // Simulate wire break: the underlying bit flips FALSE but quality is BAD.
 // The FB must ignore the glitchy reading and hold the last-known-good raw.
-fb.SetRawInput(bValue := FALSE);
+fb.inSignal := FALSE;
 fb(inpQuality := TcForge.E_IO_Quality.BAD);
 
 AssertTrue(
@@ -249,7 +236,7 @@ TEST_FINISHED();]]></ST>
     <Method Name="QualityTagSurfacesInStatus" Id="{b1c2d3e4-f5a6-7890-abcd-000000000909}">
       <Declaration><![CDATA[METHOD QualityTagSurfacesInStatus
 VAR
-    fb : FB_DigitalInput_Probe;
+    fb : TcForge.FB_DigitalInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('QualityTagSurfacesInStatus');
@@ -280,7 +267,7 @@ TEST_FINISHED();]]></ST>
     <Method Name="ClampedQualityReadsAsGood" Id="{b1c2d3e4-f5a6-7890-abcd-00000000090a}">
       <Declaration><![CDATA[METHOD ClampedQualityReadsAsGood
 VAR
-    fb : FB_DigitalInput_Probe;
+    fb : TcForge.FB_DigitalInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('ClampedQualityReadsAsGood');
@@ -289,7 +276,7 @@ END_VAR]]></Declaration>
 // CLAMPED is meant for analog signals that hit a scaling limit — for a
 // digital input it has to behave the same as GOOD so a wrapper that
 // passes CLAMPED through doesn't accidentally freeze the reading.
-fb.SetRawInput(bValue := TRUE);
+fb.inSignal := TRUE;
 fb(inpQuality := TcForge.E_IO_Quality.CLAMPED);
 
 AssertTrue(

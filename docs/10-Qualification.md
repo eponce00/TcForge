@@ -36,7 +36,9 @@ before release. Installation and qualification progress is tracked in
 
 ## Output and recovery contracts
 
-- Output startup is inhibited. `restoreCommandOnRestart` is an explicit opt-in.
+- Output startup is inhibited. `restoreCommandOnRestart` is an explicit opt-in
+  and also requires a valid saved-command marker. ForceSafe/Reset invalidate
+  that marker; default FALSE/zero is not sufficient restoration evidence.
 - BAD/UNKNOWN quality disarms output. Default behavior applies `safeOutput` or
   `safeRaw`; `holdOnBadQuality` may hold only while quality remains invalid and
   no fault/ForceSafe overrides it. Recovery requires a fresh accepted command.
@@ -66,10 +68,12 @@ python scripts/check_repository.py
 python -m unittest discover -s scripts/tests -v
 ```
 
-The source CI job checks XML, compile inputs, test registration, RPC boundaries and
-test-project isolation. It does not prove ST type correctness, virtual dispatch,
-timer behavior or persistent storage. The JUnit validator is tested with failing,
-empty, partial, skipped and duplicate reports.
+The source CI job checks XML, compile inputs, test registration, direct library
+pins, RPC boundaries and test-project isolation. It does not prove ST type
+correctness, virtual dispatch, timer behavior or persistent storage. Release
+validation requires exact source test identities; an unrelated report with the
+same count fails. Build provenance and transitive dependency verification remain
+separate qualification requirements.
 
 ## Repeatable Windows build
 
@@ -79,13 +83,79 @@ With the sibling `twincat-mcp` helper built and TcUnit installed, run:
 powershell.exe -NoProfile -File scripts/build_twincat.ps1
 ```
 
-Use `-McpRoot` if the helper repository is elsewhere. This exports/installs the
-current library from `TwinCAT/TcForge.Library.sln`, then builds the isolated tests
-and example against it. Build results and the library are written to `artifacts/`.
-The script selects `Release|TwinCAT RT (x64)` explicitly. XAE may otherwise choose
-`TwinCAT OS (x64)`. It does not activate or restart a runtime. Export success alone
-is not compilation evidence; check the consumer build results and still check
-all unused library objects before release.
+Use `-McpRoot` if the helper repository is elsewhere. This checks all library
+objects, exports/installs the current library from `TwinCAT/TcForge.Library.sln`,
+then builds the isolated tests, example and standalone simulator against it.
+Errors or warnings stop this workflow. Build results and the library are written
+to `artifacts/`, including `TcForge-library-check-all.json`.
+The script selects `Release|TwinCAT RT (x64)` and requires the exact XAE baseline
+from `toolchain.json`; requested and effective versions are recorded in each
+result. Missing versions and failed selection cannot silently choose another
+compiler. It does not activate or restart a runtime.
+
+To qualify consumption of an exported artifact from a fresh library repository:
+
+```powershell
+powershell.exe -NoProfile -File scripts/verify_clean_library_install.ps1 -Library artifacts/TcForge.library -Output artifacts/fresh-library-check
+```
+
+The output directory must be new. This copies consumer sources without compiler
+caches, installs the supplied artifact into a uniquely named repository, and
+checks actual resolved TcForge paths and hashes before and after each consumer
+build. Exact dependency resolutions, compiler version and zero warnings remain
+required. Cleanup removes only the temporary repository registration and verifies
+the original repository order and existing System TcForge files. The copied
+sources, installed artifact and evidence remain in the output directory. This
+qualifies fresh TcForge consumption on the existing engineering installation;
+it does not qualify a clean Windows installation.
+
+The sibling helper must be rebuilt with the exact-version and owned-process
+launcher changes. It launches XAE in embedded automation mode with the installed
+native DLL paths, attaches only to that process's DTE, and closes only that owned
+process. Repository scripts also initialize their own native DLL path. Neither
+requires changing the machine PATH or Docker settings.
+
+`dependencies.lock.json` records effective references and loaded library versions
+for all four build projects. The build compares fresh XAE resolution and library
+signature captures against this lock, including transitive dependencies. A wildcard
+requires one concrete matching loaded-library signature; an installed file alone
+is insufficient. Normal builds never update the lock. For deliberate dependency
+changes, capture with `scripts/capture_dependency_resolutions.ps1`, produce a
+candidate with `scripts/dependency_lock.py`, review it, and rebuild.
+
+Successful builds retain a bundle under `artifacts/builds/<buildId>/`, including
+the library, compiler results, dependency captures and build manifest.
+`artifacts/build-evidence.json` points to the latest bundle through its recorded
+canonical manifest path. Source, toolchain and helper identities are checked
+before and after engineering operations. Only toolchain `notes` and `qualification`
+are excluded from the compilation digest; qualification is checked separately.
+These local records detect stale or mixed artifacts; they are not signed attestations.
+
+To rebuild and run tests on the dedicated Windows RT target:
+
+```powershell
+powershell.exe -NoProfile -File scripts/run_tcunit.ps1 -Target <ams-net-id> -Platform 'TwinCAT RT (x64)'
+```
+
+This replaces the target configuration and restarts it. Evidence runs require the
+platform in `toolchain.json`; another platform needs a deliberate toolchain change
+and new build evidence. The runner rebuilds the selected platform in
+the same XAE session immediately before activation; cached symbols from another
+platform must not be reused. Build, simulation activation and test scripts share
+an exclusive XAE lock. Run all engineering operations sequentially, including
+manual/MCP operations that do not participate in that lock.
+
+Use `-CycleTimeMs 1` for the 1 ms qualification run (the default is 10 ms).
+The runner sets the PLC task, system task and cached PLC context before XAE
+loads the project, restores the source profile after closing, and verifies the
+actual running period in the JUnit exporter. Each run creates a new directory;
+`-RunDirectory` may choose its location but cannot overwrite existing evidence.
+The runner requires a current build manifest and verifies that the installed
+TcForge library matches its artifact. Override `-BuildEvidence` or
+`-InstalledLibrary` for explicit bundle/repository locations. JUnit and its receipt
+bind the exact tests, actual period, target, source and library to one fresh run.
+The receipt is finalized only after source profiles are restored, while the
+engineering lock is still held. Re-exporting old results cannot create a bound run.
 
 ## TwinCAT qualification after installation
 
@@ -95,8 +165,8 @@ all unused library objects before release.
    in the compiler, including transitive dependencies, and rebuild all projects.
    Record any deliberate toolchain changes before qualifying another baseline.
 2. Build/check all library objects, including unused ones. Export/install the
-   **current checkout's** TcForge 2.0.0.0 library before building Testing and
-   TcForgeExample. Their references are exact, not a wildcard selecting an older
+   **current checkout's** TcForge 2.0.0.0 library before building Testing,
+   TcForgeExample and the standalone simulator. Their references are exact, not a wildcard selecting an older
    installed library. Record commit, artifact SHA-256, dependency versions,
    compiler version and warnings. Do not suppress new compiler warnings globally.
 3. Open `TwinCAT/TcForge.Tests.sln`. It contains only the Testing application,
@@ -104,18 +174,16 @@ all unused library objects before release.
    Explicitly select an isolated Usermode Runtime/test target. The task is checked
    in with autostart disabled; the test runner must enable it for the run. Do not
    run two projects against the same runtime simultaneously.
-4. Build, activate and run Testing (ADS port 853, task `Testing`). With the MCP,
-   supply the solution, target, PLC and task explicitly to `twincat_run_tcunit`.
+4. Build, activate and run Testing (ADS port 853, task `Testing`) with
+   `scripts/run_tcunit.ps1`, supplying the target and platform explicitly.
    Capture every test result; a timeout, skipped test, or missing suite is failure.
    Run again from a fresh PLC initialization to detect persistent test contamination.
-5. After the runner finishes, export individual results using
-   `python scripts/export_tcunit_report.py --target <ams-net-id>`. The exporter
+5. The runner exports individual results automatically. The exporter
    reads the pinned TcUnit 1.3 instance layout over ADS, checks test identities
    against source, rejects unfinished results and detects runtime reinitialization
-   during capture. It writes `artifacts/tcunit.xml` and runs the report gate. Run
-   `python scripts/check_test_report.py artifacts/tcunit.xml --expected-tests N`,
-   using the declaration count printed by the source checker. The MCP runner's
-   aggregate JSON is retained alongside the independently captured JUnit results.
+   during capture. Retain the printed run directory, its `tcunit.xml`, evidence
+   receipt and activation-build JSON. A manual export is useful for diagnostics
+   but cannot replace the runner's fresh provenance token and completed receipt.
 6. Run `powershell.exe -NoProfile -File scripts/verify_operator_rpc.ps1 -Target
    <test-ams-net-id>` against the activated Testing fixture. The verifier only
    addresses MAIN.rpcOutput, MAIN.rpcUninitialized and the context probe. It
@@ -133,22 +201,44 @@ all unused library objects before release.
    physical IO response time or real-time scheduling.
 8. Store signed/reviewed acceptance evidence with the release, mark `qualification`
    verified only when complete, and run `python scripts/check_repository.py
-   --release --test-report artifacts/tcunit.xml`. Source CI passing alone never qualifies a release.
+   --release --build-evidence <bundle>/build-evidence.json --library
+   <bundle>/TcForge.library --test-report <run-1ms>/tcunit.xml --test-report
+   <run-10ms>/tcunit.xml`. Both reports must bind to the same build. Source CI
+   passing alone never qualifies a release.
 
 ## Restart and persistence acceptance matrix
 
 Use an isolated test project with no physical IO. Call each block once per scan.
 For each case, record before/after command, applied output, fault and history.
+Capture the first resumed scan as well as settled status. Distinguish a PLC
+stop/start, a PLC reset, a TwinCAT system restart and an online change in the
+evidence; one operation does not qualify the others.
+
+The reference/simulation composition uses `FB_ExecutionContinuity` with the owning
+system task's `CycleCount` and the PLC application's `OnlineChangeCnt`. Its
+interruption response cancels intent and requires explicit recovery; standalone
+devices have no implicit online-change contract. See the
+[execution-continuity contract](16-Lifecycle.md#execution-continuity-in-the-application)
+for counter sources and limits. In particular, it cannot act while PLC code is
+stopped or detect a stop/start that misses no system-task tick.
 
 | Case | Expected result |
 |---|---|
 | Default output, command ON/nonzero, orderly runtime restart | Inhibited; configured fallback; a new command is necessary |
-| Same with explicit restore enabled and valid persisted image | Saved command resumes only with acceptable quality and no active fault |
+| Same with explicit restore enabled and valid persisted image | Saved command resumes only with saved-command validity, BootDataLoaded TRUE, OldBootData FALSE, acceptable quality and no active fault |
+| Missing or backup image, even with a saved-command marker | Old intent is invalidated; outputs remain inhibited until a fresh accepted command |
 | Restore enabled but startup quality BAD/UNKNOWN | Inhibited; quality recovery alone cannot resume |
+| Restore enabled with no valid saved-command marker, including inverted DO/nonzero AO fallback | Inhibited at configured fallback; default FALSE/zero cannot arm output |
 | ForceSafe/Reset followed by restart | Saved operating intent has been cleared; default fallback remains |
 | Active actuator hold, then Abort/Reset/restart | No automatic coil energization from feedback alone |
 | Record fault, clear it, orderly restart | History survives only when persistent storage is configured and saved correctly; active fault is reevaluated |
+| Restored alarm latch with invalid startup input | Active latch and recognized configured severity remain visible; invalid evidence cannot clear it |
+| Restored acknowledged alarm latch | No second Ack required; valid clear evidence is still required |
 | Cold reset / reset origin / missing or incompatible persistent image | Apply the documented reset-class storage semantics; default operating intent remains inhibited |
+| Reference machine running, PLC stop/start that skips system-task cycles | First resumed scan cancels intent and inhibits outputs; explicit Reset/Home and fresh Start required |
+| Same with a stop shorter than the simulation watchdog | Counter interruption must still invalidate session/epoch; do not rely on watchdog expiry |
+| Implementation-only and declaration-changing online changes, idle and moving | Changed online-change counter cancels reference-machine intent and invalidates simulation epoch; qualify both paths |
+| Home/Start coincident with detected interruption | Command is rejected/consumed, cannot execute later while held; explicit recovery and a fresh command edge required |
 | Queued remote command then runtime restart | Pending intent and results are cleared; unknown result must not trigger automatic replay |
 | OPC UA server restart/reconnect with PLC still running | PLC mailbox state remains authoritative; reconcile results/status without replaying uncertain intent |
 | Real power interruption on the qualified IPC | Verify the actual UPS/persistent-save mechanism; declarations alone do not prove durability |
@@ -156,6 +246,23 @@ For each case, record before/after command, applied output, fault and history.
 The source tests exercise fresh initialization and public lifecycle behavior;
 multi-scan watchdog/motion tests use real TON time. Restart-image injection tests
 are distinct from this matrix and cannot replace runtime/power-cycle evidence.
+The saved-command marker and restored-alarm publication policy are implemented;
+the full matrix remains open. On the dedicated 3.1.4026.17 bench, short/long
+PLC stop/start passes at 1 ms and 10 ms. Direct ADS RESET/RUN and orderly system
+restart pass the standalone fixture's saved-intent/configuration, alarm-latch and
+fault-history checks. ForceSafe/Reset invalidation survives both operations.
+These do not qualify backup/invalid images, sudden power loss or actual online
+changes. Reset-origin passes separately: engineering logout and controller
+application removal are verified before same-source reload; persistent markers,
+intent, alarms and history then initialize. The separate XAE cold-reset path passes after
+confirming engineering login, waiting for reset STOP, and verifying subsequent
+RUN. See PROGRESS.md for retained evidence.
+
+Use Beckhoff's [remanent-variable semantics](https://infosys.beckhoff.com/content/1033/tc3_plc_intro/2528803467.html)
+to define reset-class expectations, and its
+[online-change operating cases](https://infosys.beckhoff.com/content/1033/tc3_plc_intro/6415331211.html)
+to distinguish initialization and instance-copying behavior. Record the actual
+runtime version, image status and save mechanism with those results.
 
 ## Release evidence
 

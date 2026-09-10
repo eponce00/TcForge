@@ -15,6 +15,8 @@
 {attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_AlarmSimple EXTENDS FB_AlarmBase
 VAR_INPUT
+    // Application quality gate; FALSE means no trustworthy new evidence.
+    inpValid : BOOL := TRUE;
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
     cfg       : ST_AlarmSimple_Cfg;
@@ -23,7 +25,11 @@ VAR_INPUT
     inpActive : BOOL;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[_Evaluate(cfgCommon := cfg.common, bRawCondition := inpActive);]]></ST>
+      <ST><![CDATA[IF inpValid THEN
+    _Evaluate(cfgCommon := cfg.common, bRawCondition := inpActive);
+ELSE
+    _Evaluate(cfgCommon := cfg.common, bRawCondition := FALSE, evaluation := E_AlarmEvaluation.InvalidInput);
+END_IF;]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>

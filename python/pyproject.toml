@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tcforge-sim"
+version = "0.1.0"
+description = "Deterministic plant models and test infrastructure for TcForge"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+ads = ["pyads==3.6.0"]
+opcua = ["pyads==3.6.0", "asyncua==2.0.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

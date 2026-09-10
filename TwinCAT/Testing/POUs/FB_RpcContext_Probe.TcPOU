@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_RpcContext_Probe" Id="{35ed318d-1a5c-4b8b-8a93-48d74c4ed752}"><Declaration><![CDATA[FUNCTION_BLOCK FB_RpcContext_Probe
+VAR_OUTPUT ownerTask : DINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[ownerTask := Tc2_System.GETCURTASKINDEXEX();]]></ST></Implementation>
+<Method Name="ReadContext" Id="{df162e03-79bd-42a4-b0af-42c0b9556496}"><Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC ReadContext : DINT]]></Declaration><Implementation><ST><![CDATA[ReadContext := Tc2_System.GETCURTASKINDEXEX();]]></ST></Implementation></Method>
+</POU></TcPlcObject>

@@ -3,8 +3,7 @@
   <DUT Name="ST_AlarmThreshold_Cfg" Id="{b0200002-0000-0000-0000-000000000001}">
     <Declaration><![CDATA[// Config for FB_AlarmThreshold. Single-direction REAL threshold check.
 // Rule: strict > / < (exact threshold value does not trip).
-// If both bFailHigh and bFailLow are TRUE, bFailHigh wins (documented
-// behaviour, but almost always a cfg mistake).
+// Exactly one direction must be selected while enabled; otherwise InvalidConfig.
 {attribute 'OPC.UA.DA' := '1'}
 {attribute 'OPC.UA.DA.Access' := '1'}
 {attribute 'OPC.UA.DA.StructuredType' := '1'}

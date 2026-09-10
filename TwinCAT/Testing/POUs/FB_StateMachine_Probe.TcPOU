@@ -1,32 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_StateMachine_Probe" Id="{c3d4e5f6-a7b8-9012-cdef-000000001100}" SpecialFunc="None">
-    <Declaration><![CDATA[// Test-only child of FB_StateMachine. Two jobs:
-//
-//   1. Shift internals (state, step, timer, _nextStep, permissives) into
-//      test reach. FB_StateMachine publishes Status as VAR_OUTPUT (which
-//      TwinCAT makes read-only from outside) and keeps its permission /
-//      interlock blocks as plain VAR members with no external mapping
-//      API, so tests cannot drive them without a subclass.
-//
-//   2. Drive the parent body when the test wants it (SUPER^()) and skip
-//      it when the test doesn't. FB_Step_Test never calls sm() on the
-//      probe — it only uses the mutators and the step FB under test
-//      drives its own observables. FB_StateMachine_Test does call sm()
-//      to exercise transitions. Because the body is just SUPER^(),
-//      both uses are safe: invoking sm() runs the parent logic,
-//      skipping it leaves the injected test state put.
-//
-// Access note: FB_StateMachine declares permAuto / permHome / permStart
-// / permProceed / intlkRunning / R_TRIG_1 / R_TRIG_5 / _nextStep and
-// the _*Requested command flags as plain `VAR`, which in TwinCAT is
-// accessible to subclasses (PROTECTED-like default). This probe leans
-// on that — none of these mutators compile if the parent hides them.
-//
-// Lives in the Testing project only — not part of TcForge's public API.
+    <Declaration><![CDATA[// Test-only access to state, timer and permissive internals for isolated cases.
+// The cyclic body supplies one synthetic active-step observation before SUPER^()
+// because transition unit tests do not run a complete application scan.
+// Coverage regressions use real FB_StateMachine instances instead of this probe.
+// Plain VAR members are accessible to TwinCAT subclasses. This type is excluded
+// from the shipped library.
 FUNCTION_BLOCK FB_StateMachine_Probe EXTENDS TcForge.FB_StateMachine]]></Declaration>
     <Implementation>
-      <ST><![CDATA[SUPER^();]]></ST>
+      <ST><![CDATA[// Transition unit tests supply no full application scan. Coverage is tested with real FB_StateMachine instances.
+_activeStepCalls := 1;
+SUPER^();]]></ST>
     </Implementation>
     <Method Name="ResetAll" Id="{c3d4e5f6-a7b8-9012-cdef-000000001198}">
       <Declaration><![CDATA[// Full isolation reset for the shared suite-level probe. Clears fault
@@ -36,19 +21,22 @@ FUNCTION_BLOCK FB_StateMachine_Probe EXTENDS TcForge.FB_StateMachine]]></Declara
 // calls this in its own Setup() so tests see a clean slate even
 // though the probe instance itself is reused.
 //
-// Why rising edges matter: R_TRIG_5 fires _completeStateRequested
-// when the current step is in-range for the state AND _nextStep=0.
-// In STOPPED with Step.Current=0 that condition is trivially TRUE
-// (STOPPED has no step range, _IsStepInStateRange returns a
-// degenerate [0,0] match), so a fresh probe or a previous test
-// leaves the rising-edge memory armed — we must explicitly drive
-// CLK:=FALSE to clear it.
 METHOD PUBLIC ResetAll
 VAR
-    rsp : TcForge.E_RpcMethodResponse;
+    i : UDINT;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[rsp := Reset();
+        <ST><![CDATA[_ClearFault();
+_stepFailurePending := FALSE;
+_stepRecoveryPending := FALSE;
+_coverageStep := -1;
+_activeStepCalls := 0;
+Status.ShutdownFailed := FALSE;
+Status.FailedStep := 0;
+inpShutdownConfirmed := FALSE;
+bSourceLockedToProg := FALSE;
+Status.AtRecoveryStep := FALSE;
+inpSubmoduleFaulted := FALSE;
 
 _abortRequested         := FALSE;
 _completeStateRequested := FALSE;
@@ -69,11 +57,15 @@ _starvedCode            := 0;
 // makes every subsequent test look like the interlock auto-aborted.
 // FB_Permissives is non-latching so the order doesn't matter there,
 // but we keep it consistent.
-permHome.MapInput(bitIndex := 0, inputValue := TRUE);
-permStart.MapInput(bitIndex := 0, inputValue := TRUE);
-permProceed.MapInput(bitIndex := 0, inputValue := TRUE);
-permAuto.MapInput(bitIndex := 0, inputValue := TRUE);
-intlkRunning.MapInput(bitIndex := 0, inputValue := TRUE);
+FOR i := 0 TO 63 DO
+    permHome.MapInput(bitIndex := i, inputValue := TRUE);
+    permStart.MapInput(bitIndex := i, inputValue := TRUE);
+    permProceed.MapInput(bitIndex := i, inputValue := TRUE);
+    permAuto.MapInput(bitIndex := i, inputValue := TRUE);
+    intlkRunning.MapInput(bitIndex := i, inputValue := TRUE);
+END_FOR;
+cfgAutoRun := FALSE;
+StepTimer(IN := FALSE);
 permHome.Reset();
 permStart.Reset();
 permProceed.Reset();
@@ -81,7 +73,6 @@ permAuto.Reset();
 intlkRunning.Reset();
 
 R_TRIG_1(CLK := FALSE);
-R_TRIG_5(CLK := FALSE);
 
 Status.State            := TcForge.E_SM_State.STOPPED;
 Status.LastState        := TcForge.E_SM_State.STOPPED;
@@ -92,7 +83,6 @@ Status.Faulted          := FALSE;
 Status.SubmoduleFaulted := FALSE;
 Status.BlockedCondition := 0;
 Status.StarvedCondition := 0;
-Status.AutoStartRequest := FALSE;
 Status.AutoCycleRequest := FALSE;
 
 _nextStep      := 0;

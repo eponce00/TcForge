@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><DUT Name="ST_OperatorCommandRecord" Id="{fefa348e-cd1e-4631-810e-1e84781950eb}"><Declaration><![CDATA[TYPE ST_OperatorCommandRecord :
+STRUCT
+    requestId : ULINT;
+    command : E_OperatorCommand;
+    value : REAL;
+    result : E_RpcMethodResponse;
+END_STRUCT
+END_TYPE]]></Declaration></DUT></TcPlcObject>

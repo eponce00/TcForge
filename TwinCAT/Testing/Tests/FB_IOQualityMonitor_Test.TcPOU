@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_IOQualityMonitor_Test" Id="{b7abd353-f88a-48ef-8d94-1511d753fbf7}"><Declaration><![CDATA[FUNCTION_BLOCK FB_IOQualityMonitor_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+_done, _cyclicDone : BOOL;
+_phase : UINT;
+_stale : TcForge.FB_IOQualityMonitor;
+_clock : TON;
+_boundaryClock : TON;
+_boundary : TcForge.FB_IOQualityMonitor;
+_boundaryStarted, _boundaryDone : BOOL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[IF NOT _done THEN
+StartupNeedsNewProducerSample();
+CommunicationRecoveryNeedsNewSample();
+DeviceAndInvalidSampleReject();
+SequenceResetNeedsNewBaseline();
+DisableRequiresReacquisition();
+TimeoutConfigurationReacquires();
+QualityRecoveryDoesNotRearmOutput();
+EtherCATStateAndWorkingCounter();
+_done := TRUE; END_IF;
+CyclicFreshness();
+FreshnessBoundary();]]></ST></Implementation><Method Name="StartupNeedsNewProducerSample" Id="{729aba98-e2bd-48fe-a3df-50d0d91a9f03}"><Declaration><![CDATA[METHOD StartupNeedsNewProducerSample
+VAR
+fb : TcForge.FB_IOQualityMonitor;
+outp : TcForge.FB_DigitalOutput;
+bitIndex : INT;
+mask : WORD;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('StartupNeedsNewProducerSample');
+fb(enabled := TRUE, communicationGood := TRUE, deviceGood := TRUE, sampleValid := TRUE, sampleSequence := 10);
+AssertEquals_INT(Expected := 0, Actual := fb.quality, Message := 'First observed frame is only a baseline');
+fb(sampleSequence := 11);
+AssertEquals_INT(Expected := 2, Actual := fb.quality, Message := 'New coherent producer sample enables quality');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="CommunicationRecoveryNeedsNewSample" Id="{05ed538d-3b0e-4fd6-b692-8eda28635bc4}"><Declaration><![CDATA[METHOD CommunicationRecoveryNeedsNewSample
+VAR
+fb : TcForge.FB_IOQualityMonitor;
+outp : TcForge.FB_DigitalOutput;
+bitIndex : INT;
+mask : WORD;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('CommunicationRecoveryNeedsNewSample');
+fb(enabled := TRUE, communicationGood := TRUE, deviceGood := TRUE, sampleValid := TRUE, sampleSequence := 10); fb(sampleSequence := 11);
+fb(communicationGood := FALSE);
+AssertEquals_INT(Expected := 1, Actual := fb.quality, Message := 'Communication loss is immediate');
+fb(communicationGood := TRUE);
+AssertEquals_INT(Expected := 1, Actual := fb.quality, Message := 'Frozen sample cannot restore quality');
+fb(sampleSequence := 12);
+AssertEquals_INT(Expected := 2, Actual := fb.quality, Message := 'Fresh sample restores quality');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="DeviceAndInvalidSampleReject" Id="{27efdac9-ee68-4571-a731-7c2f824009cc}"><Declaration><![CDATA[METHOD DeviceAndInvalidSampleReject
+VAR
+fb : TcForge.FB_IOQualityMonitor;
+outp : TcForge.FB_DigitalOutput;
+bitIndex : INT;
+mask : WORD;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DeviceAndInvalidSampleReject');
+fb(enabled := TRUE, communicationGood := TRUE, deviceGood := TRUE, sampleValid := TRUE, sampleSequence := 1); fb(sampleSequence := 2);
+fb(deviceGood := FALSE);
+AssertEquals_INT(Expected := 3, Actual := fb.reason, Message := 'Device fault is distinct');
+fb(deviceGood := TRUE, sampleValid := FALSE, sampleSequence := 3);
+AssertEquals_INT(Expected := 4, Actual := fb.reason, Message := 'Invalid frame is distinct');
+fb(sampleValid := TRUE);
+AssertEquals_INT(Expected := 1, Actual := fb.quality, Message := 'Previously invalid sample cannot become fresh');
+fb(sampleSequence := 4);
+AssertEquals_INT(Expected := 2, Actual := fb.quality, Message := 'Fresh valid update recovers');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="SequenceResetNeedsNewBaseline" Id="{b41b24e9-ac66-422e-9f34-505290235678}"><Declaration><![CDATA[METHOD SequenceResetNeedsNewBaseline
+VAR
+fb : TcForge.FB_IOQualityMonitor;
+outp : TcForge.FB_DigitalOutput;
+bitIndex : INT;
+mask : WORD;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('SequenceResetNeedsNewBaseline');
+fb(enabled := TRUE, communicationGood := TRUE, deviceGood := TRUE, sampleValid := TRUE, sampleSequence := 10); fb(sampleSequence := 11);
+fb(sampleSequence := 0);
+AssertEquals_INT(Expected := 7, Actual := fb.reason, Message := 'Producer restart invalidates old session');
+fb(); AssertEquals_INT(Expected := 1, Actual := fb.quality, Message := 'Repeated reset sequence stays bad');
+fb(sampleSequence := 1); AssertEquals_INT(Expected := 2, Actual := fb.quality, Message := 'New producer update recovers');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="DisableRequiresReacquisition" Id="{49edf302-bbf7-4dbf-9e5d-d40aca00ef4c}"><Declaration><![CDATA[METHOD DisableRequiresReacquisition
+VAR
+fb : TcForge.FB_IOQualityMonitor;
+outp : TcForge.FB_DigitalOutput;
+bitIndex : INT;
+mask : WORD;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DisableRequiresReacquisition');
+fb(enabled := TRUE, communicationGood := TRUE, deviceGood := TRUE, sampleValid := TRUE, sampleSequence := 1); fb(sampleSequence := 2);
+fb(enabled := FALSE); fb(enabled := TRUE);
+AssertEquals_INT(Expected := 0, Actual := fb.quality, Message := 'Reenable starts unqualified');
+fb(sampleSequence := 3); AssertEquals_INT(Expected := 2, Actual := fb.quality, Message := 'New sample reacquires');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="TimeoutConfigurationReacquires" Id="{1c49de9f-e71e-4fac-aa7e-773d56a74a20}"><Declaration><![CDATA[METHOD TimeoutConfigurationReacquires
+VAR
+fb : TcForge.FB_IOQualityMonitor;
+outp : TcForge.FB_DigitalOutput;
+bitIndex : INT;
+mask : WORD;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('TimeoutConfigurationReacquires');
+fb(enabled := TRUE, communicationGood := TRUE, deviceGood := TRUE, sampleValid := TRUE, sampleSequence := 1); fb(sampleSequence := 2);
+fb(timeout := T#0MS); AssertEquals_INT(Expected := 6, Actual := fb.reason, Message := 'Zero freshness deadline rejected');
+fb(timeout := T#500MS); AssertFalse(Condition := fb.quality = TcForge.E_IO_Quality.GOOD, Message := 'Timeout edit cannot revive cached sample');
+fb(sampleSequence := 3); AssertEquals_INT(Expected := 2, Actual := fb.quality, Message := 'Valid config and fresh sample recover');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="QualityRecoveryDoesNotRearmOutput" Id="{55d7af6b-2364-4845-9457-47b08df0ed49}"><Declaration><![CDATA[METHOD QualityRecoveryDoesNotRearmOutput
+VAR
+fb : TcForge.FB_IOQualityMonitor;
+outp : TcForge.FB_DigitalOutput;
+bitIndex : INT;
+mask : WORD;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('QualityRecoveryDoesNotRearmOutput');
+fb(enabled := TRUE, communicationGood := TRUE, deviceGood := TRUE, sampleValid := TRUE, sampleSequence := 1); fb(sampleSequence := 2);
+outp(inpQuality := fb.quality); outp.SetOn(); outp(); AssertTrue(Condition := outp.outSignal, Message := 'Fixture energized');
+fb(communicationGood := FALSE); outp(inpQuality := fb.quality);
+fb(communicationGood := TRUE, sampleSequence := 3); outp(inpQuality := fb.quality);
+AssertFalse(Condition := outp.outSignal, Message := 'Adapter cannot rearm retained output intent');
+outp.SetOn(); outp(); AssertTrue(Condition := outp.outSignal, Message := 'Explicit command restores output');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="EtherCATStateAndWorkingCounter" Id="{28e81c62-6057-4f3a-902d-394874930787}"><Declaration><![CDATA[METHOD EtherCATStateAndWorkingCounter
+VAR
+fb : TcForge.FB_IOQualityMonitor;
+outp : TcForge.FB_DigitalOutput;
+bitIndex : INT;
+mask : WORD;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('EtherCATStateAndWorkingCounter');
+AssertTrue(Condition := TcForge.F_EtherCATSlaveDataValid(TRUE, FALSE, WORD#16#F008), Message := 'OP and port flags are healthy');
+AssertFalse(Condition := TcForge.F_EtherCATSlaveDataValid(FALSE, FALSE, WORD#16#0008), Message := 'Unmapped diagnostics never qualify');
+AssertFalse(Condition := TcForge.F_EtherCATSlaveDataValid(TRUE, TRUE, WORD#16#0008), Message := 'Working counter failure invalidates');
+AssertFalse(Condition := TcForge.F_EtherCATSlaveDataValid(TRUE, FALSE, WORD#16#0004), Message := 'SAFEOP is not operational');
+FOR bitIndex := 0 TO 15 DO
+    mask := SHL(WORD#1, bitIndex);
+    IF (mask AND WORD#16#0F30) <> WORD#0 THEN
+        AssertFalse(Condition := TcForge.F_EtherCATSlaveDataValid(TRUE, FALSE, WORD#16#0008 OR mask), Message := 'Every documented error flag invalidates');
+    END_IF;
+END_FOR;
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="CyclicFreshness" Id="{f7b4cc6b-459f-47d7-a0c2-287327439141}"><Declaration><![CDATA[METHOD CyclicFreshness]]></Declaration><Implementation><ST><![CDATA[IF _cyclicDone THEN RETURN; END_IF;
+TEST('DuplicateProducerSamplesExpire');
+CASE _phase OF
+0:
+    _stale(enabled := TRUE, communicationGood := TRUE, deviceGood := TRUE, sampleValid := TRUE, sampleSequence := 1, timeout := T#50MS);
+    _stale(sampleSequence := 2);
+    _phase := 1;
+1:
+    _clock(IN := TRUE, PT := T#150MS); _stale();
+    IF _clock.Q THEN
+        AssertEquals_INT(Expected := 1, Actual := _stale.quality, Message := 'Repeated valid value/frame does not refresh deadline');
+        AssertEquals_INT(Expected := 5, Actual := _stale.reason, Message := 'Stale reason persists until fresh data');
+        _clock(IN := FALSE); _phase := 2;
+    END_IF;
+2:
+    _clock(IN := TRUE, PT := T#1S);
+    _stale(sampleSequence := _stale.sampleSequence + 1);
+    IF _stale.quality = TcForge.E_IO_Quality.GOOD OR _clock.Q THEN
+        AssertEquals_INT(Expected := 2, Actual := _stale.quality, Message := 'New producer data recovers without signal-value change');
+        _cyclicDone := TRUE; TEST_FINISHED();
+    END_IF;
+END_CASE;]]></ST></Implementation></Method><Method Name="FreshnessBoundary" Id="{0f722f8f-30d4-46d9-a714-3002985d6572}"><Declaration><![CDATA[METHOD FreshnessBoundary]]></Declaration><Implementation><ST><![CDATA[IF _boundaryDone THEN RETURN; END_IF;
+TEST('FreshFrameAtDeadlineCannotHideExpiry');
+IF NOT _boundaryStarted THEN
+    _boundary(enabled := TRUE, communicationGood := TRUE, deviceGood := TRUE, sampleValid := TRUE, sampleSequence := 1, timeout := T#50MS);
+    _boundary(sampleSequence := 2);
+    _boundaryClock(IN := TRUE, PT := T#50MS);
+    _boundaryStarted := TRUE;
+ELSE
+    _boundaryClock(IN := TRUE, PT := T#50MS);
+    IF _boundaryClock.Q THEN
+        _boundary(sampleSequence := 3);
+        AssertEquals_INT(Expected := 5, Actual := _boundary.reason, Message := 'Late new frame cannot hide expired producer deadline');
+        AssertEquals_INT(Expected := 1, Actual := _boundary.quality, Message := 'Deadline is measured from prior sample, not following scan');
+        _boundaryDone := TRUE; TEST_FINISHED();
+    ELSE
+        _boundary();
+    END_IF;
+END_IF;]]></ST></Implementation></Method></POU></TcPlcObject>

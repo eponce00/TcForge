@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.20">
   <POU Name="FB_AlarmLimit" Id="{a0200003-0000-0000-0000-000000000001}" SpecialFunc="None">
     <Declaration><![CDATA[// Four-level limit ladder (HiHi / Hi / Lo / LoLo) built on four composed
 // FB_AlarmThreshold instances. Each level has its own full config; delays,
@@ -23,6 +23,8 @@
 {attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_AlarmLimit IMPLEMENTS I_Alarm
 VAR_INPUT
+    // Application quality gate; FALSE means no trustworthy new evidence.
+    inpValid : BOOL := TRUE;
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
     cfg   : ST_AlarmLimit_Cfg;
@@ -36,28 +38,51 @@ VAR_OUTPUT
     sts : ST_AlarmLimit_Sts;
 END_VAR
 VAR
+    {attribute 'OPC.UA.DA' := '0'}
+    {attribute 'OPC.UA.DA' := '0'}
+    _operatorMailbox : FB_OperatorMailbox;
     _hiHi : FB_AlarmThreshold;
     _hi   : FB_AlarmThreshold;
     _lo   : FB_AlarmThreshold;
     _loLo : FB_AlarmThreshold;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[// Push config into each sub-alarm every cycle so HMI changes take effect.
+      <ST><![CDATA[_ProcessOperatorCommands();
+// Push config into each sub-alarm every cycle so HMI changes take effect.
 _hiHi.cfg := cfg.HiHi;
 _hi.cfg   := cfg.Hi;
 _lo.cfg   := cfg.Lo;
 _loLo.cfg := cfg.LoLo;
 
-_hiHi(inpValue := inpPv);
-_hi(inpValue   := inpPv);
-_lo(inpValue   := inpPv);
-_loLo(inpValue := inpPv);
+_hiHi(inpValue := inpPv, inpValid := inpValid);
+_hi(inpValue   := inpPv, inpValid := inpValid);
+_lo(inpValue   := inpPv, inpValid := inpValid);
+_loLo(inpValue := inpPv, inpValid := inpValid);
 
 // Expose raw sub-statuses
 sts.HiHi := _hiHi.sts;
 sts.Hi   := _hi.sts;
 sts.Lo   := _lo.sts;
 sts.LoLo := _loLo.sts;
+
+// Disabled levels do not invalidate enabled levels; all-disabled has no evaluation.
+sts.evaluationState := E_AlarmEvaluation.Disabled;
+IF cfg.HiHi.common.bEnable OR cfg.Hi.common.bEnable OR cfg.Lo.common.bEnable OR cfg.LoLo.common.bEnable THEN
+    sts.evaluationState := E_AlarmEvaluation.Valid;
+    IF sts.HiHi.enabled AND NOT sts.HiHi.valid THEN
+        IF sts.evaluationState <> E_AlarmEvaluation.InvalidConfig THEN sts.evaluationState := sts.HiHi.evaluationState; END_IF;
+    END_IF;
+    IF sts.Hi.enabled AND NOT sts.Hi.valid THEN
+        IF sts.evaluationState <> E_AlarmEvaluation.InvalidConfig THEN sts.evaluationState := sts.Hi.evaluationState; END_IF;
+    END_IF;
+    IF sts.Lo.enabled AND NOT sts.Lo.valid THEN
+        IF sts.evaluationState <> E_AlarmEvaluation.InvalidConfig THEN sts.evaluationState := sts.Lo.evaluationState; END_IF;
+    END_IF;
+    IF sts.LoLo.enabled AND NOT sts.LoLo.valid THEN
+        IF sts.evaluationState <> E_AlarmEvaluation.InvalidConfig THEN sts.evaluationState := sts.LoLo.evaluationState; END_IF;
+    END_IF;
+END_IF;
+sts.valid := sts.evaluationState = E_AlarmEvaluation.Valid;
 
 // Rollup with suppression (higher priority hides lower on same direction)
 sts.hiHiActive := _hiHi.sts.active;
@@ -74,9 +99,28 @@ IF _hi.sts.eSeverity   > sts.eSeverity THEN sts.eSeverity := _hi.sts.eSeverity; 
 IF _lo.sts.eSeverity   > sts.eSeverity THEN sts.eSeverity := _lo.sts.eSeverity;   END_IF;
 IF _loLo.sts.eSeverity > sts.eSeverity THEN sts.eSeverity := _loLo.sts.eSeverity; END_IF;]]></ST>
     </Implementation>
+    <Method Name="_DispatchOperatorCommand" Id="{41e77b88-0904-4ba2-a2fe-fc4bae363620}">
+      <Declaration><![CDATA[METHOD PROTECTED _DispatchOperatorCommand : E_RpcMethodResponse
+VAR_INPUT command : E_OperatorCommand; value : REAL; END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE command OF
+E_OperatorCommand.Ack: _DispatchOperatorCommand := THIS^.Ack(eRequester := E_Requester.OPERATOR);
+ELSE _DispatchOperatorCommand := E_RpcMethodResponse.REJECTED_INVALID_PARAMETER;
+END_CASE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_ProcessOperatorCommands" Id="{992ce571-3932-48c1-823c-a23fa7108f18}">
+      <Declaration><![CDATA[METHOD PROTECTED _ProcessOperatorCommands
+VAR command : E_OperatorCommand; value : REAL; result : E_RpcMethodResponse; END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _operatorMailbox.BeginConsume(command => command, value => value) THEN
+    result := THIS^._DispatchOperatorCommand(command := command, value := value);
+    _operatorMailbox.EndConsume(result := result);
+END_IF;]]></ST>
+      </Implementation>
+    </Method>
     <Method Name="Ack" Id="{a0200003-0000-0000-1000-000000000001}">
-      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
-// Composite Ack — cascades to all four levels. Returns ACCEPTED if at least
+      <Declaration><![CDATA[// Composite Ack — cascades to all four levels. Returns ACCEPTED if at least
 // one level accepted; reports any source-lock rejection otherwise.
 METHOD PUBLIC Ack : E_RpcMethodResponse
 VAR_INPUT
@@ -86,7 +130,10 @@ VAR
     r1, r2, r3, r4 : E_RpcMethodResponse;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[r1 := _hiHi.Ack(eRequester := eRequester);
+        <ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+Ack := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF Ack <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+r1 := _hiHi.Ack(eRequester := eRequester);
 r2 := _hi.Ack(eRequester   := eRequester);
 r3 := _lo.Ack(eRequester   := eRequester);
 r4 := _loLo.Ack(eRequester := eRequester);
@@ -102,8 +149,7 @@ END_IF;]]></ST>
       </Implementation>
     </Method>
     <Method Name="LockSource" Id="{a0200003-0000-0000-1000-000000000002}">
-      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
-METHOD PUBLIC LockSource : E_RpcMethodResponse
+      <Declaration><![CDATA[METHOD PUBLIC LockSource : E_RpcMethodResponse
 VAR_INPUT
     bLock : BOOL;
 END_VAR]]></Declaration>
@@ -113,6 +159,23 @@ _hi.LockSource(bLock   := bLock);
 _lo.LockSource(bLock   := bLock);
 _loLo.LockSource(bLock := bLock);
 LockSource := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OperatorAck" Id="{ade8e23b-5c25-4a4a-9bef-9c7ca753dcb3}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorAck : E_RpcMethodResponse
+
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[OperatorAck := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.Ack, value := 0.0);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OperatorCommandResult" Id="{182a2202-4f6b-4bfe-8ef7-ac0904a8a053}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorCommandResult : E_RpcMethodResponse
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[OperatorCommandResult := _operatorMailbox.GetResult(requestId := requestId);]]></ST>
       </Implementation>
     </Method>
   </POU>

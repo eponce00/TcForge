@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_DigitalInputLifecycle_Test" Id="{c4dec968-05e0-4fc9-96d7-6c83945d9da2}"><Declaration><![CDATA[FUNCTION_BLOCK FB_DigitalInputLifecycle_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+BadQualityCannotCompleteRising_fb : TcForge.FB_DigitalInput;
+BadQualityCannotCompleteRising_clock : TON;
+BadQualityCannotCompleteRising_phase : UINT;
+BadQualityCannotCompleteRising_done : BOOL;
+BadQualityCannotCompleteFalling_fb : TcForge.FB_DigitalInput;
+BadQualityCannotCompleteFalling_clock : TON;
+BadQualityCannotCompleteFalling_phase : UINT;
+BadQualityCannotCompleteFalling_done : BOOL;
+ConfigChangeDiscardsDebounceCredit_fb : TcForge.FB_DigitalInput;
+ConfigChangeDiscardsDebounceCredit_clock : TON;
+ConfigChangeDiscardsDebounceCredit_phase : UINT;
+ConfigChangeDiscardsDebounceCredit_done : BOOL;
+_instantDone : BOOL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[
+BadQualityCannotCompleteRising();
+BadQualityCannotCompleteFalling();
+ConfigChangeDiscardsDebounceCredit();
+IF NOT _instantDone THEN ReassignmentAndInvalidConfigHold(); _instantDone := TRUE; END_IF;
+]]></ST></Implementation><Method Name="BadQualityCannotCompleteRising" Id="{611535ba-2ee8-4840-b852-dad6058e3c24}"><Declaration><![CDATA[METHOD BadQualityCannotCompleteRising]]></Declaration><Implementation><ST><![CDATA[IF BadQualityCannotCompleteRising_done THEN RETURN; END_IF;
+TEST('BadQualityCannotCompleteRising');
+CASE BadQualityCannotCompleteRising_phase OF
+0:
+    BadQualityCannotCompleteRising_fb(inSignal := FALSE);
+    BadQualityCannotCompleteRising_fb.cfg.debounceOn := T#80MS; BadQualityCannotCompleteRising_fb.cfg.debounceOff := T#80MS;
+    BadQualityCannotCompleteRising_fb(inSignal := TRUE);
+    BadQualityCannotCompleteRising_fb(inpQuality := TcForge.E_IO_Quality.BAD);
+    BadQualityCannotCompleteRising_phase := 1;
+1:
+    BadQualityCannotCompleteRising_clock(IN := TRUE, PT := T#150MS); BadQualityCannotCompleteRising_fb();
+    IF BadQualityCannotCompleteRising_clock.Q THEN
+        AssertEquals_BOOL(Expected := FALSE, Actual := BadQualityCannotCompleteRising_fb.sts.value, Message := 'Invalid elapsed time must hold established state');
+        AssertFalse(Condition := BadQualityCannotCompleteRising_fb.sts.risingEdge OR BadQualityCannotCompleteRising_fb.sts.fallingEdge, Message := 'Invalid sample cannot emit edges');
+        BadQualityCannotCompleteRising_clock(IN := FALSE); BadQualityCannotCompleteRising_fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+        AssertEquals_BOOL(Expected := FALSE, Actual := BadQualityCannotCompleteRising_fb.sts.value, Message := 'Recovery starts a full fresh transition delay');
+        BadQualityCannotCompleteRising_phase := 2;
+    END_IF;
+2:
+    BadQualityCannotCompleteRising_clock(IN := TRUE, PT := T#30MS); BadQualityCannotCompleteRising_fb();
+    IF BadQualityCannotCompleteRising_clock.Q THEN
+        AssertEquals_BOOL(Expected := FALSE, Actual := BadQualityCannotCompleteRising_fb.sts.value, Message := 'Partial fresh delay cannot complete transition');
+        BadQualityCannotCompleteRising_clock(IN := FALSE); BadQualityCannotCompleteRising_phase := 3;
+    END_IF;
+3:
+    BadQualityCannotCompleteRising_clock(IN := TRUE, PT := T#150MS); BadQualityCannotCompleteRising_fb();
+    IF BadQualityCannotCompleteRising_clock.Q THEN
+        AssertEquals_BOOL(Expected := TRUE, Actual := BadQualityCannotCompleteRising_fb.sts.value, Message := 'Full fresh delay completes transition');
+        BadQualityCannotCompleteRising_done := TRUE; TEST_FINISHED();
+    END_IF;
+END_CASE;]]></ST></Implementation></Method><Method Name="BadQualityCannotCompleteFalling" Id="{a222110b-abc5-4622-9478-36b6c01b3060}"><Declaration><![CDATA[METHOD BadQualityCannotCompleteFalling]]></Declaration><Implementation><ST><![CDATA[IF BadQualityCannotCompleteFalling_done THEN RETURN; END_IF;
+TEST('BadQualityCannotCompleteFalling');
+CASE BadQualityCannotCompleteFalling_phase OF
+0:
+    BadQualityCannotCompleteFalling_fb(inSignal := TRUE);
+    BadQualityCannotCompleteFalling_fb.cfg.debounceOn := T#80MS; BadQualityCannotCompleteFalling_fb.cfg.debounceOff := T#80MS;
+    BadQualityCannotCompleteFalling_fb(inSignal := FALSE);
+    BadQualityCannotCompleteFalling_fb(inpQuality := TcForge.E_IO_Quality.BAD);
+    BadQualityCannotCompleteFalling_phase := 1;
+1:
+    BadQualityCannotCompleteFalling_clock(IN := TRUE, PT := T#150MS); BadQualityCannotCompleteFalling_fb();
+    IF BadQualityCannotCompleteFalling_clock.Q THEN
+        AssertEquals_BOOL(Expected := TRUE, Actual := BadQualityCannotCompleteFalling_fb.sts.value, Message := 'Invalid elapsed time must hold established state');
+        AssertFalse(Condition := BadQualityCannotCompleteFalling_fb.sts.risingEdge OR BadQualityCannotCompleteFalling_fb.sts.fallingEdge, Message := 'Invalid sample cannot emit edges');
+        BadQualityCannotCompleteFalling_clock(IN := FALSE); BadQualityCannotCompleteFalling_fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+        AssertEquals_BOOL(Expected := TRUE, Actual := BadQualityCannotCompleteFalling_fb.sts.value, Message := 'Recovery starts a full fresh transition delay');
+        BadQualityCannotCompleteFalling_phase := 2;
+    END_IF;
+2:
+    BadQualityCannotCompleteFalling_clock(IN := TRUE, PT := T#30MS); BadQualityCannotCompleteFalling_fb();
+    IF BadQualityCannotCompleteFalling_clock.Q THEN
+        AssertEquals_BOOL(Expected := TRUE, Actual := BadQualityCannotCompleteFalling_fb.sts.value, Message := 'Partial fresh delay cannot complete transition');
+        BadQualityCannotCompleteFalling_clock(IN := FALSE); BadQualityCannotCompleteFalling_phase := 3;
+    END_IF;
+3:
+    BadQualityCannotCompleteFalling_clock(IN := TRUE, PT := T#150MS); BadQualityCannotCompleteFalling_fb();
+    IF BadQualityCannotCompleteFalling_clock.Q THEN
+        AssertEquals_BOOL(Expected := FALSE, Actual := BadQualityCannotCompleteFalling_fb.sts.value, Message := 'Full fresh delay completes transition');
+        BadQualityCannotCompleteFalling_done := TRUE; TEST_FINISHED();
+    END_IF;
+END_CASE;]]></ST></Implementation></Method><Method Name="ConfigChangeDiscardsDebounceCredit" Id="{38e609b4-eb15-46f8-8548-03647817de2f}"><Declaration><![CDATA[METHOD ConfigChangeDiscardsDebounceCredit]]></Declaration><Implementation><ST><![CDATA[IF ConfigChangeDiscardsDebounceCredit_done THEN RETURN; END_IF;
+TEST('ConfigChangeDiscardsDebounceCredit');
+CASE ConfigChangeDiscardsDebounceCredit_phase OF
+0:
+    ConfigChangeDiscardsDebounceCredit_fb.cfg.debounceOn := T#100MS;
+    ConfigChangeDiscardsDebounceCredit_fb(inSignal := TRUE);
+    ConfigChangeDiscardsDebounceCredit_phase := 1;
+1:
+    ConfigChangeDiscardsDebounceCredit_clock(IN := TRUE, PT := T#60MS); ConfigChangeDiscardsDebounceCredit_fb();
+    IF ConfigChangeDiscardsDebounceCredit_clock.Q THEN
+        ConfigChangeDiscardsDebounceCredit_fb.cfg.debounceOn := T#80MS;
+        ConfigChangeDiscardsDebounceCredit_fb(); ConfigChangeDiscardsDebounceCredit_clock(IN := FALSE);
+        ConfigChangeDiscardsDebounceCredit_phase := 2;
+    END_IF;
+2:
+    ConfigChangeDiscardsDebounceCredit_clock(IN := TRUE, PT := T#30MS); ConfigChangeDiscardsDebounceCredit_fb();
+    IF ConfigChangeDiscardsDebounceCredit_clock.Q THEN
+        AssertFalse(Condition := ConfigChangeDiscardsDebounceCredit_fb.sts.value, Message := 'New delay cannot inherit old timer credit');
+        ConfigChangeDiscardsDebounceCredit_done := TRUE; TEST_FINISHED();
+    END_IF;
+END_CASE;]]></ST></Implementation></Method><Method Name="ReassignmentAndInvalidConfigHold" Id="{69fd0bd8-28c5-47d4-b31d-b898e2ec51cc}"><Declaration><![CDATA[METHOD ReassignmentAndInvalidConfigHold
+VAR fb : TcForge.FB_DigitalInput; END_VAR]]></Declaration><Implementation><ST><![CDATA[
+TEST('ReassignmentAndInvalidConfigHold');
+fb(inSignal := TRUE); AssertTrue(Condition := fb.sts.value, Message := 'Fixture has established TRUE');
+fb(inpQuality := TcForge.E_IO_Quality.UNKNOWN); fb.cfg.invert := TRUE; fb();
+AssertTrue(Condition := fb.sts.value, Message := 'Inversion cannot reinterpret invalid held raw');
+AssertFalse(Condition := fb.sts.risingEdge OR fb.sts.fallingEdge, Message := 'Config edit under bad quality has no edge');
+fb.ReassignInput();
+AssertEquals_INT(Expected := 0, Actual := fb.sts.quality, Message := 'Reassignment immediately invalidates old source');
+AssertFalse(Condition := fb.sts.value OR fb.sts.rawValue OR fb.sts.risingEdge OR fb.sts.fallingEdge, Message := 'Reassignment clears old history without an edge');
+fb(); AssertEquals_INT(Expected := 0, Actual := fb.sts.quality, Message := 'Unknown adapter quality remains unknown');
+fb(inpQuality := TcForge.E_IO_Quality.GOOD, inSignal := FALSE);
+AssertTrue(Condition := fb.sts.value AND fb.sts.risingEdge, Message := 'Fresh source is conditioned using current inversion');
+TEST_FINISHED();]]></ST></Implementation></Method></POU></TcPlcObject>

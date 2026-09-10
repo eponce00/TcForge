@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><DUT Name="E_IOHealthReason" Id="{e7e1c337-ed95-457b-8557-ac8f42c5f253}"><Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_IOHealthReason : (Disabled := 0, NoSample := 1, Communication := 2, Device := 3,
+    InvalidSample := 4, Stale := 5, InvalidConfig := 6, SequenceReset := 7, Good := 8) USINT;
+END_TYPE]]></Declaration></DUT></TcPlcObject>

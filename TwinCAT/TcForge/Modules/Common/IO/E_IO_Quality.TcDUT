@@ -12,8 +12,8 @@
 //   GOOD    : signal is valid and within configured range
 //   CLAMPED : signal is valid but was forced to the scaling limit
 //
-// By default every FB sets its input quality to GOOD on first scan unless an
-// explicit quality probe (e.g. FB_BasicIoQuality) writes otherwise.
+// Some device inputs default to GOOD for software signals. Hardware applications
+// must explicitly supply quality from diagnostics, e.g. FB_IOQualityMonitor.
 {attribute 'qualified_only'}
 {attribute 'strict'}
 {attribute 'to_string'}

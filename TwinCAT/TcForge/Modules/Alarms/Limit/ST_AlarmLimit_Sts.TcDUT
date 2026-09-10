@@ -10,6 +10,9 @@
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_AlarmLimit_Sts :
 STRUCT
+    // Valid fresh evaluation; active may remain held while validity is false.
+    valid : BOOL;
+    evaluationState : E_AlarmEvaluation := E_AlarmEvaluation.Disabled;
     {attribute 'OPC.UA.DA.Description' := 'HiHi sub-alarm status'}
     HiHi : ST_Alarm_Sts;
     {attribute 'OPC.UA.DA.Description' := 'Hi sub-alarm status'}

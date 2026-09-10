@@ -1,20 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <POU Name="FB_AnalogInput_Test" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e00}" SpecialFunc="None">
-    <Declaration><![CDATA[// Tests for FB_AnalogInput. The production FB keeps its hardware-linked
-// `io` UNION in a private VAR section, so tests drive the raw bytes via
-// FB_AnalogInput_Probe (SetRawInt / SetRawReal / SetRawDInt). The probe
-// delegates the cyclic body to SUPER^() so the inherited conditioning
-// pipeline runs against the injected value.
-//
-// Pipeline under test (from the production FB):
-//     UNION raw -> type select -> quality gate -> clamp to scaling range
-//     -> linear EU scaling -> optional LPF -> sts
-//
-// Scope: all synchronous conditioning behaviour. Time-dependent paths
-// (qualityFaultAfter watchdog, filterTau smoothing over many
-// samples) are already covered by FB_DeviceBase_Test and
-// FB_LPF_FirstOrder_IIR_Test respectively.
+    <Declaration><![CDATA[// Tests exercise the public input/output and command contracts.
 FUNCTION_BLOCK FB_AnalogInput_Test EXTENDS TcUnit.FB_TestSuite
 VAR CONSTANT
     TOL : REAL := 1E-3;
@@ -36,13 +23,13 @@ QualityTagPropagatesToStatus();]]></ST>
     <Method Name="InitialStatusPublishesDefaults" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e01}">
       <Declaration><![CDATA[METHOD InitialStatusPublishesDefaults
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('InitialStatusPublishesDefaults');
 
 // Default cfg: INT terminal, raw 0..32767 -> EU 0..100 %, no filter,
-// clamp-as-fault disabled. With io.inRaw zero-initialised the first
+// clamp-as-fault disabled. With inRaw zero-initialised the first
 // cycle must report a clean 0 % and no fault.
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
@@ -65,7 +52,7 @@ TEST_FINISHED();]]></ST>
     <Method Name="LinearScalingMapsEndpointsAndMidpoint" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e02}">
       <Declaration><![CDATA[METHOD LinearScalingMapsEndpointsAndMidpoint
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('LinearScalingMapsEndpointsAndMidpoint');
@@ -77,19 +64,19 @@ END_VAR]]></Declaration>
 //                           * (euMax - euMin)
 //                           / (rawMax - rawMin)
 
-fb.SetRawInt(nValue := 0);
+fb.inRaw.nInt := 0;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
     Condition := ABS(fb.sts.value - 0.0) < TOL,
     Message   := 'Raw = rawMin must map to euMin (0 %)');
 
-fb.SetRawInt(nValue := 32767);
+fb.inRaw.nInt := 32767;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
     Condition := ABS(fb.sts.value - 100.0) < TOL,
     Message   := 'Raw = rawMax must map to euMax (100 %)');
 
-fb.SetRawInt(nValue := 16384);
+fb.inRaw.nInt := 16384;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertTrue(
     Condition := ABS(fb.sts.value - 50.0015) < 0.01,
@@ -101,7 +88,7 @@ TEST_FINISHED();]]></ST>
     <Method Name="RawBypassSkipsClampAndScaling" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e03}">
       <Declaration><![CDATA[METHOD RawBypassSkipsClampAndScaling
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('RawBypassSkipsClampAndScaling');
@@ -109,7 +96,7 @@ END_VAR]]></Declaration>
 // useRawValue = TRUE publishes the raw REAL directly and suppresses
 // the clamp flags even when the raw value is outside the scaling range.
 fb.cfg.useRawValue := TRUE;
-fb.SetRawInt(nValue := 30000);
+fb.inRaw.nInt := 30000;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
@@ -131,14 +118,14 @@ TEST_FINISHED();]]></ST>
     <Method Name="ClampLowReportsAndHoldsAtRawMin" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e04}">
       <Declaration><![CDATA[METHOD ClampLowReportsAndHoldsAtRawMin
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('ClampLowReportsAndHoldsAtRawMin');
 
 // Drive the raw INT below rawMin. The clamp must flag clampedLow
 // and pin the scaled value at euMin.
-fb.SetRawInt(nValue := -500);
+fb.inRaw.nInt := -500;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
@@ -160,7 +147,7 @@ TEST_FINISHED();]]></ST>
     <Method Name="ClampHighReportsAndHoldsAtRawMax" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e05}">
       <Declaration><![CDATA[METHOD ClampHighReportsAndHoldsAtRawMax
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('ClampHighReportsAndHoldsAtRawMax');
@@ -168,7 +155,7 @@ END_VAR]]></Declaration>
 // Use REAL input so we can inject a raw that is clearly above rawMax
 // (INT saturates at 32767; REAL doesn't).
 fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
-fb.SetRawReal(fValue := 40000.0);
+fb.inRaw.fReal := 40000.0;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
@@ -187,14 +174,14 @@ TEST_FINISHED();]]></ST>
     <Method Name="ClampPromotesGoodQualityToClamped" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e06}">
       <Declaration><![CDATA[METHOD ClampPromotesGoodQualityToClamped
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('ClampPromotesGoodQualityToClamped');
 
 // When the raw input is clamping *and* inpQuality = GOOD, the FB must
 // promote quality to CLAMPED to signal "reading is legal but pinned".
-fb.SetRawInt(nValue := -1);
+fb.inRaw.nInt := -1;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
@@ -211,13 +198,13 @@ TEST_FINISHED();]]></ST>
     <Method Name="ClampAsFaultRaisesClampLow" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e07}">
       <Declaration><![CDATA[METHOD ClampAsFaultRaisesClampLow
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('ClampAsFaultRaisesClampLow');
 
 fb.cfg.clampAsFault := TRUE;
-fb.SetRawInt(nValue := -10);
+fb.inRaw.nInt := -10;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
@@ -234,14 +221,14 @@ TEST_FINISHED();]]></ST>
     <Method Name="ClampAsFaultRaisesClampHigh" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e08}">
       <Declaration><![CDATA[METHOD ClampAsFaultRaisesClampHigh
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('ClampAsFaultRaisesClampHigh');
 
 fb.cfg.clampAsFault := TRUE;
 fb.cfg.inputType    := __SYSTEM.TYPE_CLASS.TYPE_REAL;
-fb.SetRawReal(fValue := 50000.0);
+fb.inRaw.fReal := 50000.0;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
@@ -258,7 +245,7 @@ TEST_FINISHED();]]></ST>
     <Method Name="BadConfigRaisesFaultOnFirstScan" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e09}">
       <Declaration><![CDATA[METHOD BadConfigRaisesFaultOnFirstScan
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('BadConfigRaisesFaultOnFirstScan');
@@ -283,20 +270,20 @@ TEST_FINISHED();]]></ST>
     <Method Name="BadQualityHoldsLastRawReading" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e0a}">
       <Declaration><![CDATA[METHOD BadQualityHoldsLastRawReading
 VAR
-    fb          : FB_AnalogInput_Probe;
+    fb          : TcForge.FB_AnalogInput;
     snapshotRaw : REAL;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('BadQualityHoldsLastRawReading');
 
 // Establish a good reading first.
-fb.SetRawInt(nValue := 10000);
+fb.inRaw.nInt := 10000;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 snapshotRaw := fb.sts.rawReal;
 
 // Flip quality to BAD and change the raw wire. The FB must discard the
 // fresh value and hold the last-known-good raw reading.
-fb.SetRawInt(nValue := 25000);
+fb.inRaw.nInt := 25000;
 fb(inpQuality := TcForge.E_IO_Quality.BAD);
 
 AssertTrue(
@@ -309,7 +296,7 @@ TEST_FINISHED();]]></ST>
     <Method Name="InputTypeRealReadsRealMemberOfUnion" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e0b}">
       <Declaration><![CDATA[METHOD InputTypeRealReadsRealMemberOfUnion
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('InputTypeRealReadsRealMemberOfUnion');
@@ -323,12 +310,12 @@ fb.cfg.rawMax    := 100.0;
 fb.cfg.euMin     := 0.0;
 fb.cfg.euMax     := 100.0;
 
-fb.SetRawReal(fValue := 42.5);
+fb.inRaw.fReal := 42.5;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 
 AssertTrue(
     Condition := ABS(fb.sts.rawReal - 42.5) < TOL,
-    Message   := 'TYPE_REAL must read io.inRaw.fReal directly into rawReal');
+    Message   := 'TYPE_REAL must read inRaw.fReal directly into rawReal');
 AssertTrue(
     Condition := ABS(fb.sts.value - 42.5) < TOL,
     Message   := 'Identity scaling must leave value equal to the raw REAL input');
@@ -339,14 +326,14 @@ TEST_FINISHED();]]></ST>
     <Method Name="QualityTagPropagatesToStatus" Id="{b1c2d3e4-f5a6-7890-abcd-000000000e0c}">
       <Declaration><![CDATA[METHOD QualityTagPropagatesToStatus
 VAR
-    fb : FB_AnalogInput_Probe;
+    fb : TcForge.FB_AnalogInput;
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('QualityTagPropagatesToStatus');
 
 // The FB must echo inpQuality into sts.quality each cycle (subject to
 // the clamp promotion covered by ClampPromotesGoodQualityToClamped).
-fb.SetRawInt(nValue := 10000);
+fb.inRaw.nInt := 10000;
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
 AssertEquals_DINT(
     Expected := TO_DINT(TcForge.E_IO_Quality.GOOD),

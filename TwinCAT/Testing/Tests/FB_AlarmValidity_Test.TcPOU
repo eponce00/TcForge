@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_AlarmValidity_Test" Id="{36a3cea8-a943-49a3-ba5a-36c5ee0618ab}"><Declaration><![CDATA[FUNCTION_BLOCK FB_AlarmValidity_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    done : BOOL;
+    restoredUnacked : FB_AlarmRestart_Probe;
+    restoredAcked : FB_AlarmRestart_Probe;
+    criteriaThreshold : TcForge.FB_AlarmThreshold;
+    criteriaDeviation : TcForge.FB_AlarmDeviation;
+    criteriaPhase : UINT;
+    beforeChange : TON;
+    afterChange : TON;
+    reassignedRate : TcForge.FB_AlarmRateOfChange;
+    severityAlarm : TcForge.FB_AlarmSimple;
+    signalingAlarm : TcForge.FB_AlarmThreshold;
+    recovery : TcForge.FB_AlarmSimple;
+    phase : UINT;
+    waitTimer : TON;
+    clearTimer : TON;
+    device0 : TcForge.FB_AlarmThreshold;
+    device1 : TcForge.FB_AlarmThreshold;
+    device2 : TcForge.FB_AlarmSimple;
+    device3 : TcForge.FB_AlarmSimple;
+    device4 : TcForge.FB_AlarmDeviation;
+    device5 : TcForge.FB_AlarmDeviation;
+    device6 : TcForge.FB_AlarmRateOfChange;
+    device7 : TcForge.FB_AlarmRateOfChange;
+    device8 : TcForge.FB_AlarmRateOfChange;
+    device9 : TcForge.FB_AlarmLimit;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[IF NOT done THEN
+InvalidInputPreservesAlarm();
+RestoredLatchPublishesSeverity();
+RestoredAcknowledgmentNeedsClearEvidence();
+InvalidConfigPreservesLatch();
+RequireAckChangePreservesLatch();
+SimpleValidityGate();
+DeviationExtremeArithmetic();
+DeviationRejectsBadBounds();
+RateExtremeArithmetic();
+RateRecoveryNeedsTwoSamples();
+RateConfigReseedsHistory();
+LimitRollupValidity();
+InvalidSeverityPreservesAlarm();
+SignalingNaNIsClassified();
+RateReassignmentDropsHistory();
+done := TRUE;
+END_IF;
+RecoveryHonorsFreshClearDelay();
+CriteriaChangeRestartsTripDelay();]]></ST></Implementation>
+<Method Name="RestoredLatchPublishesSeverity" Id="{c59f38f5-2a5a-44cd-9534-c704acb73867}"><Declaration><![CDATA[METHOD PRIVATE RestoredLatchPublishesSeverity]]></Declaration><Implementation><ST><![CDATA[TEST('RestoredLatchPublishesSeverity');
+restoredUnacked.SeedSavedLatch(acknowledged := FALSE);
+restoredUnacked.cfg.common.bEnable := TRUE;
+restoredUnacked.cfg.common.bRequireAck := TRUE;
+restoredUnacked.cfg.common.eSeverity := TcForge.E_AlarmSeverity.SHUTDOWN;
+restoredUnacked(inpActive := FALSE, inpValid := FALSE);
+AssertTrue(restoredUnacked.sts.active AND restoredUnacked.sts.latched, 'Restored unacked latch remains active without valid input');
+AssertFalse(restoredUnacked.sts.valid, 'Restored latch is not valid process evidence');
+AssertEquals_DINT(TcForge.E_AlarmSeverity.SHUTDOWN, restoredUnacked.sts.eSeverity, 'Startup publishes configured severity despite invalid input');
+restoredUnacked.cfg.common.eSeverity := TcForge.E_AlarmSeverity.INFO;
+restoredUnacked();
+AssertEquals_DINT(TcForge.E_AlarmSeverity.SHUTDOWN, restoredUnacked.sts.eSeverity, 'Later invalid evaluation preserves established severity');
+restoredUnacked(inpValid := TRUE);
+AssertTrue(restoredUnacked.sts.active AND restoredUnacked.sts.latched, 'Valid clear evidence alone cannot erase an unacked restored latch');
+restoredUnacked.Ack(); restoredUnacked();
+AssertFalse(restoredUnacked.sts.active, 'Explicit Ack and valid clear release restored latch');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RestoredAcknowledgmentNeedsClearEvidence" Id="{c1bfaab2-c917-4b17-b9e2-4c1e5b836042}"><Declaration><![CDATA[METHOD PRIVATE RestoredAcknowledgmentNeedsClearEvidence]]></Declaration><Implementation><ST><![CDATA[TEST('RestoredAcknowledgmentNeedsClearEvidence');
+restoredAcked.SeedSavedLatch(acknowledged := TRUE);
+restoredAcked.cfg.common.bEnable := TRUE;
+restoredAcked.cfg.common.bRequireAck := TRUE;
+restoredAcked.cfg.common.eSeverity := TcForge.E_AlarmSeverity.CRITICAL;
+restoredAcked(inpActive := FALSE, inpValid := FALSE);
+AssertTrue(restoredAcked.sts.active AND restoredAcked.sts.acked, 'Restored acknowledgment cannot clear alarm with invalid evidence');
+AssertFalse(restoredAcked.sts.latched, 'Restored acknowledged alarm does not demand another Ack');
+AssertEquals_DINT(TcForge.E_AlarmSeverity.CRITICAL, restoredAcked.sts.eSeverity, 'Acknowledged restored alarm retains meaningful startup severity');
+restoredAcked(inpValid := TRUE);
+AssertFalse(restoredAcked.sts.active OR restoredAcked.sts.acked, 'Valid clear evidence releases restored acknowledged latch without a second Ack');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="InvalidInputPreservesAlarm" Id="{d1008332-2018-49b7-a824-f1fef2c902a7}"><Declaration><![CDATA[METHOD PRIVATE InvalidInputPreservesAlarm
+VAR bits : TcForge.U_IoRaw_Out; tripped, cleared : LTIME; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('InvalidInputPreservesAlarm');
+device0.cfg.common.bEnable := TRUE; device0.cfg.bFailHigh := TRUE;
+device0.cfg.common.eSeverity := TcForge.E_AlarmSeverity.CRITICAL;
+device0(inpValue := 10.0); tripped := device0.sts.tsTripped; cleared := device0.sts.tsCleared;
+bits.dw := DWORD#16#7FC00000; device0(inpValue := bits.fReal);
+AssertTrue(device0.sts.active, 'NaN cannot clear active alarm');
+AssertFalse(device0.sts.valid, 'NaN evaluation is invalid');
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.InvalidInput, device0.sts.evaluationState, 'NaN classified without FPU operation');
+AssertEquals_DINT(TcForge.E_AlarmSeverity.CRITICAL, device0.sts.eSeverity, 'Established severity preserved');
+AssertTrue(device0.sts.tsTripped = tripped AND device0.sts.tsCleared = cleared, 'Invalid evaluation creates no alarm edges');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="InvalidConfigPreservesLatch" Id="{ff379c3a-15b3-4ebe-925a-4853dfcd4f3b}"><Declaration><![CDATA[METHOD PRIVATE InvalidConfigPreservesLatch
+VAR bits : TcForge.U_IoRaw_Out; tripped, cleared : LTIME; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('InvalidConfigPreservesLatch');
+device1.cfg.common.bEnable := TRUE; device1.cfg.bFailHigh := TRUE; device1.cfg.common.bRequireAck := TRUE;
+device1(inpValue := 10.0);
+bits.dw := DWORD#16#7FC00000; device1.cfg.fThreshold := bits.fReal;
+device1(); device1.Ack(); device1();
+AssertTrue(device1.sts.active, 'Ack during invalid config cannot clear latch');
+AssertTrue(device1.sts.acked, 'Ack is recorded while evaluation is invalid');
+device1.cfg.fThreshold := 20.0; device1();
+AssertFalse(device1.sts.active, 'Valid clear evidence releases acknowledged latch');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RequireAckChangePreservesLatch" Id="{4ce45a62-b441-4694-b7db-977756e9ecba}"><Declaration><![CDATA[METHOD PRIVATE RequireAckChangePreservesLatch
+VAR bits : TcForge.U_IoRaw_Out; tripped, cleared : LTIME; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RequireAckChangePreservesLatch');
+device2.cfg.common.bEnable := TRUE; device2.cfg.common.bRequireAck := TRUE;
+device2(inpActive := TRUE); device2.cfg.common.bRequireAck := FALSE; device2(inpActive := FALSE);
+AssertTrue(device2.sts.active AND device2.sts.latched, 'Changing future latch policy does not erase unacked trip');
+device2.Ack(); device2(); AssertFalse(device2.sts.active, 'Ack and valid clear release old latch');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="SimpleValidityGate" Id="{bc706275-4e08-44e3-8451-7a3696b086e1}"><Declaration><![CDATA[METHOD PRIVATE SimpleValidityGate
+VAR bits : TcForge.U_IoRaw_Out; tripped, cleared : LTIME; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('SimpleValidityGate');
+device3.cfg.common.bEnable := TRUE; device3(inpActive := TRUE);
+device3(inpActive := FALSE, inpValid := FALSE);
+AssertTrue(device3.sts.active, 'Missing digital quality holds established alarm');
+AssertFalse(device3.sts.valid, 'Missing quality is visible');
+device3(inpValid := TRUE); AssertFalse(device3.sts.active, 'Valid clear evidence releases nonlatched alarm');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DeviationExtremeArithmetic" Id="{05389cfb-49ff-4c3d-8728-11ab002e37cc}"><Declaration><![CDATA[METHOD PRIVATE DeviationExtremeArithmetic
+VAR bits : TcForge.U_IoRaw_Out; tripped, cleared : LTIME; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DeviationExtremeArithmetic');
+device4.cfg.common.bEnable := TRUE; device4.cfg.bUseSetpoint := TRUE;
+device4.cfg.fHighLimit := 3.0E38; device4.cfg.fLowLimit := 3.0E38;
+device4(inpPv := 3.0E38, inpSetpoint := 3.0E38);
+AssertTrue(device4.sts.valid, 'Finite extremes use wide intermediate bounds');
+AssertFalse(device4.sts.active, 'Large valid setpoint window contains PV');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DeviationRejectsBadBounds" Id="{7bb86694-cfe9-4860-a8c7-54f6d3175359}"><Declaration><![CDATA[METHOD PRIVATE DeviationRejectsBadBounds
+VAR bits : TcForge.U_IoRaw_Out; tripped, cleared : LTIME; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DeviationRejectsBadBounds');
+device5.cfg.common.bEnable := TRUE; device5.cfg.fHighLimit := 1.0; device5.cfg.fLowLimit := 2.0; device5();
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.InvalidConfig, device5.sts.evaluationState, 'Reversed absolute bounds rejected');
+device5.cfg.bUseSetpoint := TRUE; device5.cfg.fLowLimit := -1.0; device5();
+AssertFalse(device5.sts.valid, 'Negative setpoint deviation rejected');
+device5.cfg.fLowLimit := 1.0; bits.dw := DWORD#16#7F800000; device5(inpSetpoint := bits.fReal);
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.InvalidInput, device5.sts.evaluationState, 'Infinite active setpoint rejected');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RateExtremeArithmetic" Id="{cc27474f-fba0-4862-baf0-3009a49ae90f}"><Declaration><![CDATA[METHOD PRIVATE RateExtremeArithmetic
+VAR bits : TcForge.U_IoRaw_Out; tripped, cleared : LTIME; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RateExtremeArithmetic');
+device6.cfg.common.bEnable := TRUE; device6.cfg.fRateLimit := 1.0;
+device6(inpPv := -3.0E38);
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.Initializing, device6.sts.evaluationState, 'First valid sample is baseline only');
+device6(inpPv := 3.0E38);
+AssertTrue(device6.sts.valid AND device6.sts.active, 'Extreme REAL step is valid LREAL rate');
+AssertTrue(TcForge.F_IsFiniteLReal(device6.outRateOfChange), 'Rate remains finite');
+AssertTrue(device6.outRateOfChange > LREAL#3.4E38, 'Rate is not narrowed or silently saturated');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RateRecoveryNeedsTwoSamples" Id="{2de63305-22ca-45c1-a8c2-e4afc7b93bbc}"><Declaration><![CDATA[METHOD PRIVATE RateRecoveryNeedsTwoSamples
+VAR bits : TcForge.U_IoRaw_Out; tripped, cleared : LTIME; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RateRecoveryNeedsTwoSamples');
+device7.cfg.common.bEnable := TRUE; device7.cfg.fRateLimit := 1.0;
+device7(inpPv := 0.0); device7(inpPv := 10.0);
+AssertTrue(device7.sts.active, 'Rate trip established');
+bits.dw := DWORD#16#7FC00000; device7(inpPv := bits.fReal);
+AssertTrue(device7.sts.active, 'Invalid sample preserves rate alarm');
+device7(inpPv := 10.0);
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.Initializing, device7.sts.evaluationState, 'Recovery reseeds history');
+AssertTrue(device7.sts.active, 'Seed sample cannot clear prior trip');
+device7(inpPv := 10.0);
+AssertTrue(device7.sts.valid, 'Second valid sample supplies rate');
+AssertFalse(device7.sts.active, 'Valid zero rate clears nonlatched trip');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RateConfigReseedsHistory" Id="{94afb662-0717-4a52-aaef-09c2e4cdfc09}"><Declaration><![CDATA[METHOD PRIVATE RateConfigReseedsHistory
+VAR bits : TcForge.U_IoRaw_Out; tripped, cleared : LTIME; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RateConfigReseedsHistory');
+device8.cfg.common.bEnable := TRUE; device8(inpPv := 0.0); device8(inpPv := 1.0);
+device8.cfg.fRateLimit := -1.0; device8();
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.InvalidConfig, device8.sts.evaluationState, 'Negative rate limit rejected');
+device8.cfg.fRateLimit := 2.0; device8(inpPv := 1000.0);
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.Initializing, device8.sts.evaluationState, 'Valid config recovery resets old sample');
+device8(inpPv := 1000.0); AssertFalse(device8.sts.active, 'No synthetic rate across invalid configuration');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="LimitRollupValidity" Id="{5f938f31-fd0a-4dcb-b0f5-e259a73c8217}"><Declaration><![CDATA[METHOD PRIVATE LimitRollupValidity
+VAR bits : TcForge.U_IoRaw_Out; tripped, cleared : LTIME; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('LimitRollupValidity');
+device9.cfg.Hi.common.bEnable := TRUE; device9.cfg.Hi.bFailHigh := TRUE;
+device9(inpPv := 10.0); AssertTrue(device9.sts.valid, 'Disabled unused levels do not invalidate enabled tier');
+device9(inpValid := FALSE);
+AssertFalse(device9.sts.valid, 'Composite propagates invalid signal');
+AssertTrue(device9.sts.anyActive, 'Composite preserves established tier alarm');
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.InvalidInput, device9.sts.Hi.evaluationState, 'Child exposes invalid signal');
+device9.cfg.Hi.common.bEnable := FALSE; device9();
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.Disabled, device9.sts.evaluationState, 'All disabled is distinct from valid');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RecoveryHonorsFreshClearDelay" Id="{17b41ed2-d80d-4f54-9f5b-4556c333753d}"><Declaration><![CDATA[METHOD PRIVATE RecoveryHonorsFreshClearDelay]]></Declaration><Implementation><ST><![CDATA[IF phase = 4 THEN RETURN; END_IF;
+TEST('RecoveryHonorsFreshClearDelay');
+CASE phase OF
+0:
+    recovery.cfg.common.bEnable := TRUE;
+    recovery.cfg.common.tOffDelay := T#60MS;
+    recovery(inpActive := TRUE);
+    AssertTrue(recovery.sts.active, 'Trip established before quality loss');
+    phase := 1;
+1:
+    recovery(inpActive := FALSE, inpValid := FALSE);
+    waitTimer(IN := TRUE, PT := T#100MS);
+    AssertTrue(recovery.sts.active, 'Invalid interval cannot count as clear evidence');
+    IF waitTimer.Q THEN phase := 2; END_IF;
+2:
+    recovery(inpValid := TRUE);
+    AssertTrue(recovery.sts.active, 'First valid clear sample starts full off-delay');
+    clearTimer(IN := TRUE, PT := T#90MS);
+    phase := 3;
+3:
+    recovery(); clearTimer(IN := TRUE, PT := T#90MS);
+    IF clearTimer.ET < T#40MS THEN AssertTrue(recovery.sts.active, 'Recovery cannot release before fresh delay'); END_IF;
+    IF clearTimer.Q THEN
+        AssertFalse(recovery.sts.active, 'Sustained valid clear releases after off-delay');
+        phase := 4; TEST_FINISHED();
+    END_IF;
+END_CASE;]]></ST></Implementation></Method>
+<Method Name="InvalidSeverityPreservesAlarm" Id="{95d9c828-8244-464c-813f-d9aa8a62ee35}"><Declaration><![CDATA[METHOD PRIVATE InvalidSeverityPreservesAlarm
+VAR badSeverity : USINT := 255; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('InvalidSeverityPreservesAlarm');
+severityAlarm.cfg.common.bEnable := TRUE;
+severityAlarm.cfg.common.eSeverity := TcForge.E_AlarmSeverity.WARNING;
+severityAlarm(inpActive := TRUE);
+MEMCPY(ADR(severityAlarm.cfg.common.eSeverity), ADR(badSeverity), SIZEOF(badSeverity));
+severityAlarm(inpActive := FALSE);
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.InvalidConfig, severityAlarm.sts.evaluationState, 'Unknown severity is invalid config');
+AssertTrue(severityAlarm.sts.active, 'Invalid severity cannot clear established trip');
+AssertEquals_DINT(TcForge.E_AlarmSeverity.WARNING, severityAlarm.sts.eSeverity, 'Established severity preserved');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="SignalingNaNIsClassified" Id="{5feeb456-8ce9-45ec-9801-b868a0f7aa0a}"><Declaration><![CDATA[METHOD PRIVATE SignalingNaNIsClassified
+VAR bits : TcForge.U_IoRaw_Out; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('SignalingNaNIsClassified');
+signalingAlarm.cfg.common.bEnable := TRUE; signalingAlarm.cfg.bFailHigh := TRUE;
+bits.dw := DWORD#16#7F800001;
+signalingAlarm(inpValue := bits.fReal);
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.InvalidInput, signalingAlarm.sts.evaluationState, 'Signaling NaN rejected before floating operations');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RateReassignmentDropsHistory" Id="{062935f5-fc23-4f79-98de-1984e4a899ef}"><Declaration><![CDATA[METHOD PRIVATE RateReassignmentDropsHistory]]></Declaration><Implementation><ST><![CDATA[TEST('RateReassignmentDropsHistory');
+reassignedRate.cfg.common.bEnable := TRUE; reassignedRate.cfg.fRateLimit := 1.0;
+reassignedRate(inpPv := 0.0); reassignedRate(inpPv := 10.0);
+AssertTrue(reassignedRate.sts.active, 'Rate alarm initially active');
+reassignedRate.ReassignInput();
+AssertFalse(reassignedRate.sts.valid, 'Reassignment invalidates immediately');
+AssertTrue(reassignedRate.sts.active, 'Reassignment cannot clear established alarm');
+reassignedRate(inpPv := 1000.0);
+AssertEquals_DINT(TcForge.E_AlarmEvaluation.Initializing, reassignedRate.sts.evaluationState, 'New source starts with baseline sample');
+reassignedRate(inpPv := 1000.0);
+AssertFalse(reassignedRate.sts.active, 'Second fresh source sample supplies valid zero rate');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="CriteriaChangeRestartsTripDelay" Id="{b919d2a7-16dd-410c-8ef8-cd861a802a6c}"><Declaration><![CDATA[METHOD PRIVATE CriteriaChangeRestartsTripDelay]]></Declaration><Implementation><ST><![CDATA[IF criteriaPhase = 4 THEN RETURN; END_IF;
+TEST('CriteriaChangeRestartsTripDelay');
+CASE criteriaPhase OF
+0:
+    criteriaThreshold.cfg.common.bEnable := TRUE;
+    criteriaThreshold.cfg.common.tOnDelay := T#120MS;
+    criteriaThreshold.cfg.bFailHigh := TRUE;
+    criteriaDeviation.cfg.common.bEnable := TRUE;
+    criteriaDeviation.cfg.common.tOnDelay := T#120MS;
+    criteriaDeviation.cfg.fHighLimit := 1.0;
+    criteriaPhase := 1;
+1:
+    criteriaThreshold(inpValue := 10.0); criteriaDeviation(inpPv := 10.0);
+    beforeChange(IN := TRUE, PT := T#80MS);
+    IF beforeChange.Q THEN
+        criteriaThreshold.cfg.fThreshold := 1.0;
+        criteriaDeviation.cfg.fHighLimit := 2.0;
+        criteriaPhase := 2;
+    END_IF;
+2:
+    criteriaThreshold(); criteriaDeviation();
+    afterChange(IN := TRUE, PT := T#160MS);
+    AssertFalse(criteriaThreshold.sts.active, 'New threshold cannot inherit old on-delay credit');
+    AssertFalse(criteriaDeviation.sts.active, 'New deviation bounds cannot inherit old on-delay credit');
+    IF afterChange.ET >= T#60MS THEN criteriaPhase := 3; END_IF;
+3:
+    criteriaThreshold(); criteriaDeviation();
+    afterChange(IN := TRUE, PT := T#160MS);
+    IF afterChange.Q THEN
+        AssertTrue(criteriaThreshold.sts.active, 'New threshold trips after fresh full delay');
+        AssertTrue(criteriaDeviation.sts.active, 'New deviation trips after fresh full delay');
+        criteriaPhase := 4; TEST_FINISHED();
+    END_IF;
+END_CASE;]]></ST></Implementation></Method>
+</POU></TcPlcObject>

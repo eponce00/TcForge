@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_AlarmRestart_Probe" Id="{13ed5234-aa7a-4314-b881-40fb364475e2}"><Declaration><![CDATA[// Injects restored flags into an otherwise fresh instance. This exercises
+// startup policy, not actual TwinCAT persistent-image durability.
+FUNCTION_BLOCK FB_AlarmRestart_Probe EXTENDS TcForge.FB_AlarmSimple]]></Declaration><Implementation><ST><![CDATA[SUPER^();]]></ST></Implementation>
+<Method Name="SeedSavedLatch" Id="{488547cb-e058-44bd-ae2e-00f3ebd09ffb}"><Declaration><![CDATA[METHOD PUBLIC SeedSavedLatch
+VAR_INPUT acknowledged : BOOL; END_VAR]]></Declaration><Implementation><ST><![CDATA[_latchedSync := TRUE;
+_ackedSync := acknowledged;]]></ST></Implementation></Method>
+</POU></TcPlcObject>

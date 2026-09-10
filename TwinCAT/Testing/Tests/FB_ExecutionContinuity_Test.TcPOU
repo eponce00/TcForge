@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?><TcPlcObject Version="1.1.0.1"><POU Name="FB_ExecutionContinuity_Test" Id="{f666fe2e-1149-484e-bbf4-abaa632eaebf}"><Declaration><![CDATA[FUNCTION_BLOCK FB_ExecutionContinuity_Test EXTENDS TcUnit.FB_TestSuite
+VAR done : BOOL; END_VAR]]></Declaration><Implementation><ST><![CDATA[IF NOT done THEN
+InitialObservationEstablishesBaseline();
+ContinuousAndRepeatedCycle();
+SkippedScanRequiresRecovery();
+OnlineChangeDetectedWithoutGap();
+TaskChangeAndInvalidContext();
+CounterWrapAndReset();
+CompatibleChangePreservesExecution();
+CompatibleChangeCannotMaskGap();
+CompatiblePolicyCannotMaskOwnerFailure();
+done := TRUE; END_IF;]]></ST></Implementation><Method Name="InitialObservationEstablishesBaseline" Id="{fd637c91-5d4c-474f-9b62-53c01240f01f}"><Declaration><![CDATA[METHOD InitialObservationEstablishesBaseline
+VAR fb : TcForge.FB_ExecutionContinuity; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('InitialObservationEstablishesBaseline');
+fb(taskIndex := 1, cycleCounter := 99, onlineChangeCounter := 3); AssertFalse(Condition := fb.interrupted, Message := 'First sample establishes baseline');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="ContinuousAndRepeatedCycle" Id="{8e0acbee-e5b2-4100-aa22-230cddb46ef5}"><Declaration><![CDATA[METHOD ContinuousAndRepeatedCycle
+VAR fb : TcForge.FB_ExecutionContinuity; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('ContinuousAndRepeatedCycle');
+fb(taskIndex := 1, cycleCounter := 99); fb(cycleCounter := 100); AssertFalse(Condition := fb.interrupted, Message := 'Next scan continues'); fb(); AssertFalse(Condition := fb.interrupted, Message := 'Same scan observation is idempotent');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="SkippedScanRequiresRecovery" Id="{ca528c56-5566-4a21-9a75-89c0945e6e1b}"><Declaration><![CDATA[METHOD SkippedScanRequiresRecovery
+VAR fb : TcForge.FB_ExecutionContinuity; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('SkippedScanRequiresRecovery');
+fb(taskIndex := 1, cycleCounter := 99); fb(cycleCounter := 101); AssertTrue(Condition := fb.interrupted, Message := 'Missed execution detected'); fb(cycleCounter := 102); AssertFalse(Condition := fb.interrupted, Message := 'Caller must latch recovery; event is one scan');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="OnlineChangeDetectedWithoutGap" Id="{5dcf1065-db81-42e2-897d-02f125642727}"><Declaration><![CDATA[METHOD OnlineChangeDetectedWithoutGap
+VAR fb : TcForge.FB_ExecutionContinuity; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('OnlineChangeDetectedWithoutGap');
+fb(taskIndex := 1, cycleCounter := 99, onlineChangeCounter := 3); fb(cycleCounter := 100, onlineChangeCounter := 4); AssertTrue(Condition := fb.interrupted, Message := 'Implementation-only online change detected');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="TaskChangeAndInvalidContext" Id="{bf3b21da-8dd2-4b8b-9378-f36750e8674d}"><Declaration><![CDATA[METHOD TaskChangeAndInvalidContext
+VAR fb : TcForge.FB_ExecutionContinuity; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('TaskChangeAndInvalidContext');
+fb(taskIndex := 1, cycleCounter := 99); fb(taskIndex := 2, cycleCounter := 100); AssertTrue(Condition := fb.interrupted, Message := 'Different owner detected'); fb(taskIndex := 0); AssertTrue(Condition := fb.interrupted, Message := 'RPC or invalid context rejected');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="CounterWrapAndReset" Id="{5a54f69c-7298-4ef0-9f2e-22778f2caecd}"><Declaration><![CDATA[METHOD CounterWrapAndReset
+VAR fb : TcForge.FB_ExecutionContinuity; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('CounterWrapAndReset');
+fb(taskIndex := 1, cycleCounter := UDINT#16#FFFFFFFF); fb(cycleCounter := 0); AssertFalse(Condition := fb.interrupted, Message := 'Natural wrap is continuous'); fb(cycleCounter := 99); fb(cycleCounter := 0); AssertTrue(Condition := fb.interrupted, Message := 'Counter discontinuity detected');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="CompatibleChangePreservesExecution" Id="{985ce2be-8e0d-4375-b688-a5d00b13cba2}"><Declaration><![CDATA[METHOD CompatibleChangePreservesExecution
+VAR fb : TcForge.FB_ExecutionContinuity; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('CompatibleChangePreservesExecution');
+fb(taskIndex := 1, cycleCounter := 99, onlineChangeCounter := 3, recoverOnOnlineChange := FALSE);
+fb(cycleCounter := 100, onlineChangeCounter := 4);
+AssertTrue(Condition := fb.onlineChanged, Message := 'Change remains observable');
+AssertFalse(Condition := fb.executionInterrupted, Message := 'Online edit is not an execution gap');
+AssertFalse(Condition := fb.interrupted, Message := 'Explicit compatible-edit policy preserves execution');
+fb(cycleCounter := 101);
+AssertFalse(Condition := fb.onlineChanged, Message := 'Change notification is a pulse');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="CompatibleChangeCannotMaskGap" Id="{7ee05729-d075-40ba-9c1f-b3af6d45b09e}"><Declaration><![CDATA[METHOD CompatibleChangeCannotMaskGap
+VAR fb : TcForge.FB_ExecutionContinuity; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('CompatibleChangeCannotMaskGap');
+fb(taskIndex := 1, cycleCounter := 99, onlineChangeCounter := 3, recoverOnOnlineChange := FALSE);
+fb(cycleCounter := 101, onlineChangeCounter := 4);
+AssertTrue(Condition := fb.onlineChanged, Message := 'Simultaneous online edit observed');
+AssertTrue(Condition := fb.executionInterrupted, Message := 'Gap remains a gap during online edit');
+AssertTrue(Condition := fb.interrupted, Message := 'Compatible-edit policy cannot suppress recovery');
+TEST_FINISHED();]]></ST></Implementation></Method><Method Name="CompatiblePolicyCannotMaskOwnerFailure" Id="{e7723f75-2354-47e4-a5e1-12d2b1911e61}"><Declaration><![CDATA[METHOD CompatiblePolicyCannotMaskOwnerFailure
+VAR fb : TcForge.FB_ExecutionContinuity; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('CompatiblePolicyCannotMaskOwnerFailure');
+fb(taskIndex := 1, cycleCounter := 99, recoverOnOnlineChange := FALSE);
+fb(taskIndex := 2, cycleCounter := 100);
+AssertTrue(Condition := fb.interrupted, Message := 'Owner conflict still requires recovery');
+fb(taskIndex := 0);
+AssertTrue(Condition := fb.executionInterrupted, Message := 'Invalid context still fails closed');
+TEST_FINISHED();]]></ST></Implementation></Method></POU></TcPlcObject>

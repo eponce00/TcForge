@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_Foundation_Test" Id="{255720d9-4766-4672-9803-51ea79f2a5cc}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Foundation_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    _done : BOOL;
+    RecordedFaultBlocksStart_sm : FB_StateMachine_Probe;
+    RetryRecoversOddStep_sm : FB_StateMachine_Probe;
+    StopHandlesPausedAndHoming_sm : FB_StateMachine_Probe;
+    AbortCannotBeOverwritten_sm : FB_StateMachine_Probe;
+    StopCancelsQueuedHome_sm : FB_StateMachine_Probe;
+    PendingHomeRechecksPermissive_sm : FB_StateMachine_Probe;
+    MissingRequiredPermissiveInhibits_fb : TcForge.FB_Permissives;
+    MissingRequiredInterlockLatches_fb : TcForge.FB_Interlock;
+    DigitalQualityRecoveryNeedsCommand_fb : TcForge.FB_DigitalOutput;
+    ForceSafeBypassesInvertAndDelay_fb : TcForge.FB_DigitalOutput;
+    OperatorCannotClaimProgram_fb : TcForge.FB_DigitalOutput;
+    AnalogLiveConfigFaultInhibits_fb : TcForge.FB_AnalogOutput;
+    AnalogQualityRecoveryNeedsCommand_fb : TcForge.FB_AnalogOutput;
+    ActuatorTripDropsOutputSameScan_fb : TcForge.FB_TwoPosActuator;
+    ActuatorAbortDoesNotReenergizeHold_fb : TcForge.FB_TwoPosActuator;
+    ExternalInputUsesPublicBoundary_fb : TcForge.FB_DigitalInput;
+    ResetDoesNotStopRunningMachine_sm : FB_StateMachine_Probe;
+    PublicSequenceLifecycle_sm : TcForge.FB_StateMachine;
+    PublicSequenceLifecycle_homeStep : TcForge.FB_Step;
+    PublicSequenceLifecycle_stopStep : TcForge.FB_Step;
+    RateAlarmSeedsAndDetectsChange_fb : TcForge.FB_AlarmRateOfChange;
+    StartupDoesNotRestoreWithoutOptIn_fb : FB_OutputRestart_Probe;
+    StartupRestoreRequiresGoodQuality_fb : FB_OutputRestart_Probe;
+    StartupRestoreRequiresGoodQuality_restored : FB_OutputRestart_Probe;
+    SubmoduleFaultDoesNotPreventAbortCompletion_sm : FB_StateMachine_Probe;
+    ActuatorAbortDominatesSameScan_fb : TcForge.FB_TwoPosActuator;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF _done THEN RETURN; END_IF;
+RecordedFaultBlocksStart();
+RetryRecoversOddStep();
+StopHandlesPausedAndHoming();
+AbortCannotBeOverwritten();
+StopCancelsQueuedHome();
+PendingHomeRechecksPermissive();
+MissingRequiredPermissiveInhibits();
+MissingRequiredInterlockLatches();
+DigitalQualityRecoveryNeedsCommand();
+ForceSafeBypassesInvertAndDelay();
+OperatorCannotClaimProgram();
+AnalogLiveConfigFaultInhibits();
+AnalogQualityRecoveryNeedsCommand();
+ActuatorTripDropsOutputSameScan();
+ActuatorAbortDoesNotReenergizeHold();
+ExternalInputUsesPublicBoundary();
+ResetDoesNotStopRunningMachine();
+PublicSequenceLifecycle();
+RateAlarmSeedsAndDetectsChange();
+StartupDoesNotRestoreWithoutOptIn();
+StartupRestoreRequiresGoodQuality();
+SubmoduleFaultDoesNotPreventAbortCompletion();
+ActuatorAbortDominatesSameScan();
+_done := TRUE;]]></ST>
+    </Implementation>
+    <Method Name="RecordedFaultBlocksStart" Id="{8b5585dc-38c5-42de-84f7-6247a321289e}">
+      <Declaration><![CDATA[METHOD RecordedFaultBlocksStart
+VAR
+rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RecordedFaultBlocksStart');
+RecordedFaultBlocksStart_sm.ResetAll(); RecordedFaultBlocksStart_sm.ForceState(state := TcForge.E_SM_State.READY); RecordedFaultBlocksStart_sm();
+RecordedFaultBlocksStart_sm.inpSubmoduleFaulted := TRUE; RecordedFaultBlocksStart_sm();
+rsp := RecordedFaultBlocksStart_sm.Start();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_FAULTED, Actual := rsp, Message := 'Base fault must block Start even on an even step');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RetryRecoversOddStep" Id="{9ff7391c-c736-415c-ac5f-2d736fbe595d}">
+      <Declaration><![CDATA[METHOD RetryRecoversOddStep
+VAR
+rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RetryRecoversOddStep');
+RetryRecoversOddStep_sm.ResetAll(); RetryRecoversOddStep_sm.ForceState(state := TcForge.E_SM_State.RUNNING);
+RetryRecoversOddStep_sm.SetCurrentStep(nStep := 3001); RetryRecoversOddStep_sm.ForceNextStep(nStep := 3001); RetryRecoversOddStep_sm();
+rsp := RetryRecoversOddStep_sm.Retry();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Retry must accept recovery step');
+RetryRecoversOddStep_sm(); RetryRecoversOddStep_sm();
+AssertEquals_DINT(Expected := 3000, Actual := RetryRecoversOddStep_sm.Status.Step.Current, Message := 'Retry re-enters previous even step');
+AssertFalse(Condition := RetryRecoversOddStep_sm.IsFaulted(), Message := 'Recovered step fault must clear');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StopHandlesPausedAndHoming" Id="{91907899-d792-4e19-990b-1bbb64e7dbb8}">
+      <Declaration><![CDATA[METHOD StopHandlesPausedAndHoming
+VAR
+i : INT;
+rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('StopHandlesPausedAndHoming');
+FOR i := 0 TO 1 DO
+StopHandlesPausedAndHoming_sm.ResetAll();
+IF i = 0 THEN StopHandlesPausedAndHoming_sm.ForceState(state := TcForge.E_SM_State.PAUSED); ELSE StopHandlesPausedAndHoming_sm.ForceState(state := TcForge.E_SM_State.HOMING); END_IF;
+rsp := StopHandlesPausedAndHoming_sm.Stop(); StopHandlesPausedAndHoming_sm();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Stop is accepted');
+AssertEquals_DINT(Expected := TcForge.E_SM_State.STOPPING, Actual := StopHandlesPausedAndHoming_sm.Status.State, Message := 'Accepted Stop starts stopping sequence');
+END_FOR;
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AbortCannotBeOverwritten" Id="{67a2a0ff-8172-4514-acbd-09991d021714}">
+      <Declaration><![CDATA[METHOD AbortCannotBeOverwritten
+VAR
+rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AbortCannotBeOverwritten');
+AbortCannotBeOverwritten_sm.ResetAll(); AbortCannotBeOverwritten_sm.ForceState(state := TcForge.E_SM_State.RUNNING);
+AbortCannotBeOverwritten_sm.Abort(); rsp := AbortCannotBeOverwritten_sm.Pause(); AbortCannotBeOverwritten_sm.Stop(); AbortCannotBeOverwritten_sm();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_WRONG_STATE, Actual := rsp, Message := 'Pause cannot replace Abort');
+AssertEquals_DINT(Expected := TcForge.E_SM_State.ABORTING, Actual := AbortCannotBeOverwritten_sm.Status.State, Message := 'Abort has priority');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StopCancelsQueuedHome" Id="{77f06d5a-07ab-4385-8ad4-e81527082332}">
+      <Declaration><![CDATA[METHOD StopCancelsQueuedHome
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('StopCancelsQueuedHome');
+StopCancelsQueuedHome_sm.ResetAll(); StopCancelsQueuedHome_sm(); StopCancelsQueuedHome_sm.Home(); StopCancelsQueuedHome_sm.Stop(); StopCancelsQueuedHome_sm(); StopCancelsQueuedHome_sm();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.STOPPED, Actual := StopCancelsQueuedHome_sm.Status.State, Message := 'Queued home must not survive Stop');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PendingHomeRechecksPermissive" Id="{212c266c-26d3-4eeb-ad0e-ec62824e9258}">
+      <Declaration><![CDATA[METHOD PendingHomeRechecksPermissive
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('PendingHomeRechecksPermissive');
+PendingHomeRechecksPermissive_sm.ResetAll(); PendingHomeRechecksPermissive_sm(); PendingHomeRechecksPermissive_sm.Home(); PendingHomeRechecksPermissive_sm.MapHomeCondition(bitIndex := 0, bGood := FALSE); PendingHomeRechecksPermissive_sm();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.STOPPED, Actual := PendingHomeRechecksPermissive_sm.Status.State, Message := 'Current bad permission cancels pending Home');
+PendingHomeRechecksPermissive_sm.MapHomeCondition(bitIndex := 0, bGood := TRUE); PendingHomeRechecksPermissive_sm();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.STOPPED, Actual := PendingHomeRechecksPermissive_sm.Status.State, Message := 'Cancelled request must not restart later');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MissingRequiredPermissiveInhibits" Id="{b8a2757b-516c-4143-bace-1b9dbbd2cb84}">
+      <Declaration><![CDATA[METHOD MissingRequiredPermissiveInhibits
+VAR
+i : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('MissingRequiredPermissiveInhibits');
+MissingRequiredPermissiveInhibits_fb.cfg.nRequired := 1; MissingRequiredPermissiveInhibits_fb();
+AssertFalse(Condition := MissingRequiredPermissiveInhibits_fb.sts.bOK, Message := 'Never-mapped required condition must inhibit');
+MissingRequiredPermissiveInhibits_fb.MapInput(bitIndex := 0, inputValue := TRUE); MissingRequiredPermissiveInhibits_fb();
+AssertTrue(Condition := MissingRequiredPermissiveInhibits_fb.sts.bOK, Message := 'Fresh required condition is good');
+FOR i := 1 TO 12 DO MissingRequiredPermissiveInhibits_fb(); END_FOR;
+AssertFalse(Condition := MissingRequiredPermissiveInhibits_fb.sts.bOK, Message := 'Stale required condition must inhibit');
+AssertEquals_ULINT(Expected := 1, Actual := MissingRequiredPermissiveInhibits_fb.sts.nMissing, Message := 'Missing mask identifies condition');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="MissingRequiredInterlockLatches" Id="{a99a7798-61ab-42f9-872b-c19b02806607}">
+      <Declaration><![CDATA[METHOD MissingRequiredInterlockLatches
+VAR
+i : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('MissingRequiredInterlockLatches');
+MissingRequiredInterlockLatches_fb.cfg.nRequired := 1; MissingRequiredInterlockLatches_fb.MapInput(bitIndex := 0, inputValue := TRUE); MissingRequiredInterlockLatches_fb();
+FOR i := 1 TO 12 DO MissingRequiredInterlockLatches_fb(); END_FOR;
+MissingRequiredInterlockLatches_fb.MapInput(bitIndex := 0, inputValue := TRUE); MissingRequiredInterlockLatches_fb();
+AssertFalse(Condition := MissingRequiredInterlockLatches_fb.sts.bOK, Message := 'Recovered missing interlock requires Reset');
+MissingRequiredInterlockLatches_fb.Reset(); MissingRequiredInterlockLatches_fb.MapInput(bitIndex := 0, inputValue := TRUE); MissingRequiredInterlockLatches_fb();
+AssertTrue(Condition := MissingRequiredInterlockLatches_fb.sts.bOK, Message := 'Reset after fresh data releases missing latch');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DigitalQualityRecoveryNeedsCommand" Id="{571f05f3-1feb-467c-9b94-3d76b23399cd}">
+      <Declaration><![CDATA[METHOD DigitalQualityRecoveryNeedsCommand
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('DigitalQualityRecoveryNeedsCommand');
+DigitalQualityRecoveryNeedsCommand_fb.SetOn(); DigitalQualityRecoveryNeedsCommand_fb(); AssertTrue(Condition := DigitalQualityRecoveryNeedsCommand_fb.sts.value, Message := 'Output starts on command');
+DigitalQualityRecoveryNeedsCommand_fb(inpQuality := TcForge.E_IO_Quality.BAD);
+AssertFalse(Condition := DigitalQualityRecoveryNeedsCommand_fb.sts.value, Message := 'Default bad-quality policy applies safe level');
+DigitalQualityRecoveryNeedsCommand_fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertFalse(Condition := DigitalQualityRecoveryNeedsCommand_fb.sts.value, Message := 'Quality recovery alone must not energize');
+DigitalQualityRecoveryNeedsCommand_fb.SetOn(); DigitalQualityRecoveryNeedsCommand_fb(); AssertTrue(Condition := DigitalQualityRecoveryNeedsCommand_fb.sts.value, Message := 'Fresh command resumes output');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ForceSafeBypassesInvertAndDelay" Id="{a14c0edc-2656-44b5-953f-f0c543bd8c8d}">
+      <Declaration><![CDATA[METHOD ForceSafeBypassesInvertAndDelay
+VAR
+rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ForceSafeBypassesInvertAndDelay');
+ForceSafeBypassesInvertAndDelay_fb.cfg.invert := TRUE; ForceSafeBypassesInvertAndDelay_fb.cfg.debounceOff := T#10S;
+ForceSafeBypassesInvertAndDelay_fb.SetOff(); ForceSafeBypassesInvertAndDelay_fb(); ForceSafeBypassesInvertAndDelay_fb.ForceSafe(); rsp := ForceSafeBypassesInvertAndDelay_fb.SetOn(); ForceSafeBypassesInvertAndDelay_fb();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED, Actual := rsp, Message := 'ForceSafe wins within scan');
+AssertFalse(Condition := ForceSafeBypassesInvertAndDelay_fb.sts.value, Message := 'ForceSafe writes electrical safe level without invert/delay');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OperatorCannotClaimProgram" Id="{f2b3845a-5886-4a2c-a6fb-9b4a94aa64d7}">
+      <Declaration><![CDATA[METHOD OperatorCannotClaimProgram
+VAR
+rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('OperatorCannotClaimProgram');
+OperatorCannotClaimProgram_fb();
+OperatorCannotClaimProgram_fb.LockSource(bLock := TRUE); rsp := OperatorCannotClaimProgram_fb.OperatorSetOn(requestId := 1);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.QUEUED, Actual := rsp, Message := 'Admission is not execution');
+OperatorCannotClaimProgram_fb();
+rsp := OperatorCannotClaimProgram_fb.OperatorCommandResult(requestId := 1);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_SOURCE_NOT_ALLOWED, Actual := rsp, Message := 'Operator wrapper always uses OPERATOR identity');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AnalogLiveConfigFaultInhibits" Id="{95ac6185-0ce8-4172-b543-9c21b24dc3a5}">
+      <Declaration><![CDATA[METHOD AnalogLiveConfigFaultInhibits
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AnalogLiveConfigFaultInhibits');
+AnalogLiveConfigFaultInhibits_fb.SetValue(rValue := 50.0); AnalogLiveConfigFaultInhibits_fb(); AnalogLiveConfigFaultInhibits_fb.cfg.euMax := AnalogLiveConfigFaultInhibits_fb.cfg.euMin; AnalogLiveConfigFaultInhibits_fb();
+AssertTrue(Condition := AnalogLiveConfigFaultInhibits_fb.IsFaulted(), Message := 'Live invalid range must fault');
+AssertTrue(Condition := AnalogLiveConfigFaultInhibits_fb.sts.outputInhibited, Message := 'Invalid config inhibits output same scan');
+AssertTrue(Condition := AnalogLiveConfigFaultInhibits_fb.sts.rawReal = 0.0, Message := 'Fallback is raw safe value');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AnalogQualityRecoveryNeedsCommand" Id="{5c053ef9-e35c-4747-8069-8280976a102c}">
+      <Declaration><![CDATA[METHOD AnalogQualityRecoveryNeedsCommand
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AnalogQualityRecoveryNeedsCommand');
+AnalogQualityRecoveryNeedsCommand_fb.SetValue(rValue := 50.0); AnalogQualityRecoveryNeedsCommand_fb(); AnalogQualityRecoveryNeedsCommand_fb(inpQuality := TcForge.E_IO_Quality.UNKNOWN); AnalogQualityRecoveryNeedsCommand_fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(Condition := AnalogQualityRecoveryNeedsCommand_fb.sts.outputInhibited, Message := 'Unknown quality disarms until fresh command');
+AnalogQualityRecoveryNeedsCommand_fb.SetValue(rValue := 25.0); AnalogQualityRecoveryNeedsCommand_fb();
+AssertFalse(Condition := AnalogQualityRecoveryNeedsCommand_fb.sts.outputInhibited, Message := 'Fresh command re-arms');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ActuatorTripDropsOutputSameScan" Id="{22075ae8-1499-483c-9006-f881167f581d}">
+      <Declaration><![CDATA[METHOD ActuatorTripDropsOutputSameScan
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ActuatorTripDropsOutputSameScan');
+ActuatorTripDropsOutputSameScan_fb(inAdvanced := FALSE, inRetracted := TRUE);
+ActuatorTripDropsOutputSameScan_fb.Advance(); ActuatorTripDropsOutputSameScan_fb(); AssertTrue(Condition := ActuatorTripDropsOutputSameScan_fb.outAdvance, Message := 'Motion output energized');
+ActuatorTripDropsOutputSameScan_fb(inAdvanced := TRUE, inRetracted := TRUE);
+AssertTrue(Condition := ActuatorTripDropsOutputSameScan_fb.IsFaulted(), Message := 'Contradictory feedback faults');
+AssertFalse(Condition := ActuatorTripDropsOutputSameScan_fb.outAdvance OR ActuatorTripDropsOutputSameScan_fb.outRetract, Message := 'Fault removes both outputs same scan');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ActuatorAbortDoesNotReenergizeHold" Id="{4416d9aa-018d-4d29-8ae2-2287bcc0ca1c}">
+      <Declaration><![CDATA[METHOD ActuatorAbortDoesNotReenergizeHold
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ActuatorAbortDoesNotReenergizeHold');
+ActuatorAbortDoesNotReenergizeHold_fb.cfg.holdAtRetracted := TRUE; ActuatorAbortDoesNotReenergizeHold_fb(inRetracted := TRUE);
+ActuatorAbortDoesNotReenergizeHold_fb.Abort(); ActuatorAbortDoesNotReenergizeHold_fb(); ActuatorAbortDoesNotReenergizeHold_fb();
+AssertFalse(Condition := ActuatorAbortDoesNotReenergizeHold_fb.outRetract, Message := 'Abort must not automatically energize hold coil later');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ExternalInputUsesPublicBoundary" Id="{6cc51664-ef67-4223-aa68-ceaf923cc285}">
+      <Declaration><![CDATA[METHOD ExternalInputUsesPublicBoundary
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ExternalInputUsesPublicBoundary');
+ExternalInputUsesPublicBoundary_fb(inSignal := TRUE);
+AssertTrue(Condition := ExternalInputUsesPublicBoundary_fb.sts.value, Message := 'Digital external input path works without probe');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetDoesNotStopRunningMachine" Id="{3cf9708b-1b5f-45fe-a219-f1db1cd328e7}">
+      <Declaration><![CDATA[METHOD ResetDoesNotStopRunningMachine
+VAR
+rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ResetDoesNotStopRunningMachine');
+ResetDoesNotStopRunningMachine_sm.ResetAll(); ResetDoesNotStopRunningMachine_sm.ForceState(state := TcForge.E_SM_State.RUNNING); rsp := ResetDoesNotStopRunningMachine_sm.Reset();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_WRONG_STATE, Actual := rsp, Message := 'Reset requires stopped state');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PublicSequenceLifecycle" Id="{f1248f4f-8c53-4091-9526-211ea1d34bdb}">
+      <Declaration><![CDATA[METHOD PublicSequenceLifecycle
+VAR
+i : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('PublicSequenceLifecycle');
+PublicSequenceLifecycle_sm(); PublicSequenceLifecycle_sm.Home(); PublicSequenceLifecycle_sm();
+AssertEquals_DINT(Expected := 1000, Actual := PublicSequenceLifecycle_sm.Status.Step.Current, Message := 'Home enters first step');
+FOR i := 1 TO 5 DO
+    PublicSequenceLifecycle_homeStep(sm := PublicSequenceLifecycle_sm, nStep := 1000, nNextStep := 0, nTimeout := 0, sName := 'Home'); PublicSequenceLifecycle_sm();
+END_FOR;
+AssertEquals_DINT(Expected := TcForge.E_SM_State.READY, Actual := PublicSequenceLifecycle_sm.Status.State, Message := 'Home completion enters ready');
+PublicSequenceLifecycle_sm.Start(); PublicSequenceLifecycle_sm(); PublicSequenceLifecycle_sm.Stop(); PublicSequenceLifecycle_sm();
+FOR i := 1 TO 5 DO
+    PublicSequenceLifecycle_stopStep(sm := PublicSequenceLifecycle_sm, nStep := 2000, nNextStep := 0, nTimeout := 0, sName := 'Stop'); PublicSequenceLifecycle_sm();
+END_FOR;
+AssertEquals_DINT(Expected := TcForge.E_SM_State.STOPPED, Actual := PublicSequenceLifecycle_sm.Status.State, Message := 'Stop sequence completes through public API');
+PublicSequenceLifecycle_sm(); AssertEquals_DINT(Expected := TcForge.E_SM_State.STOPPED, Actual := PublicSequenceLifecycle_sm.Status.State, Message := 'No stale commands replay');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RateAlarmSeedsAndDetectsChange" Id="{64fe4c78-543d-4741-bacd-41ce15b2f817}">
+      <Declaration><![CDATA[METHOD RateAlarmSeedsAndDetectsChange
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('RateAlarmSeedsAndDetectsChange');
+RateAlarmSeedsAndDetectsChange_fb.cfg.common.bEnable := TRUE; RateAlarmSeedsAndDetectsChange_fb.cfg.fRateLimit := 1.0;
+RateAlarmSeedsAndDetectsChange_fb(inpPv := 100.0); AssertTrue(Condition := RateAlarmSeedsAndDetectsChange_fb.outRateOfChange = 0.0, Message := 'First scan seeds rate');
+RateAlarmSeedsAndDetectsChange_fb(inpPv := 200.0); AssertTrue(Condition := RateAlarmSeedsAndDetectsChange_fb.sts.active, Message := 'Fast change trips rate alarm');
+RateAlarmSeedsAndDetectsChange_fb.cfg.common.bEnable := FALSE; RateAlarmSeedsAndDetectsChange_fb(); RateAlarmSeedsAndDetectsChange_fb.cfg.common.bEnable := TRUE; RateAlarmSeedsAndDetectsChange_fb(inpPv := 999.0);
+AssertTrue(Condition := RateAlarmSeedsAndDetectsChange_fb.outRateOfChange = 0.0, Message := 'Re-enable reseeds rate');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StartupDoesNotRestoreWithoutOptIn" Id="{71556db4-c66b-42f0-83cf-94d0c44e1b00}">
+      <Declaration><![CDATA[METHOD StartupDoesNotRestoreWithoutOptIn
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('StartupDoesNotRestoreWithoutOptIn');
+StartupDoesNotRestoreWithoutOptIn_fb.SeedSavedCommand(value := TRUE); StartupDoesNotRestoreWithoutOptIn_fb();
+AssertFalse(Condition := StartupDoesNotRestoreWithoutOptIn_fb.sts.value, Message := 'Saved command does not implicitly restore output');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StartupRestoreRequiresGoodQuality" Id="{06b3c25f-f292-4f4d-8ca6-19b3c8c4c168}">
+      <Declaration><![CDATA[METHOD StartupRestoreRequiresGoodQuality
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('StartupRestoreRequiresGoodQuality');
+StartupRestoreRequiresGoodQuality_fb.SeedSavedCommand(value := TRUE); StartupRestoreRequiresGoodQuality_fb.cfg.restoreCommandOnRestart := TRUE; StartupRestoreRequiresGoodQuality_fb(inpQuality := TcForge.E_IO_Quality.BAD); StartupRestoreRequiresGoodQuality_fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertFalse(Condition := StartupRestoreRequiresGoodQuality_fb.sts.value, Message := 'Bad startup quality cancels restoration');
+StartupRestoreRequiresGoodQuality_restored.SeedSavedCommand(value := TRUE); StartupRestoreRequiresGoodQuality_restored.cfg.restoreCommandOnRestart := TRUE; StartupRestoreRequiresGoodQuality_restored();
+AssertTrue(Condition := StartupRestoreRequiresGoodQuality_restored.sts.value, Message := 'Explicit opt-in restores with good startup quality');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SubmoduleFaultDoesNotPreventAbortCompletion" Id="{aa2f47ab-2a43-4948-babf-4f4a34c00393}">
+      <Declaration><![CDATA[METHOD SubmoduleFaultDoesNotPreventAbortCompletion
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SubmoduleFaultDoesNotPreventAbortCompletion');
+SubmoduleFaultDoesNotPreventAbortCompletion_sm.ResetAll(); SubmoduleFaultDoesNotPreventAbortCompletion_sm.ForceState(state := TcForge.E_SM_State.RUNNING); SubmoduleFaultDoesNotPreventAbortCompletion_sm.inpSubmoduleFaulted := TRUE; SubmoduleFaultDoesNotPreventAbortCompletion_sm();
+SubmoduleFaultDoesNotPreventAbortCompletion_sm.ForceNextStep(nStep := 0); SubmoduleFaultDoesNotPreventAbortCompletion_sm();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.STOPPED, Actual := SubmoduleFaultDoesNotPreventAbortCompletion_sm.Status.State, Message := 'Persistent submodule fault must allow abort completion');
+AssertTrue(Condition := SubmoduleFaultDoesNotPreventAbortCompletion_sm.IsFaulted(), Message := 'Completion does not erase submodule fault');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ActuatorAbortDominatesSameScan" Id="{da40757f-1292-412b-a06e-a8848894b07b}">
+      <Declaration><![CDATA[METHOD ActuatorAbortDominatesSameScan
+VAR
+    rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('ActuatorAbortDominatesSameScan');
+ActuatorAbortDominatesSameScan_fb(inRetracted := TRUE); ActuatorAbortDominatesSameScan_fb.Advance(); ActuatorAbortDominatesSameScan_fb(); ActuatorAbortDominatesSameScan_fb.Abort(); rsp := ActuatorAbortDominatesSameScan_fb.Advance(); ActuatorAbortDominatesSameScan_fb();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED, Actual := rsp, Message := 'Abort cannot be replaced by motion in the same scan');
+AssertFalse(Condition := ActuatorAbortDominatesSameScan_fb.outAdvance OR ActuatorAbortDominatesSameScan_fb.outRetract, Message := 'Abort leaves both coils off');
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

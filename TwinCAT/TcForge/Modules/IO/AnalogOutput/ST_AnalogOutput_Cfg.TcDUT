@@ -8,6 +8,11 @@
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_AnalogOutput_Cfg :
 STRUCT
+    // Startup restoration requires explicit application opt-in.
+    restoreCommandOnRestart : BOOL := FALSE;
+    // Optional hold during bad/unknown quality. Recovery still requires a fresh command.
+    holdOnBadQuality : BOOL := FALSE;
+    safeRaw : REAL := 0.0; // Terminal units, independent of scaling.
     // Which UNION member to write. Supported values:
     //   TYPE_REAL, TYPE_INT, TYPE_UINT, TYPE_WORD, TYPE_DWORD, TYPE_UDINT, TYPE_DINT
     {attribute 'OPC.UA.DA.Description' := 'Terminal numeric type (selects UNION member)'}

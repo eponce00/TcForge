@@ -8,6 +8,7 @@
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_DigitalOutput_Sts :
 STRUCT
+    outputInhibited : BOOL;
     header        : ST_DeviceHeader_Sts;
 
     {attribute 'OPC.UA.DA.Description' := 'Final physical output value (after mode + invert)'}

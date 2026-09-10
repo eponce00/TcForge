@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_SequenceIntegrity_Test" Id="{941cc9be-1b45-48b2-8501-1e5ffcde9f69}">
+<Declaration><![CDATA[FUNCTION_BLOCK FB_SequenceIntegrity_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    _done : BOOL;
+    extraTimeout, extraZero, extraNegative, extraReset : TcForge.FB_Step;
+    sm : FB_StateMachine_Probe;
+    step_RejectNegativeDestination : TcForge.FB_Step;
+    step_RejectOddDestination : TcForge.FB_Step;
+    step_RejectCrossStateDestination : TcForge.FB_Step;
+    step_RejectSelfDestination : TcForge.FB_Step;
+    step_RejectNegativeTimeout : TcForge.FB_Step;
+    step_TimeoutIncludesEntryAndSatisfiedConditions : TcForge.FB_Step;
+    step_StopTimeoutEscalatesToAbort : TcForge.FB_Step;
+    step_StopUserFaultEscalatesToAbort : TcForge.FB_Step;
+    step_AbortTimeoutRequiresConfirmedShutdown : TcForge.FB_Step;
+    step_CustomStepFaultCanRetry : TcForge.FB_Step;
+    missing : TcForge.FB_StateMachine;
+    duplicate : TcForge.FB_StateMachine;
+    missingTarget : TcForge.FB_StateMachine;
+    missingAbort : TcForge.FB_StateMachine;
+    zero : TcForge.FB_StateMachine;
+    duplicateA : TcForge.FB_Step;
+    duplicateB : TcForge.FB_Step;
+    targetStep : TcForge.FB_Step;
+    zeroStep : TcForge.FB_Step;
+END_VAR]]></Declaration>
+<Implementation><ST><![CDATA[IF _done THEN RETURN; END_IF;
+RejectNegativeDestination();
+RejectOddDestination();
+RejectCrossStateDestination();
+RejectSelfDestination();
+RejectNegativeTimeout();
+TimeoutIncludesEntryAndSatisfiedConditions();
+StopTimeoutEscalatesToAbort();
+StopUserFaultEscalatesToAbort();
+AbortTimeoutRequiresConfirmedShutdown();
+CustomStepFaultCanRetry();
+MissingActiveStepFaults();
+DuplicateActiveStepFaults();
+MissingDestinationImplementationFaults();
+MissingAbortImplementationFailsShutdown();
+StepZeroNeverExecutes();
+TimeoutAboveTimerRangeRejected();
+ZeroFaultCodeStillInhibits();
+NegativeFaultCodeStillInhibits();
+InvalidResetPreservesShutdownLatch();
+_done := TRUE;]]></ST></Implementation>
+<Method Name="RejectNegativeDestination" Id="{2784eb6c-629e-4b83-951a-2380caa3ee58}"><Declaration><![CDATA[METHOD RejectNegativeDestination
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RejectNegativeDestination');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.RUNNING); sm.SetCurrentStep(nStep := 3000);
+step_RejectNegativeDestination(sm := sm, nStep := 3000, nNextStep := -2, nTimeout := 0);
+AssertFalse(Condition := step_RejectNegativeDestination.Entry, Message := 'Invalid destination must inhibit Entry');
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.InvalidStepConfiguration, Actual := sm.GetFaultCode(), Message := 'Configuration fault must be explicit');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RejectOddDestination" Id="{5f664b1a-4c6a-4271-8632-9eedc6001848}"><Declaration><![CDATA[METHOD RejectOddDestination
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RejectOddDestination');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.RUNNING); sm.SetCurrentStep(nStep := 3000);
+step_RejectOddDestination(sm := sm, nStep := 3000, nNextStep := 3001, nTimeout := 0);
+AssertFalse(Condition := step_RejectOddDestination.Entry, Message := 'Invalid destination must inhibit Entry');
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.InvalidStepConfiguration, Actual := sm.GetFaultCode(), Message := 'Configuration fault must be explicit');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RejectCrossStateDestination" Id="{e1235191-03b4-4c9d-a239-036e2ea0643e}"><Declaration><![CDATA[METHOD RejectCrossStateDestination
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RejectCrossStateDestination');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.RUNNING); sm.SetCurrentStep(nStep := 3000);
+step_RejectCrossStateDestination(sm := sm, nStep := 3000, nNextStep := 5000, nTimeout := 0);
+AssertFalse(Condition := step_RejectCrossStateDestination.Entry, Message := 'Invalid destination must inhibit Entry');
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.InvalidStepConfiguration, Actual := sm.GetFaultCode(), Message := 'Configuration fault must be explicit');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RejectSelfDestination" Id="{00da3303-17da-45ea-b362-28c9ec1d35dd}"><Declaration><![CDATA[METHOD RejectSelfDestination
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RejectSelfDestination');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.RUNNING); sm.SetCurrentStep(nStep := 3000);
+step_RejectSelfDestination(sm := sm, nStep := 3000, nNextStep := 3000, nTimeout := 0);
+AssertFalse(Condition := step_RejectSelfDestination.Entry, Message := 'Invalid destination must inhibit Entry');
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.InvalidStepConfiguration, Actual := sm.GetFaultCode(), Message := 'Configuration fault must be explicit');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RejectNegativeTimeout" Id="{98ad3d66-84c1-45e9-aa9f-6bbf8a68032f}"><Declaration><![CDATA[METHOD RejectNegativeTimeout
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RejectNegativeTimeout');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.RUNNING); sm.SetCurrentStep(nStep := 3000);
+step_RejectNegativeTimeout(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := -1);
+AssertFalse(Condition := step_RejectNegativeTimeout.Entry, Message := 'Negative timeout cannot silently disable protection');
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.InvalidStepConfiguration, Actual := sm.GetFaultCode(), Message := 'Invalid timeout fault');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="TimeoutIncludesEntryAndSatisfiedConditions" Id="{80950d7e-7e74-4cba-b419-ba76364ea85d}"><Declaration><![CDATA[METHOD TimeoutIncludesEntryAndSatisfiedConditions
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('TimeoutIncludesEntryAndSatisfiedConditions');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.RUNNING); sm.SetCurrentStep(nStep := 3000); sm.SetTimerSeconds(seconds := 1.0);
+step_TimeoutIncludesEntryAndSatisfiedConditions(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 1, nRequired := 0);
+AssertFalse(Condition := step_TimeoutIncludesEntryAndSatisfiedConditions.Entry OR step_TimeoutIncludesEntryAndSatisfiedConditions.Execute OR step_TimeoutIncludesEntryAndSatisfiedConditions.Exiting, Message := 'Timeout must suppress all lifecycle outputs even with no missing conditions');
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.StepTimeout, Actual := sm.GetFaultCode(), Message := 'Timeout at the configured boundary');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="StopTimeoutEscalatesToAbort" Id="{b67d03b9-68ba-4635-ac62-d77224a3a047}"><Declaration><![CDATA[METHOD StopTimeoutEscalatesToAbort
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('StopTimeoutEscalatesToAbort');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.STOPPING); sm.SetCurrentStep(nStep := 2000); sm.ForceNextStep(nStep := 2000); sm.SetTimerSeconds(seconds := 2.0);
+step_StopTimeoutEscalatesToAbort(sm := sm, nStep := 2000, nNextStep := 0, nTimeout := 1);
+sm();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.ABORTING, Actual := sm.Status.State, Message := 'Failed Stop must escalate');
+AssertEquals_DINT(Expected := 5000, Actual := sm.Status.Step.Current, Message := 'Abort entry step selected immediately');
+AssertTrue(Condition := sm.IsFaulted(), Message := 'Escalation must preserve failure diagnostics');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="StopUserFaultEscalatesToAbort" Id="{2bb4cd4c-eb88-41bb-b12a-bbd9a9903bde}"><Declaration><![CDATA[METHOD StopUserFaultEscalatesToAbort
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('StopUserFaultEscalatesToAbort');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.STOPPING); sm.SetCurrentStep(nStep := 2000); sm.ForceNextStep(nStep := 2000);
+step_StopUserFaultEscalatesToAbort(sm := sm, nStep := 2000, nNextStep := 0, nTimeout := 0);
+step_StopUserFaultEscalatesToAbort.RaiseFault(code := 101, reason := 'Stop feedback failed'); sm();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.ABORTING, Actual := sm.Status.State, Message := 'Custom shutdown fault must escalate independently of diagnostic code');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="AbortTimeoutRequiresConfirmedShutdown" Id="{117afd20-b2ec-4157-9b90-6368a96ae52b}"><Declaration><![CDATA[METHOD AbortTimeoutRequiresConfirmedShutdown
+VAR
+rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AbortTimeoutRequiresConfirmedShutdown');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.ABORTING); sm.SetCurrentStep(nStep := 5000); sm.ForceNextStep(nStep := 5000); sm.SetTimerSeconds(seconds := 2.0);
+step_AbortTimeoutRequiresConfirmedShutdown(sm := sm, nStep := 5000, nNextStep := 0, nTimeout := 1); sm();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.STOPPED, Actual := sm.Status.State, Message := 'Failed Abort must leave a defined terminal state');
+AssertTrue(Condition := sm.Status.ShutdownFailed AND sm.IsFaulted(), Message := 'Terminal state must not masquerade as confirmed shutdown');
+rsp := sm.Reset();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED, Actual := rsp, Message := 'Reset requires application shutdown confirmation');
+sm.inpShutdownConfirmed := TRUE; rsp := sm.Reset();
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Confirmed healthy terminal shutdown permits Reset');
+AssertFalse(Condition := sm.Status.ShutdownFailed OR sm.IsFaulted(), Message := 'Reset clears the latched shutdown diagnostic');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="CustomStepFaultCanRetry" Id="{02ab1aca-5118-4ecd-a191-ae47430e1829}"><Declaration><![CDATA[METHOD CustomStepFaultCanRetry
+VAR
+rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('CustomStepFaultCanRetry');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.RUNNING); sm.SetCurrentStep(nStep := 3000); sm.ForceNextStep(nStep := 3000);
+step_CustomStepFaultCanRetry(sm := sm, nStep := 3000, nNextStep := 3002, nTimeout := 0); step_CustomStepFaultCanRetry.RaiseFault(code := 101, reason := 'Application fault'); sm();
+rsp := sm.Retry(); AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.ACCEPTED, Actual := rsp, Message := 'Recorded custom step faults must support explicit retry');
+sm(); sm(); AssertEquals_DINT(Expected := 3000, Actual := sm.Status.Step.Current, Message := 'Retry returns to failed even step');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="MissingActiveStepFaults" Id="{e76bc8ce-8c5b-4c79-9d2d-c44431c5d7fb}"><Declaration><![CDATA[METHOD MissingActiveStepFaults
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('MissingActiveStepFaults');
+missing(); missing.Home(); missing(); missing();
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.MissingStepImplementation, Actual := missing.GetFaultCode(), Message := 'Uncalled active step cannot silently stall');
+AssertEquals_DINT(Expected := 1000, Actual := missing.Status.FailedStep, Message := 'Identify the missing implementation');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="DuplicateActiveStepFaults" Id="{bf816c8f-c0c6-4a0a-97bb-d6eee92b1ef8}"><Declaration><![CDATA[METHOD DuplicateActiveStepFaults
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('DuplicateActiveStepFaults');
+duplicate(); duplicate.Home(); duplicate();
+duplicateA(sm := duplicate, nStep := 1000, nNextStep := 0, nTimeout := 0);
+duplicateB(sm := duplicate, nStep := 1000, nNextStep := 0, nTimeout := 0);
+duplicate();
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.DuplicateStepImplementation, Actual := duplicate.GetFaultCode(), Message := 'Two implementations of the active step must fault');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="MissingDestinationImplementationFaults" Id="{404dc442-ed91-44ab-9ce0-06a620b61094}"><Declaration><![CDATA[METHOD MissingDestinationImplementationFaults
+VAR
+i : INT;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('MissingDestinationImplementationFaults');
+missingTarget(); missingTarget.Home(); missingTarget();
+FOR i := 1 TO 5 DO
+    targetStep(sm := missingTarget, nStep := 1000, nNextStep := 1002, nTimeout := 0);
+    missingTarget();
+END_FOR;
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.MissingStepImplementation, Actual := missingTarget.GetFaultCode(), Message := 'Valid but unimplemented destination must fault');
+AssertEquals_DINT(Expected := 1002, Actual := missingTarget.Status.FailedStep, Message := 'Report destination without implementation');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="MissingAbortImplementationFailsShutdown" Id="{44bfe65a-65f1-4b5a-8247-d00f4e682a24}"><Declaration><![CDATA[METHOD MissingAbortImplementationFailsShutdown
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('MissingAbortImplementationFailsShutdown');
+missingAbort(); missingAbort.Home(); missingAbort(); missingAbort.Abort(); missingAbort(); missingAbort();
+AssertEquals_DINT(Expected := TcForge.E_SM_State.STOPPED, Actual := missingAbort.Status.State, Message := 'Missing Abort cannot leave a stuck state');
+AssertTrue(Condition := missingAbort.Status.ShutdownFailed, Message := 'Missing Abort requires confirmed recovery');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="StepZeroNeverExecutes" Id="{a57e6339-914e-4be3-9234-330027b135af}"><Declaration><![CDATA[METHOD StepZeroNeverExecutes
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('StepZeroNeverExecutes');
+zero(); zeroStep(sm := zero, nStep := 0, nNextStep := 0, nTimeout := 0);
+AssertFalse(Condition := zeroStep.Entry OR zeroStep.Execute OR zeroStep.Exiting, Message := 'Idle step zero is not executable work');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="TimeoutAboveTimerRangeRejected" Id="{318cdc0a-8279-47a6-9eeb-1d267ff96a4f}"><Declaration><![CDATA[METHOD TimeoutAboveTimerRangeRejected
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('TimeoutAboveTimerRangeRejected');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.RUNNING); sm.SetCurrentStep(nStep := 3000);
+extraTimeout(sm := sm, nStep := 3000, nNextStep := 0, nTimeout := 356401);
+AssertFalse(Condition := extraTimeout.Entry, Message := 'Unsupported timeout cannot silently wait forever');
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.InvalidStepConfiguration, Actual := sm.GetFaultCode(), Message := 'Timeout above timer range is invalid');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ZeroFaultCodeStillInhibits" Id="{1ed915dc-59e8-473f-943a-5ae9eefaeeb9}"><Declaration><![CDATA[METHOD ZeroFaultCodeStillInhibits
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('ZeroFaultCodeStillInhibits');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.RUNNING); sm.SetCurrentStep(nStep := 3000);
+extraZero(sm := sm, nStep := 3000, nNextStep := 0, nTimeout := 0); extraZero.RaiseFault(code := 0, reason := 'Invalid application code');
+AssertTrue(Condition := sm.IsFaulted(), Message := 'Zero cannot hide a requested fault');
+AssertFalse(Condition := extraZero.Entry OR extraZero.Execute OR extraZero.Exiting, Message := 'Fault immediately removes lifecycle outputs');
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.StepUserFault, Actual := sm.GetFaultCode(), Message := 'Normalize invalid code');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="NegativeFaultCodeStillInhibits" Id="{bcd336e6-1a4d-4d3e-a725-4b63250f8b0b}"><Declaration><![CDATA[METHOD NegativeFaultCodeStillInhibits
+VAR
+
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('NegativeFaultCodeStillInhibits');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.RUNNING); sm.SetCurrentStep(nStep := 3000);
+extraNegative(sm := sm, nStep := 3000, nNextStep := 0, nTimeout := 0); extraNegative.RaiseFault(code := -1, reason := 'Invalid application code');
+AssertTrue(Condition := sm.IsFaulted(), Message := 'Negative code cannot hide a requested fault');
+AssertEquals_DINT(Expected := TcForge.E_SM_Fault.StepUserFault, Actual := sm.GetFaultCode(), Message := 'Normalize invalid code');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="InvalidResetPreservesShutdownLatch" Id="{7cee7fc2-6fd2-4edb-a083-f7f7801d90c2}"><Declaration><![CDATA[METHOD InvalidResetPreservesShutdownLatch
+VAR
+raw : DINT := 99;
+requester : POINTER TO TcForge.E_Requester;
+rsp : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('InvalidResetPreservesShutdownLatch');
+sm.ResetAll(); sm.ForceState(state := TcForge.E_SM_State.ABORTING); sm.SetCurrentStep(nStep := 5000); sm.ForceNextStep(nStep := 5000);
+extraReset(sm := sm, nStep := 5000, nNextStep := 0, nTimeout := 0); extraReset.RaiseFault(code := 101, reason := 'Abort failed'); sm();
+sm.inpShutdownConfirmed := TRUE;
+requester := ADR(raw); rsp := sm.Reset(eRequester := requester^);
+AssertEquals_DINT(Expected := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER, Actual := rsp, Message := 'Invalid command identity rejected');
+AssertTrue(Condition := sm.Status.ShutdownFailed, Message := 'Rejected reset preserves shutdown latch');
+AssertEquals_DINT(Expected := 5000, Actual := sm.Status.FailedStep, Message := 'Rejected reset preserves failed step');
+TEST_FINISHED();]]></ST></Implementation></Method>
+</POU></TcPlcObject>

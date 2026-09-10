@@ -8,7 +8,8 @@
 // Internally: TwinCAT stores CycleTime as UDINT in units of 100 ns, so we
 // divide by 10_000 to convert to ms before casting to TIME.
 FUNCTION F_GetTaskCycleTime : TIME
-VAR_STAT
+// Per-call storage: different owning tasks must not share a cached task index.
+VAR
     fbGetCurTaskIndex : GETCURTASKINDEX;
 END_VAR]]></Declaration>
     <Implementation>

@@ -13,6 +13,8 @@
 {attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_AlarmRateOfChange EXTENDS FB_AlarmBase
 VAR_INPUT
+    // Application quality gate; FALSE means no trustworthy new evidence.
+    inpValid : BOOL := TRUE;
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
     cfg   : ST_AlarmRateOfChange_Cfg;
@@ -24,9 +26,18 @@ VAR_OUTPUT
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
     {attribute 'OPC.UA.DA.Description' := 'Latest rate of change (units / s)'}
-    outRateOfChange : REAL;
+    outRateOfChange : LREAL;
 END_VAR
 VAR
+    _evaluation : E_AlarmEvaluation;
+    _task : DINT;
+    _previousTask : DINT;
+    _previousCycleTime : LREAL;
+    _configKnown : BOOL;
+    _previousLimit : REAL;
+    _previousOnDelay : TIME;
+    _previousOffDelay : TIME;
+    _previousRequireAck : BOOL;
     {attribute 'OPC.UA.DA' := '0'}
     _raw           : BOOL;
     {attribute 'OPC.UA.DA' := '0'}
@@ -34,41 +45,58 @@ VAR
     {attribute 'OPC.UA.DA' := '0'}
     _firstScan     : BOOL := TRUE;
     {attribute 'OPC.UA.DA' := '0'}
-    _cycleTimeSec  : REAL;
+    _cycleTimeSec  : LREAL;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[// Cycle time in seconds (F_GetTaskCycleTime returns TIME in ms).
-_cycleTimeSec := TIME_TO_REAL(F_GetTaskCycleTime()) / 1000.0;
-
-IF NOT cfg.common.bEnable THEN
-    // Mirror the base's disabled path for our extra state
-    outRateOfChange := 0.0;
-    _previousPv     := inpPv;
-    _firstScan      := TRUE;
-    _raw            := FALSE;
-    _Evaluate(cfgCommon := cfg.common, bRawCondition := FALSE);
+      <ST><![CDATA[_raw := FALSE;
+_evaluation := E_AlarmEvaluation.Valid;
+_task := Tc2_System.GETCURTASKINDEXEX();
+IF NOT F_IsFiniteReal(cfg.fRateLimit) THEN _evaluation := E_AlarmEvaluation.InvalidConfig;
+ELSIF cfg.fRateLimit < 0.0 THEN _evaluation := E_AlarmEvaluation.InvalidConfig;
+END_IF;
+IF NOT (cfg.common.eSeverity = E_AlarmSeverity.NONE OR cfg.common.eSeverity = E_AlarmSeverity.INFO OR
+    cfg.common.eSeverity = E_AlarmSeverity.WARNING OR cfg.common.eSeverity = E_AlarmSeverity.CRITICAL OR
+    cfg.common.eSeverity = E_AlarmSeverity.SHUTDOWN) THEN _evaluation := E_AlarmEvaluation.InvalidConfig; END_IF;
+IF _evaluation = E_AlarmEvaluation.Valid THEN
+    IF NOT inpValid OR NOT F_IsFiniteReal(inpPv) THEN _evaluation := E_AlarmEvaluation.InvalidInput;
+    END_IF;
+END_IF;
+IF _evaluation = E_AlarmEvaluation.Valid THEN
+    IF _task <= 0 THEN _evaluation := E_AlarmEvaluation.InvalidConfig;
+    ELSE
+        _cycleTimeSec := TIME_TO_LREAL(F_GetTaskCycleTime()) / LREAL#1000.0;
+        IF _cycleTimeSec <= 0.0 THEN _evaluation := E_AlarmEvaluation.InvalidConfig; END_IF;
+    END_IF;
+END_IF;
+IF NOT cfg.common.bEnable OR _evaluation <> E_AlarmEvaluation.Valid THEN
+    _firstScan := TRUE; _configKnown := FALSE; outRateOfChange := 0.0;
+    _Evaluate(cfgCommon := cfg.common, bRawCondition := FALSE, evaluation := _evaluation);
     RETURN;
 END_IF;
-
-// Seed on first enabled scan — no rate is meaningful yet.
+// Previous limit is stored only after classification; equality is now safe.
+IF NOT _configKnown OR _previousTask <> _task THEN _firstScan := TRUE;
+ELSIF _cycleTimeSec <> _previousCycleTime OR cfg.fRateLimit <> _previousLimit OR cfg.common.tOnDelay <> _previousOnDelay OR
+    cfg.common.tOffDelay <> _previousOffDelay OR cfg.common.bRequireAck <> _previousRequireAck THEN
+    _firstScan := TRUE;
+END_IF;
+_configKnown := TRUE; _previousLimit := cfg.fRateLimit; _previousTask := _task;
+_previousCycleTime := _cycleTimeSec;
+_previousOnDelay := cfg.common.tOnDelay; _previousOffDelay := cfg.common.tOffDelay;
+_previousRequireAck := cfg.common.bRequireAck;
 IF _firstScan THEN
-    _firstScan      := FALSE;
-    _previousPv     := inpPv;
-    outRateOfChange := 0.0;
-    _raw            := FALSE;
-    _Evaluate(cfgCommon := cfg.common, bRawCondition := FALSE);
+    _firstScan := FALSE; _previousPv := inpPv; outRateOfChange := 0.0;
+    _Evaluate(cfgCommon := cfg.common, bRawCondition := FALSE, evaluation := E_AlarmEvaluation.Initializing);
     RETURN;
 END_IF;
-
-IF _cycleTimeSec > 0.0 THEN
-    outRateOfChange := (inpPv - _previousPv) / _cycleTimeSec;
-ELSE
-    outRateOfChange := 0.0;
-END_IF;
+// Widen before subtract/divide: all finite REAL extremes fit comfortably in LREAL.
+outRateOfChange := (REAL_TO_LREAL(inpPv) - REAL_TO_LREAL(_previousPv)) / _cycleTimeSec;
 _previousPv := inpPv;
-
-_raw := ABS(outRateOfChange) > cfg.fRateLimit;
+_raw := ABS(outRateOfChange) > REAL_TO_LREAL(cfg.fRateLimit);
 _Evaluate(cfgCommon := cfg.common, bRawCondition := _raw);]]></ST>
     </Implementation>
+<Method Name="ReassignInput" Id="{91f7fa26-8c9d-44f4-b41c-43d48c7d8274}"><Declaration><![CDATA[// Application-only owning-task API; invalidate history before assigning a new signal source.
+METHOD PUBLIC ReassignInput]]></Declaration><Implementation><ST><![CDATA[_firstScan := TRUE; _configKnown := FALSE; outRateOfChange := 0.0;
+IF cfg.common.bEnable THEN _InvalidateEvaluation(evaluation := E_AlarmEvaluation.Initializing); END_IF;
+]]></ST></Implementation></Method>
   </POU>
 </TcPlcObject>

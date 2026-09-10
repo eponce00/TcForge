@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_AnalogOutputRestart_Probe" Id="{ebbca1f8-d594-4e16-8e01-6a69b7b6ee85}">
+    <Declaration><![CDATA[// Injects a previously persisted value into an otherwise fresh instance.
+// This tests startup policy, NOT actual TwinCAT persistent-image durability.
+FUNCTION_BLOCK FB_AnalogOutputRestart_Probe EXTENDS TcForge.FB_AnalogOutput
+VAR_INPUT
+    simulatedBootDataLoaded : BOOL := TRUE;
+    simulatedOldBootData : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();]]></ST>
+    </Implementation>
+    <Method Name="SeedSavedCommand" Id="{61a14c7d-e2c0-43a8-b919-62c5c8be93eb}">
+      <Declaration><![CDATA[METHOD PUBLIC SeedSavedCommand
+VAR_INPUT
+    value : REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_savedCommand := value;
+_savedCommandValid := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SimulateStartup" Id="{578ac2f4-3463-4339-80c5-977d64b8c14b}"><Declaration><![CDATA[// Policy probe: reset volatile arming only; not a runtime/persistent-image test.
+METHOD PUBLIC SimulateStartup]]></Declaration><Implementation><ST><![CDATA[_startup := TRUE;
+_commandReceived := FALSE;
+_armed := FALSE;
+_forceSafe := FALSE;
+_safeRequested := FALSE;
+_requestSync := 0.0;]]></ST></Implementation></Method>
+    <Method Name="_HasTrustedPersistentImage" Id="{ad6e76eb-ef94-4632-b781-d0d349f32271}"><Declaration><![CDATA[METHOD PROTECTED _HasTrustedPersistentImage : BOOL]]></Declaration><Implementation><ST><![CDATA[// Local probe inputs only: never mutate TwinCAT system information.
+_HasTrustedPersistentImage := simulatedBootDataLoaded AND NOT simulatedOldBootData;]]></ST></Implementation></Method>
+  </POU>
+</TcPlcObject>

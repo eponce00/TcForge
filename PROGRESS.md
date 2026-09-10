@@ -1,10 +1,10 @@
 # TcForge progress
 
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 
 ## Goal and current status
 
-Establish a dependable architecture for company production use before expanding
+Establish a dependable open-source architecture for discrete assembly production use before expanding
 the feature set. The foundation refactor is implemented in source, but TwinCAT production qualification remains open. This is not a production-qualified release.
 
 There are no existing consumers or backward-compatibility requirements. Delete or
@@ -26,13 +26,146 @@ and before/after documentation are not required.
 
 ## Next action
 
-Prioritize S2: implement the isolated PLC simulation IO bridge with coherent
-frames, exclusive ownership and a PLC-side freshness watchdog. Then S3 can run
-Python plant models against the actual reference machine. S1 is implemented and
-locally tested. In parallel with that work, resolve N1 access to the dedicated
-network bench before deploying to it. Continue Q2–Q7 qualification; new SPT-inspired
-features remain behind testing and diagnostic foundations. Preserve Docker,
-Hyper-V and Windows security settings.
+Finish Q4 backup-only and corrupt-with-backup persistent-image tests using the
+proven XAE restart path. The raw ADS CONFIG/RUN runner could not reliably observe
+recovery after a restart; do not confuse that timeout with a completed image test.
+Compatible implementation online change during healthy simulated motion now has
+bench evidence. Next extend engineering usability and declaration/layout coverage.
+Keep genuine execution-gap and IO-loss protection. Preserve Docker, Hyper-V and
+Windows security settings.
+
+### Current priorities (user scope, 2026-09-10)
+
+This ordering overrides older sequencing in the detailed items below; deferred
+acceptance remains unproven, not completed.
+
+- **High — Q4 engineering workflow:** use actual XAE Online Change with matching
+  compile information; never silently substitute download, activation or restart.
+  `scripts/verify_online_change.py` already edits through Automation Interface,
+  invokes the available XAE DTE Online Change command and verifies the actual
+  runtime counter. Baseline activation/restoration are separate fixture operations.
+  Diagnose simulator feed stalls separately from PLC execution interruption;
+  demonstrate healthy motion immediately before the applied change. Review and
+  extend the verified compatible implementation policy to the remaining recovery and declaration/layout cases.
+- **High — engineering tool usability:** extract a reusable online-change operation
+  from the qualification fixture, with explicit target/PLC selection, baseline
+  checks, command availability, outcome verification and no restart fallback.
+  Assess exposing it through the TwinCAT MCP once its server source/capabilities
+  are located; no TwinCAT MCP tool is callable in this session. Preserve separate
+  online-change and activation operations and explicit boot-project update behavior.
+- **High — Q4 recovery:** exercise invalid/missing/backup persistent images and
+  deterministic recovery. SSH permits an orderly Windows reboot; this does not
+  reproduce abrupt removal of electrical power. Retain that distinction in reports.
+- **Supporting robustness — Q5:** conflicting ownership means two cyclic tasks
+  inside one PLC calling the same FB instance, not two PLCs commanding one device.
+  Keep the single-owner contract; defer the dedicated misuse fixture behind Q4.
+  Deployment-specific operator accounts/permissions are later commissioning work.
+- **Medium — R1/A7/A8:** after the high-priority lifecycle/tooling work, evaluate
+  and adapt useful SPT utilities, device patterns and documentation integration
+  for discrete assembly. Review actual needs and upstream license/attribution
+  before adopting code; avoid process-plant scope or unnecessary dependencies.
+- **Low/deferred — Q2/Q6/N2:** clean engineering-PC qualification, physical IO and
+  fieldbus commissioning, physical power cuts and representative hardware/load
+  acceptance. Local build reliability still matters when it blocks development.
+- **Low/deferred — D2/Q7:** packaging/publication improvements and downstream
+  release qualification. This repository is the reusable open-source library;
+  company publisher metadata, private distribution and company-specific deployment
+  policy are not current deliverables. Do not mark deferred qualification passed.
+
+Simulator communication loss covers the application's stale/unavailable-input
+response while the PLC continues running. PLC reboot also restarts execution and
+reloads state; device power loss can additionally reset device state. Treat these
+as distinct test scenarios even when all appear as a broken connection externally.
+
+Engineering references:
+[Online Change](https://infosys.beckhoff.com/content/1033/tc3_userinterface/2531444363.html),
+[PLC Automation Interface](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242730891.html),
+[Login choices](https://infosys.beckhoff.com/content/1033/tc3_plc_intro/2531393419.html).
+
+### Latest verification batch
+
+2026-09-10 online-change and recovery batch:
+
+- [x] Separate `executionInterrupted` from `onlineChanged`. The default
+  `recoverOnOnlineChange := TRUE` remains conservative; explicit FALSE permits
+  compatible implementation edits while retaining gap/owner protection.
+- [x] Actual moving implementation online change with `--policy preserve`:
+  counter 0 -> 1, same nonzero boot epoch/session, healthy advance before and
+  after, then completed cycle without reconnect, Reset or Home. Baseline source
+  restored. Evidence: `artifacts/online-compatible-moving/`.
+- [x] All 380 PLC tests in 31 suites passed at 10 ms on the bench:
+  `artifacts/online-policy-tcunit-10ms-ready/`. The three new tests cover compatible
+  continuity and mandatory interruption for coincident gaps/owner faults.
+  The earlier 377-test 1 ms runs do not cover these three additions.
+- [x] Full build `9385dcfbe409419d8b959c5c2eab1758`: all library objects and
+  all three consumers, zero errors/warnings, matching dependency locks.
+  Library SHA-256: `1F632506B66409C390BAD73A32A4693EB5080CA882ADCE6E4308EDF8F791D15F`.
+  One tooling-test exit-code fix followed this receipt; do not claim an immutable
+  qualification of the entire current source/tooling snapshot.
+- [x] Generated TMC preflight preserves ignored XAE-generated symbols in artifacts
+  before project load; compile/login information is retained. Tested rejection
+  of unexpected producer and paths outside the repository. Integrated into
+  build, Example/Simulation activation, TcUnit and online-change runners.
+- [x] Reusable online-change command dispatch extracted to
+  `scripts/online_change_commands.ps1`; dispatch is explicitly not runtime success,
+  and unavailable/logged-out sessions cannot fall back to activation or download.
+  66 tooling tests pass, including these command and TMC preflight checks.
+- [ ] Standalone engineering interface / MCP integration and layout-change
+  qualification remain open. MCP source was located in sibling `twincat-mcp`.
+- Missing-image startup was observed manually: no loaded/backup image, default
+  markers, inhibited outputs. Original saved images were subsequently restored
+  and their loaded state read back; outputs were explicitly cleared:
+  `artifacts/persistent-post-recovery-confirmation.json`.
+- [ ] Backup-only and corrupt-with-backup cases were **not reached**. Failed
+  exploratory runs remain under `artifacts/persistent-images-*`; they are not
+  acceptance evidence. Replace unreliable raw CONFIG/RUN polling before retrying.
+- [ ] Restart durability: after bench reboot, Secure ADS required supported
+  `Add-AdsRoute -SelfSigned -FingerPrint ... -Force` refresh with the existing
+  pinned certificate. No trust downgrade. The exact failure cause and unattended
+  reconnect across restarts remain unproven. OPC UA required a fresh XAE-managed
+  restart and additional startup time before accepting connections.
+- Example was reactivated successfully on port 851 with zero build warnings and
+  advancing cyclic-owner counters: `artifacts/architecture-example-final.log`.
+  Final authenticated OPC UA check passed: device error zero, ForceSafe queued
+  and completed in cyclic task 1, duplicate rejected, output off. Evidence:
+  `artifacts/architecture-final-opcua.json`. Endpoint remains
+  `opc.tcp://192.168.1.224:4840`, Example ADS port 851. Existing certificate trust
+  and authentication remain in place; no helper OPC UA process remains.
+- Source checks, strict documentation build and whitespace checks pass after the
+  final documentation update. The 66 tooling-test result is recorded above.
+
+Earlier verification batch (different source snapshots):
+
+- New immutable build `21835695c01c45c1be4a7c6be272bce6`: all library objects
+  and all three consumers pass with zero warnings and matching dependency locks.
+  Library SHA-256: `FEF53EE92AE22E409A5F59E170DF23B021AF3468DBCFA277596E7527993AD82F`.
+- Fresh 377/377 PLC tests at both 10 ms and 1 ms, validated together against that
+  build: `artifacts/batch-tcunit-10ms/`, `artifacts/batch-tcunit-1ms/`,
+  `artifacts/batch-bound-validation.json`.
+- The same library passes all three consumers from a clean library repository
+  and fresh project copies; original repository registration is restored:
+  `artifacts/batch-clean-library-install/`. This is the same engineering PC,
+  not a separately qualified clean Windows/XAE installation.
+- Reusable OPC UA suite: Example and Testing at 10 ms; Testing at 1 ms with a
+  temporary read-only user. Sixteen independent clients, priority cancellation,
+  source lock/safe exception, duplicate/invalid IDs, anonymous denial and verified
+  cleanup pass. Evidence: `artifacts/q5-repeatable-example/`,
+  `artifacts/q5-repeatable-testing-10ms-ready/`, `artifacts/q5-repeatable-testing-1ms/`.
+- All 10 assembly functional scenarios and both short/long in-motion STOP/RUN
+  cases pass at 1 ms: `artifacts/batch-assembly-1ms/`, `artifacts/batch-stop-start-1ms/`.
+- 63 tooling tests, 18 Python model/contract tests, source integrity and strict
+  documentation build pass. Guide: [OPC UA qualification](docs/17-OPC-UA-Qualification.md).
+- A stale ignored `Simulation.tmc` caused an XAE warning and correctly failed
+  the first build. Retaining it in artifacts and regenerating it produced the
+  clean build above. No warning suppression was added; recurring stale generated
+  metadata handling remains a build-workflow improvement.
+- End state: Example restored on 851 via `scripts/activate_example.ps1`, with
+  advancing cyclic counter, successful OPC UA ForceSafe/duplicate checks and
+  output off (`artifacts/batch-example-restored.json`). UAExpert's certificate
+  connects successfully. Temporary permission-test account removed. OPC UA
+  startup temporarily refused TCP connections after restoration; verified ready
+  before ending the batch. Current build/test bindings still validate after
+  restoring the Example and the library repository configuration.
 
 ## Remaining architecture work
 
@@ -69,7 +202,7 @@ Hyper-V and Windows security settings.
 
 ## Simulation, network bench and SPT follow-up
 
-Priority order: S2, N1, S3/N2, A5/A6 and Q2–Q7; then D1/D2 and optional A7/A8.
+Priority order: Q4, Q2, Q5/Q6, Q7/D2; optional A7/A8 follow demonstrated machine needs.
 The user's 2026-09-09 ideas are tracked here; completed foundations remain below.
 
 - [x] **R1 — SPT reference review.** Reviewed SPT repository structure, Base Types,
@@ -83,39 +216,77 @@ The user's 2026-09-09 ideas are tracked here; completed foundations remain below
   Eleven Python tests and a 200-tick offline scenario pass. ADS probe reaches the
   existing local test PLC in RUN. These are not PLC end-to-end tests. CI now runs
   the Python model tests and offline scenario. [Package guide](python/README.md).
-- [ ] **S2 — Live PLC simulation IO bridge.** Implement a separate simulation
-  composition using the same reference-machine source and application IO boundary.
-  Enforce exclusive input ownership, version/session handshake, coherent frame
-  commit, output correlation, PLC-side stale-data watchdog and explicit reconnect.
-  Keep physical fieldbus mappings disabled in that configuration. Test partial
-  writes, duplicate/wrong-session frames, simulator crash and PLC restart before
-  enabling Python writes. [Required contract](docs/12-Simulation.md).
-- [ ] **S3 — Functional scenario runner.** Drive actual PLC Home/Run/Stop/Abort,
-  jams, contradictory/missing sensors, timeout, shutdown confirmation and recovery
-  through the simulated plant. Retain trace and machine-readable assertions.
-  Keep deterministic test time separate from wall-clock functional execution.
-- [ ] **N1 — Network test-bench access and inventory.** User confirms this is a
+- [x] **S2 — Live PLC simulation IO bridge.**
+  Added versioned identity, exclusive session, boot handshake, atomic complete-frame
+  admission, output acknowledgement, owning-task consumption and 250 ms watchdog.
+  The canonical reference machine runs in both TcUnit and a standalone no-IO,
+  no-TcUnit simulation composition. Three consumers compile with zero warnings/errors.
+  Actual ADS tests verify rejected frames, competing sessions, lost simulator,
+  reconnect and explicit recovery. Actual runtime restart changed the boot identity,
+  cleared the session, kept both coils off and rejected the previous boot identity.
+  Standalone port 854 passes all 10 functional scenarios and an in-motion system
+  restart on the network bench. Full lifecycle acceptance remains Q4. [Protocol and commands](docs/12-Simulation.md).
+- [x] **S3 — Initial discrete assembly functional runner.** Ten actual PLC scenarios
+  pass at 10 ms on both Testing and standalone network-bench applications:
+  session/frame rejection, Home/assembly cycle, controlled Stop, Abort, jam timeout,
+  contradictory sensors, lost IO quality, simulator loss, explicit recovery, and
+  independent shutdown confirmation/timeout/Reset. JSONL/JUnit evidence:
+  `artifacts/bench-assembly-e2e/` and `artifacts/bench-standalone-fed-probes/`.
+  Eighteen Python model/live-contract tests pass. System restart during simulated
+  advance passes: `artifacts/bench-in-motion-restart/`. Online-change, power-loss
+  and physical IO/load acceptance remain Q4/Q6.
+- [x] **N1 — Network test-bench access and inventory.** User confirms this is a
   dedicated bench with no connected equipment. Host `BTN-000TM2QI`, IP
   `192.168.1.224`, AMS `172.18.236.100.1.1`. SSH/RDP/ADS TCP ports respond.
-  Existing Secure ADS route returns error 29 (TLS connection failure). SSH accepts
-  authentication but refuses commands until the default password is changed.
-  Resolve initial-password setup and secure routing, then inventory OS, runtime,
-  CPU, licenses, loaded projects and IO. Do not store credentials in the repo.
-  Read-only probe evidence: `artifacts/network-plc-inventory.json`. No runtime
-  state change, deployment, route change or password change performed.
+  Secure ADS responds in Config mode. SSH command execution now works after the
+  Administrator password change; credentials are kept outside the repository.
+  RDP inspection confirms Windows 10 IoT Enterprise LTSC 21H2 build 19044.4046,
+  Atom E3940, 8 GB RAM, TwinCAT kernel runtime 3.1.4026.17 (local XAE 4026.26).
+  User activated a trial license on 2026-09-09; the isolated Testing application
+  activated and reached RUN on port 853, confirming the required license coverage. An OPC UA server is installed. The route now displays secure status.
+  Before deployment, backed up 79 boot/configuration files (8,962,036 bytes) with
+  SHA-256 manifest in `artifacts/bench-backup-20260909/`. The saved boot configuration
+  predates this work. Credentials stay out of repo.
+  Read-only evidence: `artifacts/network-plc-inventory.json` and RDP inventory.
 - [ ] **N2 — Bench deployment and acceptance.** After N1, retain a backup of the
   existing configuration; deploy isolated tests/simulation, confirm memory budget
-  (current TcUnit PLC data area is about 216 MB), and run Q3/Q4/Q6 on this target.
+  (current TcUnit PLC data area is about 245 MiB), and run Q3/Q4/Q6 on this target.
   A network bench without physical IO does not by itself close IO acceptance.
-- [ ] **A5 — Initialization/configuration lifecycle audit.** Use SPT's explicit
-  initialization pattern as a comparison. Define readiness, invalid live config,
-  online-change/restart behavior and ownership for each block. Add mechanisms only
-  where a concrete failure mode is found; integrate evidence with Q4.
-- [ ] **A6 — Bus/device diagnostic adapters.** Review specific SPT Diagnostic and
-  EtherCat candidates. Implement application adapters that translate bus/device
-  status into existing IO quality and required conditions; test lost/stale data
-  and recovery. Record version, provenance, notices and regression coverage for
-  any adapted implementation.
+- [x] **A10 — Application execution continuity.** The reference composition detects
+  missed system-task cycles and changed online-change counters before admitting
+  commands. It cancels motion and requires explicit recovery; the simulation bridge
+  invalidates its session/epoch. Six counter-policy tests and short/long in-motion
+  stop/start tests pass at 1 ms and 10 ms. This does not control physical outputs
+  while PLC code is stopped or detect a stop that skips no task cycle. Actual
+  online-change acceptance remains Q4.
+- [x] **A5 — Device configuration and conditioning lifecycle.**
+  Output/actuator behavioral config changes invalidate active/saved/queued intent;
+  new commands for the current config remain valid. Input type/config/quality
+  handling is consistent; revoked bypass permissions cannot silently persist;
+  standalone filter nonfinite inputs cannot poison history. Readiness/ownership
+  contracts are documented in [Device lifecycle](docs/16-Lifecycle.md).
+  Filter interpretation changes reseed from fresh usable samples; source reassignment
+  invalidates old measurements. Digital inputs cannot advance debounce or emit edges
+  during unusable quality. Saved output intent now has an explicit persistent validity marker; default zero/
+  FALSE cannot arm restoration. ForceSafe/Reset/config changes invalidate it.
+  A loaded non-backup image is also required; missing/backup-image status clears
+  old intent. Six policy tests cover that gate; real invalid-image acceptance is Q4.
+  Alarm validity is covered by A9. The combined 377-test
+  suite passes on the bench at 10 ms and 1 ms. Actual restart/online-change and
+  persistence acceptance remain Q4; there is no blanket online-change guarantee.
+- [x] **A6 — IO diagnostic foundation.**
+  Added original FB_IOQualityMonitor and EtherCAT slave status mapping after SPT
+  diagnostic review. Producer freshness is separate from sensor value changes and
+  InfoData.ChangeCnt. Startup/loss/deadline/recovery and error-bit tests are added.
+  No SPT code copied. [Contract and provenance](docs/15-IO-Diagnostics.md).
+  Actual driver wiring, bus loss and target load remain Q6.
+- [x] **A9 — Alarm evaluation validity.** Explicit validity/evaluation state prevents
+  invalid data from silently clearing alarms. Bit classification precedes numeric
+  operations; wide deviation/rate arithmetic covers finite REAL extremes.
+  Recovery requires fresh clear evidence and full off-delay. Configuration edits
+  discard elapsed debounce credit without erasing unacknowledged latches; rate
+  history reinitializes on invalidity, reassignment and timing/configuration changes.
+  Fifteen focused regressions pass within the combined bench suite.
 - [ ] **A7 — Parent/child machine coordination (later).** Evaluate SPT/PackML
   composition against an actual multi-module use case before adding framework
   hierarchy or changing the current sequencing contract.
@@ -193,9 +364,10 @@ the selected versions belong in [toolchain.json](toolchain.json).
   Four MCP Python tests pass. The C# build emits warnings (including nullable
   annotations without nullable context); build-warning review remains Q2.
 - [x] **Q1c: Verify the complete build/test workflow.** The current library is
-  exported/installed, both consumers build cleanly, and the local PLC reaches
-  RUN with its TC3 PLC trial license. TcUnit reports 235/235 passing tests across
-  21 suites; individual ADS results pass the JUnit gate. Production qualification
+  exported/installed, all three consumers build cleanly, and the local PLC reaches
+  RUN with its TC3 PLC trial license. The latest network-bench runs report
+  377/377 tests across 31 suites at both task periods; individual ADS results pass
+  the JUnit gate. Production qualification
   remains separate under Q2–Q7.
 
 MCP is registered in Codex as `twincat-automation` using the sibling repo's `.venv`,
@@ -218,7 +390,8 @@ The installer restart and licensing blocks are resolved. A seven-day TC3 PLC
 trial was generated through XAE on 2026-09-08 and applied to the local Usermode
 Runtime `192.168.1.108.1.1`. ADS port 853 reaches RUN. The local trial file is
 ignored by Git; renew the trial or provide a production license as appropriate.
-No network PLC has been used.
+Current qualification also uses the licensed, dedicated network bench
+`172.18.236.100.1.1` at `192.168.1.224`, with no connected equipment.
 
 The local test approach follows Beckhoff's
 [runtime configuration](https://infosys.beckhoff.com/content/1033/tc3_installation/20830884491.html)
@@ -226,27 +399,146 @@ and [Usermode Runtime installation/licensing](https://infosys.beckhoff.com/conte
 The repository now records the installed 4026.26 baseline and exact direct vendor
 library versions. Verify compiler resolutions before qualification. Normal PLC licensing or
 trial licensing still applies. Docker containers are not the initial TwinCAT/MCP
-execution environment; native Windows XAE/COM plus Usermode Runtime is the chosen
-development setup.
+execution environment. Engineering uses native Windows XAE/COM; Usermode remains
+available locally, and current runtime qualification uses the dedicated RT bench.
 
-- [ ] **Q2 — Reproducible build.** Resolve and pin exact vendor libraries, record
-  toolchain versions, build/check all library objects, export/install the current
-  checkout's library, and build both consumers. Resolve compiler errors and
-  investigate warnings; record commit and artifact hash.
-- [ ] **Q3 — PLC test execution.** Run every registered test, including A1/A2
-  additions; capture complete results and pass the report gate. Repeat from fresh
-  initialization and exercise timing at 1 ms and 10 ms task cycles. Fix failures
-  and record evidence; source checks cannot substitute for this.
+- [ ] **Q2 — Reproducible build.** Exact XAE version selection/readback,
+  all-library-objects checking and zero-warning build policy are implemented.
+  Direct project pins and exact source test identities are enforced. The all-objects
+  library check and all three consumer builds pass with the exact baseline and
+  zero errors/warnings.
+  Implemented: `dependencies.lock.json` captures effective direct/transitive
+  references and compiler-produced library signatures for all four projects;
+  normal builds fail on drift. Source/tooling/helper hashes, Git revision and
+  dirty state, compiler, dependencies and library bytes are retained in immutable
+  build bundles. Fresh test tokens and receipts bind exact source test identities
+  and actual 1 ms/10 ms task periods to that bundle. Local regression checks pass.
+  The first bound full build passed with zero errors/warnings; immutable bundle:
+  `artifacts/builds/d8a936f9ab514d5b8ea4bcb148b197f7/`. Fresh bound 377/377 PLC runs
+  at both 1 ms and 10 ms passed, including installed-library and source restoration
+  checks. Both reports validate together against that exact build. Evidence:
+  `artifacts/q2-bound-tcunit-1ms/`, `artifacts/q2-bound-tcunit-10ms/`, and
+  `artifacts/q2-bound-evidence-validation.json`. The full release checker reports
+  only the intentionally pending overall qualification status.
+  `verify_clean_library_install.ps1` passed all three consumer builds from a fresh
+  library repository and uncached copies, with exact resolved TcForge path/hash
+  checks before/after compilation. Repository order was restored and System
+  TcForge files were unchanged. Evidence: `artifacts/q2-clean-library-install/`;
+  tested artifact SHA-256 `BB25A4024DCC46C5CBC0125BEE079055D9B80198859D6346D7C3B1C6000EFEB2`.
+  Repeated successfully for the immutable, runtime-tested `A59C27FB...` artifact:
+  `artifacts/q2-bound-clean-library-install/`. All three consumers passed with zero
+  errors/warnings; original repository configuration and System files were verified unchanged.
+  Remaining: bind broader acceptance evidence and qualify
+  a fresh engineering environment. Local manifests are unsigned evidence records.
+  The development export is still mutable `2.0.0.0`, and a repeated export changed
+  its binary hash. Each new build now retains its exact export separately.
+  Bit-for-bit reproducible exports and a qualified production release are not claimed.
+  The sibling helper now launches its own embedded XAE process with native DLL
+  paths, attaches by exact PID and cleans up only that process. Engineering login,
+  deployment and cold reset work. Ten launch and ten exact-version tests pass.
+  Retain `artifacts/q2-enforced-build-verified.log`,
+  `artifacts/q2-build-evidence.json` and the version-bearing consumer reports.
+  The earlier `VisualElem` initialization failure remains a reliability observation
+  in `artifacts/xae-initialization-failure.log`; full environment qualification is open.
+- [x] **Q3 — PLC test execution.** All 377 registered tests passed across 31 suites
+  on the licensed network bench after fresh activations at 10 ms and 1 ms. Each
+  report verifies test identities, completion and actual runtime task period.
+  Latest source-bound runs: `artifacts/batch-tcunit-10ms/` and
+  `artifacts/batch-tcunit-1ms/`, both linked to build `21835695c01c45c1be4a7c6be272bce6`.
+  Evidence: `artifacts/q4-trusted-tcunit-10ms.xml`, `artifacts/q4-trusted-tcunit-1ms.xml`,
+  matching logs and activation-build JSON. Target/load stress remains Q6.
 - [ ] **Q4 — Restart and persistence.** Execute the documented restart/reset and
   power-interruption matrix on the intended runtime/IPC. Verify actual persistence,
   inhibited defaults, restoration opt-in, quality recovery and diagnostic history.
+  Completed: actual system restart during simulated advance on the bench; new boot
+  identity, cleared session, coils off, stale requests rejected, no automatic resume,
+  explicit Reset/Home and a complete recovery cycle. Evidence:
+  `artifacts/bench-in-motion-restart/`. Direct ADS RESET/RUN and orderly system restart now pass retained-data checks
+  for valid saved intent, ForceSafe-cleared intent, and Reset-cleared intent,
+  including persistent configuration, alarm latch and diagnostic history.
+  Reset-origin now passes with confirmed engineering logout and application removal
+  before same-source reload; persistent markers, intent, alarms and history initialize.
+  Evidence: `artifacts/q4-reset-origin/`. Invalid/backup-image handling, power loss
+  and remaining online-change cases remain open. Implementation-only online change
+  while idle now passes via the actual Online Change command: counter increment,
+  retained lifecycle state, epoch/session invalidation, stale-request rejection
+  and explicit recovery. Evidence: `artifacts/q4-online-direct-idle/`.
+  The earlier logged-in full solution build returned COM `E_FAIL`; removing that
+  unrelated build step resolved the engineering failure. A moving attempt is
+  inconclusive because motion faulted in the old epoch before the change applied
+  (`artifacts/q4-online-direct-moving/`); repeat without concurrent desktop work.
+  Declaration-changing online change while idle also passes, including retained
+  state and explicit recovery (`artifacts/q4-online-declaration-idle-retry/`).
+  Its first attempt failed engineering login before editing; the fresh session
+  succeeded. The isolated motion repeat also exceeded the host feed budget, so
+  concurrent desktop work is not established as the cause. Removing a redundant
+  snapshot request improves the feed interval but has not qualified motion.
+  Each run restores exact POU source
+  and reactivates the baseline application.
+  XAE cold reset during motion now passes with verified login,
+  STOP/RUN transitions, retained configuration/intent and explicit recovery:
+  `artifacts/q4-trusted-cold-reset-verified/`.
 - [ ] **Q5 — Actual OPC UA integration.** Verify exposed methods, credentials,
   certificates, roles, source locks and RPC task execution. Exercise the ownership
   solution from A3 and record command arbitration behavior.
+  Bench connectivity resolved: changed the default Administrator password via
+  authenticated Device Manager; verified SSH command execution. Recovery credential
+  is DPAPI-encrypted outside the repo under the current Windows user's
+  `%LOCALAPPDATA%/TcForge/bench/192.168.1.224-Administrator.credential.xml`.
+  Confirmed the Win32 `TcOpcUaServer.exe` listens on TCP 4840 and accepts local
+  connections. Added inbound rule `TcForge-Bench-OPCUA-DevPC`, restricted to
+  development PC `192.168.1.108`; firewall remains enabled. Remote TCP and OPC UA
+  discovery now pass (`artifacts/q5-opcua-endpoints.json`). Advertised endpoint is
+  `opc.tcp://BTN-000tm2qi:4840` (reachable by IP), with SignAndEncrypt and username
+  authentication. Certificate trust, credentials/roles, active ADS backend mapping
+  and application-level method/ownership tests remain open. Installation XML points
+  to ADS 851; standalone simulation needs its configured runtime 854.
+  Added a separate filtered `TcForgeSimulation` device on ADS 854 and verified
+  browsing with device error zero while that runtime was active. The subsequent
+  user activation selected Example on 851; Simulation is now inactive.
+  Secure Administrator login and an actual Example `OperatorForceSafe` call pass:
+  queued (1), completed (0), duplicate rejected (35), execution task equals owner
+  task (1), output remains off (`artifacts/q5-ua-force-safe.json`). Initial calls
+  correctly rejected an uninitialized owner because Example's cyclic task had
+  autostart disabled. Enabled task autostart in `TwinCAT/TcForge.tsproj` and
+  rebuilt/reactivated Example with zero errors/warnings
+  (`artifacts/q5-example-activation-build.json`). This verifies safe-command
+  dispatch, not the complete ownership/role matrix.
+  Explicit certificate trust now enabled on the bench: automatic trust disabled,
+  UAExpert and qualification client certificates explicitly installed. Both trusted
+  identities connect; a new certificate is rejected with BadSecurityChecksFailed
+  and its exact certificate appears in the rejected store. Anonymous login is
+  rejected with BadIdentityTokenRejected (`artifacts/q5-certificate-trust.json`).
+  A temporary OS-authenticated read-only user successfully browsed/read but method
+  invocation returned BadUserAccessDenied (`artifacts/q5-readonly-role.json`).
+  The temporary user was removed and the original user/role configuration restored;
+  no additional persistent credentials were introduced. Explicit certificate trust
+  remains enabled and UAExpert's certificate was verified after the change.
+  Twelve OPC UA SetOn requests while Example was inhibited were all queued then
+  cancelled by cyclic policy, with output off at each observation; zero request ID
+  returned 30 (`artifacts/q5-inhibition-arbitration.json`). Final ForceSafe,
+  duplicate rejection and owner-task execution checks pass again. This samples
+  output state; it is not a continuous electrical-output timing measurement.
+  `scripts/verify_opcua.py` now provides the repeatable fixture suite with fresh
+  JSON/JUnit directories, failure/cleanup handling, pinned server certificate,
+  environment-only passwords and explicit coverage scope. Sixteen independent
+  clients admit one request; paused-owner priority cancellation and source-lock
+  enforcement pass at 10 ms and 1 ms. Observer read/method denial passes through
+  the runner at 1 ms; temporary OS account removal is recorded in
+  `artifacts/q5-readonly-role-batch-cleanup.json`. Example's 12 inhibition cases
+  also pass through the runner. Remaining Q5: commissioned operator-role/node
+  permissions and actual conflicting-task scenarios. An initial test attempt
+  timed out during OPC UA server restart; the ready-server repeat passed. No
+  failed attempt is counted as successful acceptance.
 - [ ] **Q6 — Hardware and task-load acceptance.** Validate the integrated example
   on representative hardware: bus/feedback loss, fallback outputs, recovery and
   cycle-time budget. Usermode tests alone do not qualify physical response or
   real-time scheduling.
+  Initial 1 ms bench telemetry: 309 samples over 35 seconds, highest observed
+  execution 159.2 microseconds, no observed overrun flags
+  (`artifacts/q6-task-samples-1ms.json`). Sampling is not continuous worst-case
+  measurement, and the window includes server preparation/restart as well as
+  qualification activity; this does not close load or physical IO acceptance.
 - [ ] **Q7 — Production foundation gate.** Close architecture items, retain reviewed
   build/test/restart/RPC/hardware evidence, update qualification metadata, and pass
   the release checker. Machine-specific commissioning remains required for each
@@ -254,58 +546,95 @@ development setup.
 
 ## Verification snapshot
 
-Latest available source baseline: 109 XML files, 23 suites and 276 PLC test
-declarations. Source checks and all 5 Python report-gate tests passed.
-The exported library, isolated test application and example compile under XAE 3.1.4026.26,
-`Release|TwinCAT RT (x64)`, with zero errors/warnings. Both the compiler output
-and XAE's failed-project count confirm the builds passed. The example's obsolete
-VisuSymbols library reference was removed.
-**276/276 PLC tests passed across 23 suites on the local Usermode Runtime, 10 ms
-cycle, after fresh activation.** This includes 19 sequence-integrity regressions, 10 reference-machine scenarios,
-22 identity-validation cases and 19 mailbox/dispatch cases.
-Both consumers build with zero compiler errors and warnings.
+Earlier baseline: **132 XML files, 31 suites, 377 PLC tests** (current batch above has 380). All three consumers
+(test application, example and standalone simulator) compile under XAE
+3.1.4026.26, `Release|TwinCAT RT (x64)`, with zero errors and warnings.
 
-Runtime evidence: `artifacts/architecture-tcunit.log` and `artifacts/architecture-tcunit.xml`.
-The JUnit export reads each test's name, finished/failed/skipped flags and duration
-from the running PLC. It checks identities against the current source and detects
-reinitialization during capture. All 276 individual results passed the report gate.
-Actual ADS RPC evidence: `artifacts/operator-rpc-final.log`, produced by
-`scripts/verify_operator_rpc.ps1`. Requests do not mutate output while consumption
-is paused; execution reports the owning task; urgent commands cancel normal work;
-duplicates reject; 16 concurrent clients admit one pending command and return BUSY
-to the other 15. The final test fixture is left at its safe output. No OPC UA
-server or network PLC was qualified.
+**377/377 tests passed on the licensed network bench at both 10 ms and 1 ms**
+after fresh activations. JUnit export verifies every source test identity,
+finished/failed/skipped flags, runtime initialization marker and actual task
+period. These runs include 17 alarm-validity, eight filter-lifecycle, four digital-input-lifecycle,
+ten saved-intent policy, six image-trust and six execution-continuity regressions.
 
-Repeat at 1 ms and repeat the corrected build from fresh initialization before Q3
-is closed; the source-only restart probes do not close Q4.
+Evidence:
 
-Compiler-driven fixes removed duplicate/out-of-block declarations and moved POU
-methods before LineIds metadata so XAE loads them. The source checker now rejects
-code after metadata and stray declarations after END_STRUCT. The sibling MCP
-checks XAE's failed-project count and returns raw build output; an empty Error
-List is no longer treated as proof of a successful build or safe test activation.
+- `artifacts/builds/d8a936f9ab514d5b8ea4bcb148b197f7/`: immutable build bundle with
+  current source/tooling/helper identities, exact resolved dependency lock/captures,
+  zero-error/warning all-objects and consumer reports, and tested library SHA-256
+  `A59C27FB3162B55610B488FFBA9B706E4444987B23EC13838BDFD0B727EA19E4`.
+  `artifacts/q2-bound-tcunit-1ms/` and `artifacts/q2-bound-tcunit-10ms/` contain
+  new 377/377 results and validated receipts for that bundle. The older Q4 reports
+  below are separate observed evidence; they have not been retroactively bound.
+- `artifacts/q2-bound-clean-library-install/`: all three uncached consumers compile
+  against the exact runtime-tested artifact in a fresh repository. Registration
+  is restored and System TcForge hashes remain unchanged.
+- `artifacts/q2-final-assembly-e2e/`: all ten assembly scenarios pass after
+  activating the current installed artifact. This is observed functional evidence,
+  not yet part of the automated build/test receipt protocol. Final bench state:
+  `artifacts/q2-final-bench-state.json`, no session, both coils off and inhibited.
+  Released simulation IO is unhealthy by design and requires a fresh connection
+  and explicit recovery before operation.
+- `artifacts/q4-trusted-evidence-manifest.json`: hashes for the 12 current PLC
+  reports, source files and retained `artifacts/q4-tested-TcForge.library`. This
+  records observed bench evidence; it is not the Q2/Q7 release manifest.
+- `artifacts/q4-trusted-tcunit-10ms.xml` and `artifacts/q4-trusted-tcunit-1ms.xml`, with
+  matching `.log` and `-build.json` files.
+- `artifacts/bench-operator-rpc.log`: actual ADS context differs from cyclic owner;
+  deferred execution, priority cancellation, duplicate rejection and 16 concurrent
+  clients verified. The fixture finishes with its output off.
+- `artifacts/bench-assembly-e2e/`: all 10 functional scenarios passed on Testing
+  port 853. `artifacts/bench-standalone-fed-probes/`: all 10 also passed on the
+  standalone simulation at port 854. The first standalone protocol test exceeded
+  the scheduling budget; the harness now feeds IO between rejection probes.
+  Watchdog and scheduling limits were not relaxed.
+- `artifacts/q4-trusted-stop-start-1ms/` and `artifacts/q4-trusted-stop-start-10ms/`: short
+  (30 ms) and long (500 ms) PLC stops during advance; resumed execution inhibits
+  outputs, rejects stale sessions and requires explicit recovery.
+- `artifacts/q4-trusted-ads-reset-seed/`, `q4-trusted-ads-reset-safe/`, `q4-trusted-ads-reset-reset/`:
+  direct ADS RESET/RUN retains configured data, saved-intent validity, alarm latch
+  and fault history while clearing volatile execution state. ForceSafe/Reset
+  prevent command restoration. This is an observed ADS reset, not evidence that
+  the XAE ResetColdCmd path worked; that separate path has its own evidence below.
+- `artifacts/q4-trusted-cold-reset-verified/`: engineering login and cold reset
+  during advance pass, including observed STOP/RUN, retained data and recovery.
+- `artifacts/q4-trusted-system-restart-seed/`, `q4-trusted-system-restart-safe/`,
+  `q4-trusted-system-restart-reset/`: orderly restart during simulated motion with real
+  persistent data retained and volatile commands reset. Explicit saved-command
+  invalidation survives restart. Boot-data-loaded status is recorded.
+- `artifacts/q4-trusted-assembly-e2e/`: all 10 scenarios pass with execution continuity and the image-trust gate.
+- `artifacts/bench-in-motion-restart/`: system restart during simulated advance
+  passed, including stale-session rejection and explicit recovery. Cleanup released
+  the session with both coils off and motion inhibited.
+- `artifacts/q4-image-trust-build.log` and `artifacts/q4-trusted-simulation-activation-embedding.log`, `artifacts/TcForge.Tests-build.json`,
+  `artifacts/TcForge-build.json`, `artifacts/TcForge.Simulation-build.json`.
+- `artifacts/bench-backup-20260909/manifest.json`: hashes for 79 saved bench boot
+  and configuration files, retained before deployment.
 
-`powershell.exe -NoProfile -File scripts/build_twincat.ps1` exports/installs the
-current library and builds both consumers without runtime activation. It requires
-the built sibling MCP helper and Windows PowerShell 5.1. Generated evidence lives
-in `artifacts/`; retain reviewed evidence for release. Check unused library objects
-and transitive dependency resolutions separately before closing Q2.
-Current library SHA-256:
-`594F1ECC436D9DF26D382814D7990BC9B02A199262A2FCF9314C7F9746458F37`.
-This artifact came from the modified working tree based on commit
-`b7906203262b29312e75fb7ceb3ddd463de9f251`, not an immutable qualified release.
-Build evidence: `artifacts/TcForge.Tests-build.json`, `artifacts/TcForge-build.json`,
-`artifacts/architecture-build.log`. The reference application source is shared
-by `TwinCAT/Testing.plcproj` and the example project; test sources remain under
-`TwinCAT/Testing/`. Reference-machine SHA-256:
-`2CF4B9A7D055AD48657975958ADD3BAD86CEBE932D022AAE655926F293BE6B1D`.
-The obsolete disconnected sequence/alarm demo programs are removed from the example.
+The user-reported duplicate message-category exception did not recur in fresh
+build sessions; the old 07:19 local FPU exception predates the verified fixes.
+One later XAE session had a PLC-subsystem `VisualElem` type-loading failure.
+A fresh session recovered; engineering-session reliability remains part of Q2.
 
-The test application currently allocates approximately 216 MB for the PLC data area (180 MB used); review
-TcUnit limits/test-instance storage during Q3 before deploying to a smaller PLC.
+The test runner sets both task declarations and the cached PLC context coherently
+before loading XAE, checks the engineering task period, rebuilds the selected
+platform immediately before activation, then verifies the actual runtime period.
+It restores the source profile after closing. Engineering scripts serialize XAE
+access. Do not run manual/MCP engineering operations concurrently with them.
 
-Recompute counts after changing tests; they are not a fixed acceptance target.
-Run from the repository root:
+Bench-tested library SHA-256 (`artifacts/q4-tested-TcForge.library`):
+`383EA729535A99E92A162E3DF615D898A452351A6C06F1F4D6199ED45EC431CB`.
+Built from the modified working tree based on
+`a55e2a7bd202d4d62b1aef243d24ef5afb26ac81`, not an immutable qualified release.
+The shared reference-machine SHA-256 is
+`530394AABDA2B6CDB46F1C9F9BC518FECC70E5253949F3EA3B820B839862CC08`.
+
+The test PLC allocates approximately 245 MiB for its data area (204 MiB used).
+The standalone simulator allocates 10 MiB (about 0.5 MiB used), so TcUnit storage
+is not a production application memory estimate. Review target memory and task
+load during Q6.
+
+All 18 Python simulation tests and 60 script/evidence-gate tests pass. Recompute counts
+after changing tests; they are not a fixed acceptance target. Run from repo root:
 
 ```powershell
 python scripts/check_repository.py
@@ -313,5 +642,6 @@ python -m unittest discover -s scripts/tests -v
 git diff --check
 ```
 
-Release qualification remains blocked by incomplete build/dependency qualification
-and missing runtime acceptance results. Do not mark qualification verified to bypass the gate.
+Q2/Q4/Q5/Q6/Q7 remain open. Passing functional tests does not qualify physical IO,
+power-loss persistence, online changes, OPC UA authorization or worst-case load.
+Keep qualification metadata at `pending-validation` until the release gate closes.

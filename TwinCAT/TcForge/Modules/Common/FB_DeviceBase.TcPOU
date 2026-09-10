@@ -34,6 +34,8 @@ END_VAR
 
 VAR
     {attribute 'OPC.UA.DA' := '0'}
+    _operatorMailbox : FB_OperatorMailbox;
+    {attribute 'OPC.UA.DA' := '0'}
     bSourceLockedToProg : BOOL;
     {attribute 'OPC.UA.DA' := '0'}
     _lastRequester : E_Requester;
@@ -71,25 +73,27 @@ END_VAR]]></Declaration>
     <Folder Name="Diagnostics" Id="{c0000001-0000-0000-f000-000000000002}" />
     <Folder Name="Protected" Id="{c0000001-0000-0000-f000-000000000003}" />
     <Method Name="Reset" Id="{c0000001-0000-0000-1000-000000000001}" FolderPath="Safety\">
-      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
-// Safety invariant: Reset is always accepted from any requester, regardless
+      <Declaration><![CDATA[// Base Reset clears diagnostics from any requester, regardless
 // of source lock or current fault state. Clears the active fault; history is
 // preserved in the ring buffer. Children may override to add device-specific
-// cleanup (e.g. return-to-idle), but must call SUPER^.Reset and must keep
-// the always-accepted contract.
+// recovery validation and cleanup. Successful overrides call SUPER^.Reset;
+// the state machine rejects Reset until STOPPED and running conditions are good.
 METHOD PUBLIC Reset : E_RpcMethodResponse
 VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[_ClearFault();
+        <ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+Reset := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF Reset <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_operatorMailbox.CancelNormal();
+_ClearFault();
 _AcceptCommand(eRequester := eRequester);
 Reset := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
     <Method Name="LockSource" Id="{c0000001-0000-0000-1000-000000000002}" FolderPath="Safety\">
-      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
-METHOD PUBLIC LockSource : E_RpcMethodResponse
+      <Declaration><![CDATA[METHOD PUBLIC LockSource : E_RpcMethodResponse
 VAR_INPUT
     bLock : BOOL;
 END_VAR]]></Declaration>
@@ -179,6 +183,7 @@ _lastFaultRequester := _lastRequester;
 _lastFaultSource    := source;
 _lastFaultReason    := reason;
 
+_faultRingHead := _faultRingHead MOD FAULT_RING_SIZE;
 _faultRing[_faultRingHead].code      := code;
 _faultRing[_faultRingHead].ts        := _faultTs;
 _faultRing[_faultRingHead].requester := _lastRequester;
@@ -232,7 +237,27 @@ header.tsLastCommand   := _tsLastCommand;
 header.tsLastFault     := _lastFaultTs;]]></ST>
       </Implementation>
     </Method>
-    <LineIds Name="FB_DeviceBase">
+    <Method Name="OperatorReset" Id="{1ff20d7b-3ab2-48a6-b25f-458b50a21eec}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorReset : E_RpcMethodResponse
+
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+      <Implementation><ST><![CDATA[OperatorReset := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.Reset, value := 0.0);]]></ST></Implementation>
+    </Method>
+    <Method Name="OperatorCommandResult" Id="{c6b8086b-4a61-471d-bc0a-5f1111c8623e}"><Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorCommandResult : E_RpcMethodResponse
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[OperatorCommandResult := _operatorMailbox.GetResult(requestId := requestId);]]></ST></Implementation></Method>
+<Method Name="_ProcessOperatorCommands" Id="{b9227d48-50f9-4f57-b40f-1adca118f38b}"><Declaration><![CDATA[METHOD PROTECTED _ProcessOperatorCommands
+VAR command : E_OperatorCommand; value : REAL; result : E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[IF _operatorMailbox.BeginConsume(command => command, value => value) THEN
+    result := THIS^._DispatchOperatorCommand(command := command, value := value);
+    _operatorMailbox.EndConsume(result := result);
+END_IF;]]></ST></Implementation></Method>
+<Method Name="_DispatchOperatorCommand" Id="{94fe5150-ee7b-447c-92ba-8317950b56d8}"><Declaration><![CDATA[METHOD PROTECTED _DispatchOperatorCommand : E_RpcMethodResponse
+VAR_INPUT command : E_OperatorCommand; value : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[CASE command OF
+E_OperatorCommand.Reset: _DispatchOperatorCommand := THIS^.Reset(eRequester := E_Requester.OPERATOR);
+ELSE _DispatchOperatorCommand := E_RpcMethodResponse.REJECTED_INVALID_PARAMETER;
+END_CASE;]]></ST></Implementation></Method>
+<LineIds Name="FB_DeviceBase">
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_DeviceBase.Reset">

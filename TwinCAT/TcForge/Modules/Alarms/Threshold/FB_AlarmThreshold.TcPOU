@@ -15,6 +15,8 @@
 {attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_AlarmThreshold EXTENDS FB_AlarmBase
 VAR_INPUT
+    // Application quality gate; FALSE means no trustworthy new evidence.
+    inpValid : BOOL := TRUE;
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
     cfg      : ST_AlarmThreshold_Cfg;
@@ -23,20 +25,30 @@ VAR_INPUT
     inpValue : REAL;
 END_VAR
 VAR
+    _criteriaKnown : BOOL;
+    _criteriaChanged : BOOL;
+    _previousCriteria : ST_AlarmThreshold_Cfg;
+    _evaluation : E_AlarmEvaluation;
     {attribute 'OPC.UA.DA' := '0'}
     _raw : BOOL;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[// bFailHigh wins if both directions are (mis)configured.
-IF cfg.bFailHigh THEN
-    _raw := inpValue > cfg.fThreshold;
-ELSIF cfg.bFailLow THEN
-    _raw := inpValue < cfg.fThreshold;
-ELSE
-    _raw := FALSE;
+      <ST><![CDATA[_criteriaChanged := FALSE;
+IF _criteriaKnown THEN
+    IF NOT (F_IsFiniteReal(cfg.fThreshold) AND F_IsFiniteReal(_previousCriteria.fThreshold)) THEN _criteriaChanged := TRUE;
+    ELSE _criteriaChanged := cfg.fThreshold <> _previousCriteria.fThreshold OR cfg.bFailHigh <> _previousCriteria.bFailHigh OR cfg.bFailLow <> _previousCriteria.bFailLow; END_IF;
 END_IF;
-
-_Evaluate(cfgCommon := cfg.common, bRawCondition := _raw);]]></ST>
+_criteriaKnown := TRUE; _previousCriteria := cfg;
+_raw := FALSE;
+_evaluation := E_AlarmEvaluation.Valid;
+IF NOT F_IsFiniteReal(cfg.fThreshold) OR (cfg.bFailHigh = cfg.bFailLow) THEN
+    _evaluation := E_AlarmEvaluation.InvalidConfig;
+ELSIF NOT inpValid OR NOT F_IsFiniteReal(inpValue) THEN
+    _evaluation := E_AlarmEvaluation.InvalidInput;
+ELSIF cfg.bFailHigh THEN _raw := inpValue > cfg.fThreshold;
+ELSE _raw := inpValue < cfg.fThreshold;
+END_IF;
+_Evaluate(cfgCommon := cfg.common, bRawCondition := _raw, evaluation := _evaluation, resetTiming := _criteriaChanged);]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>

@@ -8,6 +8,7 @@
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_AnalogOutput_Sts :
 STRUCT
+    outputInhibited : BOOL; // value (EU) is not valid when inhibited; rawReal is the applied fallback/held raw value.
     header        : ST_DeviceHeader_Sts;
 
     {attribute 'OPC.UA.DA.Description' := 'Clamped command actually written (EU)'}

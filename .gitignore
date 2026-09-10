@@ -8,6 +8,7 @@
 # TwinCAT PLC
 *.plcproj.bak
 *.plcproj.orig
+*.noprjfile
 *.tpy
 *.tclrs
 *.library
@@ -71,3 +72,12 @@ tchmipublish.journal.json
 # Additional generated files
 *.tfignore
 
+
+# Local validation artifacts
+__pycache__/
+artifacts/
+
+# Python package build output
+python/src/*.egg-info/
+python/build/
+python/dist/

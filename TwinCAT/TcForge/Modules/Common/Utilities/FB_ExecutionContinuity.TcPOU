@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_ExecutionContinuity" Id="{405f4446-3429-46cc-98e7-d7d60e1c338f}"><Declaration><![CDATA[// Application supplies the owning system task identity/counter and PLC online-change counter.
+// A pulse requires application cancellation and explicit recovery; no output is controlled here.
+FUNCTION_BLOCK FB_ExecutionContinuity
+VAR_INPUT
+    taskIndex : DINT;
+    cycleCounter, onlineChangeCounter : UDINT;
+    // Application policy; FALSE permits a compatible online edit, never a real gap.
+    recoverOnOnlineChange : BOOL := TRUE;
+END_VAR
+VAR_OUTPUT interrupted, executionInterrupted, onlineChanged : BOOL; END_VAR
+VAR known : BOOL; lastTask : DINT; lastCycle, lastChange, expectedCycle : UDINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[interrupted := FALSE;
+executionInterrupted := FALSE; onlineChanged := FALSE;
+IF taskIndex <= 0 THEN interrupted := TRUE; executionInterrupted := TRUE; known := FALSE; RETURN; END_IF;
+IF known THEN
+    IF lastCycle = UDINT#16#FFFFFFFF THEN expectedCycle := 0; ELSE expectedCycle := lastCycle + 1; END_IF;
+    onlineChanged := onlineChangeCounter <> lastChange;
+    executionInterrupted := taskIndex <> lastTask OR
+        (cycleCounter <> lastCycle AND cycleCounter <> expectedCycle);
+END_IF;
+interrupted := executionInterrupted OR (onlineChanged AND recoverOnOnlineChange);
+lastTask := taskIndex; lastCycle := cycleCounter; lastChange := onlineChangeCounter; known := TRUE;]]></ST></Implementation></POU></TcPlcObject>

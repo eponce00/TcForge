@@ -7,6 +7,11 @@
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_DigitalOutput_Cfg :
 STRUCT
+    // Startup restoration requires explicit application opt-in.
+    restoreCommandOnRestart : BOOL := FALSE;
+    // Optional hold during bad/unknown quality. Recovery still requires a fresh command.
+    holdOnBadQuality : BOOL := FALSE;
+    safeOutput : BOOL := FALSE; // Electrical level, bypasses inversion and debounce.
     // Signal conditioning
     {attribute 'OPC.UA.DA.Description' := 'Invert output signal (active-low actuators). Regular mode only.'}
     invert            : BOOL := FALSE;

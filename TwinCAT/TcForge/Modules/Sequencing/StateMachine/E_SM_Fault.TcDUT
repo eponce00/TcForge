@@ -27,6 +27,11 @@ TYPE E_SM_Fault :
     OddStepReached          := 2,    // default fault when a step moves onto an odd step number
     StepUserFault           := 3,    // user called step.RaiseFault(code, reason)
 
+    InvalidStepConfiguration := 30,
+    MissingStepImplementation := 31,
+    DuplicateStepImplementation := 32,
+    ShutdownFailed := 33,
+
     RunningInterlockTripped := 50,   // intlkRunning tripped, auto-aborted
 
     SubmoduleFaulted        := 70    // external inpSubmoduleFaulted asserted

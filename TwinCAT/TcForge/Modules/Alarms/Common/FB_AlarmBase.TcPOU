@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.20">
   <POU Name="FB_AlarmBase" Id="{a0200000-0000-0000-0000-000000000001}" SpecialFunc="None">
     <Declaration><![CDATA[// Abstract base for every FB_Alarm*. Owns the common moving parts:
 //   - debounce (TON/TOF) driven by cfg.common.tOnDelay / tOffDelay
-//   - latch / ack bookkeeping (VAR PERSISTENT so an unexpected restart does
-//     not silently "un-latch" an unacknowledged critical alarm)
+//   - latch / ack bookkeeping (VAR PERSISTENT; restoration depends on the
+//     application's configured and verified persistent-data saving mechanism)
 //   - rising / falling / ack timestamps (LTIME)
-//   - the Ack / LockSource RPC methods contracted by I_Alarm
+//   - program Ack / LockSource methods and queued OperatorAck RPC
 //   - the shared ST_Alarm_Sts status surface
 //
 // Concrete alarms:
@@ -28,17 +28,23 @@ VAR_OUTPUT
 END_VAR
 VAR
     {attribute 'OPC.UA.DA' := '0'}
+    {attribute 'OPC.UA.DA' := '0'}
+    _operatorMailbox : FB_OperatorMailbox;
+    {attribute 'OPC.UA.DA' := '0'}
     bSourceLockedToProg : BOOL;
     {attribute 'OPC.UA.DA' := '0'}
     _ton : TON;
     {attribute 'OPC.UA.DA' := '0'}
-    _tof : TOF;
+    _tof : TON;
     {attribute 'OPC.UA.DA' := '0'}
     _prevDebounced : BOOL;
+    _commonKnown : BOOL;
+    _previousCommon : ST_Alarm_Cfg;
 END_VAR
 VAR PERSISTENT
-    // Latch / ack state is persistent: a process restart must not silently
-    // hide an unacknowledged critical alarm. Operators re-acknowledge on boot.
+    // A restored latch preserves its acknowledgment state. Restart does not
+    // require a second Ack; a restored acknowledged latch still needs valid
+    // clear evidence. Persistent-image durability is an application concern.
     _latchedSync : BOOL;
     _ackedSync   : BOOL;
 END_VAR]]></Declaration>
@@ -47,9 +53,114 @@ END_VAR]]></Declaration>
     </Implementation>
     <Folder Name="Protected" Id="{a0200000-0000-0000-f000-000000000001}" />
     <Folder Name="Public" Id="{a0200000-0000-0000-f000-000000000002}" />
+    <Method Name="_DispatchOperatorCommand" Id="{de106cbb-d23f-472a-848d-c6e80c62921b}">
+      <Declaration><![CDATA[METHOD PROTECTED _DispatchOperatorCommand : E_RpcMethodResponse
+VAR_INPUT command : E_OperatorCommand; value : REAL; END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE command OF
+E_OperatorCommand.Ack: _DispatchOperatorCommand := THIS^.Ack(eRequester := E_Requester.OPERATOR);
+ELSE _DispatchOperatorCommand := E_RpcMethodResponse.REJECTED_INVALID_PARAMETER;
+END_CASE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_Evaluate" Id="{a0200000-0000-0000-1000-000000000006}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Called once per cycle by the concrete child. Takes the child's flattened
+// common cfg and the pre-computed raw trip condition, and does the rest:
+// debounce → latch/ack → severity → timestamps → sts.
+METHOD PROTECTED _Evaluate
+VAR_INPUT
+    cfgCommon     : ST_Alarm_Cfg;
+    bRawCondition : BOOL;
+    evaluation : E_AlarmEvaluation := E_AlarmEvaluation.Valid;
+    resetTiming : BOOL := FALSE;
+END_VAR
+VAR changed, severityValid : BOOL; END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_ProcessOperatorCommands();
+sts.enabled := cfgCommon.bEnable;
+sts.sMessage := cfgCommon.sMessage;
+sts.evaluationState := evaluation;
+// Explicit disable remains a deliberate suppression/clear operation.
+IF NOT cfgCommon.bEnable THEN
+    _ton(IN := FALSE); _tof(IN := FALSE);
+    _latchedSync := FALSE; _ackedSync := FALSE; _prevDebounced := FALSE;
+    sts.raw := FALSE; sts.debounced := FALSE; sts.active := FALSE;
+    sts.latched := FALSE; sts.acked := FALSE; sts.eSeverity := E_AlarmSeverity.NONE;
+    sts.valid := FALSE; sts.evaluationState := E_AlarmEvaluation.Disabled;
+    _previousCommon := cfgCommon; _commonKnown := TRUE;
+    RETURN;
+END_IF;
+// NONE is a legitimate configured severity; reject only unknown enum values.
+severityValid := cfgCommon.eSeverity = E_AlarmSeverity.NONE OR cfgCommon.eSeverity = E_AlarmSeverity.INFO OR
+    cfgCommon.eSeverity = E_AlarmSeverity.WARNING OR cfgCommon.eSeverity = E_AlarmSeverity.CRITICAL OR
+    cfgCommon.eSeverity = E_AlarmSeverity.SHUTDOWN;
+IF NOT severityValid THEN
+    sts.evaluationState := E_AlarmEvaluation.InvalidConfig;
+END_IF;
+// A restored latch has no volatile status history yet. Publish its configured
+// severity before an invalid-input return; later invalid scans preserve it.
+IF NOT _commonKnown AND _latchedSync AND severityValid THEN
+    sts.eSeverity := cfgCommon.eSeverity;
+END_IF;
+changed := _commonKnown AND (cfgCommon.tOnDelay <> _previousCommon.tOnDelay OR
+    cfgCommon.tOffDelay <> _previousCommon.tOffDelay OR cfgCommon.bRequireAck <> _previousCommon.bRequireAck);
+_previousCommon := cfgCommon; _commonKnown := TRUE;
+IF changed OR resetTiming THEN _ton(IN := FALSE); _tof(IN := FALSE); END_IF;
+sts.valid := sts.evaluationState = E_AlarmEvaluation.Valid;
+IF NOT sts.valid THEN
+    // Unknown evidence cannot clear an existing alarm or count toward debounce.
+    _ton(IN := FALSE); _tof(IN := FALSE);
+    sts.raw := FALSE;
+    sts.active := sts.active OR _latchedSync;
+    sts.latched := _latchedSync AND NOT _ackedSync;
+    sts.acked := _ackedSync;
+    RETURN;
+END_IF;
+sts.raw := bRawCondition;
+// Debounce each state transition separately. A held active condition cannot
+// disappear merely because its trip timer was reset while evidence was invalid.
+IF bRawCondition THEN
+    _tof(IN := FALSE);
+    IF NOT sts.debounced THEN
+        _ton(IN := TRUE, PT := cfgCommon.tOnDelay);
+        IF _ton.Q THEN sts.debounced := TRUE; END_IF;
+    ELSE _ton(IN := FALSE); END_IF;
+ELSE
+    _ton(IN := FALSE);
+    IF sts.debounced THEN
+        _tof(IN := TRUE, PT := cfgCommon.tOffDelay);
+        IF _tof.Q THEN sts.debounced := FALSE; END_IF;
+    ELSE _tof(IN := FALSE); END_IF;
+END_IF;
+IF sts.debounced AND NOT _prevDebounced THEN sts.tsTripped := F_Now();
+ELSIF NOT sts.debounced AND _prevDebounced THEN sts.tsCleared := F_Now(); END_IF;
+_prevDebounced := sts.debounced;
+IF cfgCommon.bRequireAck AND sts.debounced AND NOT _latchedSync THEN
+    _latchedSync := TRUE; _ackedSync := FALSE;
+END_IF;
+// Existing latches outlive changes to the policy for future trips.
+IF _latchedSync AND _ackedSync AND NOT sts.debounced THEN
+    _latchedSync := FALSE; _ackedSync := FALSE;
+END_IF;
+sts.active := sts.debounced OR _latchedSync;
+sts.latched := _latchedSync AND NOT _ackedSync;
+sts.acked := _ackedSync;
+IF sts.active THEN sts.eSeverity := cfgCommon.eSeverity;
+ELSE sts.eSeverity := E_AlarmSeverity.NONE; END_IF;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_ProcessOperatorCommands" Id="{16247dea-4ff8-4ef6-94f5-3eb31b474695}">
+      <Declaration><![CDATA[METHOD PROTECTED _ProcessOperatorCommands
+VAR command : E_OperatorCommand; value : REAL; result : E_RpcMethodResponse; END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _operatorMailbox.BeginConsume(command => command, value => value) THEN
+    result := THIS^._DispatchOperatorCommand(command := command, value := value);
+    _operatorMailbox.EndConsume(result := result);
+END_IF;]]></ST>
+      </Implementation>
+    </Method>
     <Method Name="Ack" Id="{a0200000-0000-0000-1000-000000000001}" FolderPath="Public\">
-      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
-// Acknowledge the current latch. Idempotent — repeated Acks on the same latch
+      <Declaration><![CDATA[// Acknowledge the current latch. Idempotent — repeated Acks on the same latch
 // just refresh tsAcked / ackRequester. If the condition has already cleared,
 // the next cyclic _Evaluate releases the latch.
 METHOD PUBLIC Ack : E_RpcMethodResponse
@@ -57,7 +168,10 @@ VAR_INPUT
     eRequester : E_Requester := E_Requester.PROG;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[Ack := F_ValidateRequester(
+        <ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+Ack := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF Ack <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+Ack := F_ValidateRequester(
     eRequester    := eRequester,
     bSourceLocked := bSourceLockedToProg,
     bFaulted      := FALSE);
@@ -70,8 +184,7 @@ END_IF;]]></ST>
       </Implementation>
     </Method>
     <Method Name="LockSource" Id="{a0200000-0000-0000-1000-000000000002}" FolderPath="Public\">
-      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
-// When bLock = TRUE, only PROG requesters may Ack(); OPERATOR calls are
+      <Declaration><![CDATA[// When bLock = TRUE, only PROG requesters may Ack(); OPERATOR calls are
 // rejected with REJECTED_SOURCE_NOT_ALLOWED. Use for interlock-grade alarms
 // that must only be cleared by sequence logic.
 METHOD PUBLIC LockSource : E_RpcMethodResponse
@@ -83,83 +196,27 @@ END_VAR]]></Declaration>
 LockSource := E_RpcMethodResponse.ACCEPTED;]]></ST>
       </Implementation>
     </Method>
-    <Method Name="_Evaluate" Id="{a0200000-0000-0000-1000-000000000006}" FolderPath="Protected\">
-      <Declaration><![CDATA[// Called once per cycle by the concrete child. Takes the child's flattened
-// common cfg and the pre-computed raw trip condition, and does the rest:
-// debounce → latch/ack → severity → timestamps → sts.
-METHOD PROTECTED _Evaluate
-VAR_INPUT
-    cfgCommon     : ST_Alarm_Cfg;
-    bRawCondition : BOOL;
-END_VAR]]></Declaration>
+    <Method Name="OperatorAck" Id="{d47d4989-6dac-43eb-a474-297767ea3277}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorAck : E_RpcMethodResponse
+
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[// Disabled: stop timers, clear everything, but keep the message echo so the
-// HMI can still render "(disabled) Tank level high" if it wants.
-IF NOT cfgCommon.bEnable THEN
-    _ton(IN := FALSE, PT := T#0MS);
-    _tof(IN := FALSE, PT := T#0MS);
-    _latchedSync        := FALSE;
-    _ackedSync          := FALSE;
-    _prevDebounced      := FALSE;
-    sts.enabled      := FALSE;
-    sts.raw          := FALSE;
-    sts.debounced    := FALSE;
-    sts.active       := FALSE;
-    sts.latched      := FALSE;
-    sts.acked        := FALSE;
-    sts.eSeverity       := E_AlarmSeverity.NONE;
-    sts.sMessage        := cfgCommon.sMessage;
-    RETURN;
-END_IF;
-
-sts.enabled := TRUE;
-sts.raw     := bRawCondition;
-sts.sMessage   := cfgCommon.sMessage;
-
-// Asymmetric debounce: raw → TON (arm delay) → TOF (release hysteresis)
-_ton(IN := bRawCondition, PT := cfgCommon.tOnDelay);
-_tof(IN := _ton.Q,        PT := cfgCommon.tOffDelay);
-sts.debounced := _tof.Q;
-
-// Edge-triggered timestamps
-IF sts.debounced AND NOT _prevDebounced THEN
-    sts.tsTripped := F_Now();
-ELSIF NOT sts.debounced AND _prevDebounced THEN
-    sts.tsCleared := F_Now();
-END_IF;
-_prevDebounced := sts.debounced;
-
-// Latch / ack state machine
-IF cfgCommon.bRequireAck THEN
-    // Rising edge of debounced → fresh latch
-    IF sts.debounced AND NOT _latchedSync THEN
-        _latchedSync := TRUE;
-        _ackedSync   := FALSE;
-    END_IF;
-    // Release only after operator ack AND condition cleared
-    IF NOT sts.debounced AND _latchedSync AND _ackedSync THEN
-        _latchedSync := FALSE;
-        _ackedSync   := FALSE;
-    END_IF;
-    sts.active  := _latchedSync;
-    sts.latched := _latchedSync AND NOT _ackedSync;
-    sts.acked   := _ackedSync;
-ELSE
-    // Self-clearing, no latch
-    _latchedSync   := FALSE;
-    _ackedSync     := FALSE;
-    sts.active  := sts.debounced;
-    sts.latched := FALSE;
-    sts.acked   := FALSE;
-END_IF;
-
-// Severity follows active state so aggregators can MAX() blindly.
-IF sts.active THEN
-    sts.eSeverity := cfgCommon.eSeverity;
-ELSE
-    sts.eSeverity := E_AlarmSeverity.NONE;
-END_IF;]]></ST>
+        <ST><![CDATA[OperatorAck := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.Ack, value := 0.0);]]></ST>
       </Implementation>
     </Method>
+    <Method Name="OperatorCommandResult" Id="{05830c96-98fa-4479-8055-bd7a626b9b74}">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorCommandResult : E_RpcMethodResponse
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[OperatorCommandResult := _operatorMailbox.GetResult(requestId := requestId);]]></ST>
+      </Implementation>
+    </Method>
+<Method Name="_InvalidateEvaluation" Id="{9b1189fa-30d1-49a1-a0b4-3abab7242e58}"><Declaration><![CDATA[METHOD PROTECTED _InvalidateEvaluation
+VAR_INPUT evaluation : E_AlarmEvaluation; END_VAR]]></Declaration><Implementation><ST><![CDATA[_ton(IN := FALSE); _tof(IN := FALSE);
+sts.valid := FALSE; sts.evaluationState := evaluation; sts.raw := FALSE;
+// Preserve established alarm state and timestamps until fresh valid evidence.
+]]></ST></Implementation></Method>
   </POU>
 </TcPlcObject>

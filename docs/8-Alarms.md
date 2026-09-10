@@ -1,286 +1,195 @@
 # 8 Alarms
 
-RPC calls use `OperatorAck(requestId)` through the owning-task mailbox with fixed operator identity. `Ack(eRequester)` and `LockSource` remain program APIs; LockSource is not RPC-enabled. See [HMI integration](9-HMI-Integration.md).
-
-TcForge alarms are process-condition detectors. They live alongside devices but are **not** devices: they do not own I/O, they do not carry a fault code, and they do not extend `FB_DeviceBase`. Instead they expose a small, uniform status surface (`ST_Alarm_Sts`) with debounce, ack/latch, severity tagging, and timestamps — so HMIs, aggregators, and device FBs can consume them identically regardless of the underlying detection rule (boolean, threshold, limit ladder, deviation, rate of change…).
+TcForge alarms detect assembly-machine conditions such as missing parts, clamp feedback, force limits and abnormal position rates. They expose debounce, acknowledgment, severity and evaluation validity independently of device faults.
 
 > **Navigation:** [← Sequencing](7-Sequencing.md) · [Documentation home](index.md) · [HMI Integration →](9-HMI-Integration.md)
 
----
-
 ## 8.1 Alarms vs. Faults
 
-TcForge draws a clean line between the two concepts:
+| Concept | Owner | Recovery |
+| --- | --- | --- |
+| Device fault | `FB_DeviceBase` and the device's fault definitions | Explicit device `Reset()` after correcting the cause. |
+| Alarm | A standalone alarm instance or an alarm composed by a device | Valid clear evidence, configured off-delay, and acknowledgment when required. |
 
-| Concept | Lives on | Raised by | Lifetime | Operator action |
-| ------- | -------- | --------- | -------- | --------------- |
-| **Fault** (`E_<Dev>_Fault`) | `FB_DeviceBase` fault state / `ST_DeviceHeader_Sts` | The device itself, via the inherited `_Raise(code, source, reason)` helper. The device is broken, hung, or misconfigured. | Persists until `Reset()` on the device. | Reset the device after fixing the underlying issue. |
-| **Alarm** (`FB_Alarm*`) | Standalone alarm instance or `ST_*_Sts` on a device | A separate detector watching a signal or value. The signal condition is outside the expected range. | Follows the condition, optionally latches for ack. | Acknowledge; condition clears when the signal returns. |
-
-Both can promote into each other — a device can read `alarm.sts.active` and call its own `_Raise(...)`, or an alarm can monitor a device's header (`faulted`). They share the same HMI vocabulary (active / acked / severity / timestamps) but keep distinct storage so diagnostic queries stay unambiguous.
-
-This also means: alarms **do not live in the device fault ring buffer**. If you need an alarm-history ring, run the alarm through the device's fault pipeline by promoting it to an `E_<Dev>_Fault` code — that's a deliberate authoring decision, not automatic.
-
----
+Alarms do not extend `FB_DeviceBase`, own physical IO or automatically write the device fault history. An application may explicitly promote a selected alarm to a device fault. An alarm can also display a device's existing `sts.header.faulted` condition.
 
 ## 8.2 Severity Model
 
-Every alarm carries a severity tag the HMI uses to drive colour, stacklight tower, siren, etc.
+`E_AlarmSeverity` contains `NONE`, `INFO`, `WARNING`, `CRITICAL` and `SHUTDOWN` in increasing numeric order. `NONE` remains a valid configured value. Unknown enum values produce `InvalidConfig`.
 
-```iecst
-TYPE E_AlarmSeverity :
-(
-    NONE     := 0,     // bookkeeping: alarm disabled or inactive
-    INFO     := 1,     // informational, no operator action required
-    WARNING  := 2,     // operator should investigate
-    CRITICAL := 3,     // urgent; process may be about to lose control
-    SHUTDOWN := 4      // interlock-grade; a controller is already acting
-) USINT;
-```
-
-Numeric order is meaningful: `WARNING > INFO`, etc. Aggregators can compute `MAX(severity)` over a collection and light the highest tier. Pick a level per site-wide convention and stick to it; keeping names instead of `LEVEL_0..3` makes review diffs self-explanatory.
-
----
+An inactive alarm reports `NONE`. A valid active evaluation publishes `cfg.common.eSeverity`; invalid evaluation preserves the last established severity. `FB_AlarmLimit` reports the highest severity among its four child statuses. Severity is a display/classification value; it does not itself issue a machine stop.
 
 ## 8.3 Common Status: `ST_Alarm_Sts`
 
-Every alarm block fills the same status struct (analogous to `ST_DeviceHeader_Sts` for devices). The HMI always knows what it's reading.
+| Field | Meaning |
+| --- | --- |
+| `enabled` | Echo of `cfg.common.bEnable`. |
+| `valid` | TRUE only when the alarm has a usable evaluation. |
+| `evaluationState` | `Disabled`, `Valid`, `InvalidInput`, `InvalidConfig` or `Initializing`. |
+| `raw` | Current condition before debounce when valid. FALSE during invalidity is not evidence that the condition cleared. |
+| `debounced` | Established condition after trip/clear delays; held during invalid evaluation. |
+| `active` | TRUE while the debounced condition or an outstanding latch remains. |
+| `latched` | An outstanding latch awaits acknowledgment, even if `bRequireAck` was subsequently disabled. |
+| `acked` | The outstanding latch has been acknowledged; this does not prove the condition cleared. |
+| `eSeverity` | Active severity, held during invalidity; `NONE` when inactive. |
+| `sMessage` | Echo of `cfg.common.sMessage`. |
+| `ackRequester` | Requester of the most recent acknowledgment of a latch. |
+| `tsTripped`, `tsCleared` | Last rising/falling edge timestamps of the established debounced condition. |
+| `tsAcked` | Last accepted acknowledgment timestamp when a latch existed. |
 
-| Field | Type | Meaning |
-| ----- | ---- | ------- |
-| `enabled` | `BOOL` | Echo of `cfg.bEnable`. Disabled alarms always report all flags FALSE. |
-| `raw` | `BOOL` | Instantaneous condition, *before* debounce. Useful for waveforms / diagnostics. |
-| `debounced` | `BOOL` | After `tOnDelay` / `tOffDelay`. This is what actually trips the alarm. |
-| `active` | `BOOL` | The alarm's public "is it firing?" bit. With ack required, this is the **latch**; without, it mirrors `debounced`. |
-| `latched` | `BOOL` | TRUE while the alarm is latched awaiting ack. Always FALSE when `cfg.bRequireAck = FALSE`. |
-| `acked` | `BOOL` | TRUE once an operator has acknowledged the current latch. Cleared when the alarm re-latches. |
-| `eSeverity` | `E_AlarmSeverity` | Echo of `cfg.eSeverity` while active; `NONE` when inactive. HMIs read this directly. |
-| `sMessage` | `STRING(79)` | Echo of `cfg.sMessage` — the operator-facing one-liner for this alarm. |
-| `ackRequester` | `E_Requester` | Who acknowledged the current latch (`PROG` / `OPERATOR`). |
-| `tsTripped` | `LTIME` | Timestamp of the most recent rising edge of `debounced`. |
-| `tsCleared` | `LTIME` | Timestamp of the most recent falling edge of `debounced`. |
-| `tsAcked` | `LTIME` | Timestamp of the most recent accepted `Ack` call. |
+The alarm owns its status. Consumers should display both `active` and `valid`: an inactive alarm with invalid evidence does not establish that the machine condition is normal.
 
-Rules:
+### Validity and recovery
 
-- The alarm owns `sts`. A consumer never writes into it.
-- `active` is the only field most HMI pages need. Everything else is there for forensics.
-- `eSeverity` reports `NONE` while `active = FALSE` so aggregators can naïvely sum or `MAX` without special-casing.
+Every concrete alarm has `inpValid : BOOL := TRUE`. Bind it to application signal quality when a value can be stale, disconnected or unavailable. Numeric alarms also classify IEEE NaN and infinity through integer-bit helpers before floating-point comparisons, arithmetic or conversions.
 
----
+Invalid input/configuration and rate-history initialization reset pending transition timing. They preserve established debounced/active state, latch, severity and trip/clear timestamps. Ack may be recorded while invalid, but cannot release a latch without later valid clear evidence. Recovery starts the full off-delay from fresh valid clear samples; time without trustworthy evidence does not count toward clearing.
+
+`cfg.common.bEnable := FALSE` is an explicit suppression operation that clears active/latch/ack state and reports `Disabled`. Use `inpValid` for communication loss. Changing `bRequireAck` affects future trips and cannot erase an existing unacknowledged latch.
 
 ## 8.4 Common Config: `ST_Alarm_Cfg`
 
-The shared head of every alarm's config struct. Each concrete alarm's `ST_Alarm<Type>_Cfg` starts with these fields in the same order so the consumer-facing shape is consistent.
+Each concrete configuration contains `common : ST_Alarm_Cfg`. For example, use `alarm.cfg.common.bEnable`, not a flattened enable field. `FB_AlarmLimit` has a separate nested common configuration per level, such as `alarm.cfg.Hi.common.bEnable`.
 
-| Field | Type | Default | Meaning |
-| ----- | ---- | ------- | ------- |
-| `bEnable` | `BOOL` | `FALSE` | Master enable. Disabled alarms consume zero state. |
-| `tOnDelay` | `TIME` | `T#0MS` | Debounce — the condition must hold this long before the alarm trips. |
-| `tOffDelay` | `TIME` | `T#0MS` | Hysteresis — the condition must clear this long before the alarm releases. |
-| `bRequireAck` | `BOOL` | `FALSE` | When TRUE, the alarm latches and waits for `Ack`. |
-| `eSeverity` | `E_AlarmSeverity` | `NONE` | HMI severity tag. |
-| `sMessage` | `STRING(79)` | `''` | Short operator-facing message (e.g. `'Tank 1 high level'`). |
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `bEnable` | FALSE | Explicitly enable evaluation; FALSE clears and suppresses the alarm. |
+| `tOnDelay` | `T#0MS` | Continuous valid trip evidence required before activation. |
+| `tOffDelay` | `T#0MS` | Continuous valid clear evidence required before releasing the condition. |
+| `bRequireAck` | FALSE | New trips create an acknowledgment latch when TRUE. |
+| `eSeverity` | `NONE` | Severity classification for valid active evaluation. |
+| `sMessage` | Empty | Operator message, for example `Clamp force above limit`. |
 
-Alarms **default disabled** (`bEnable = FALSE`). Explicit enable at commissioning prevents "forgot to configure it, why is it firing?" discussions.
-
----
+TIME is unsigned in TwinCAT. Zero disables the corresponding delay. The application writes configuration in the owning cyclic task; configuration and status are published read-only to OPC UA. Do not use external field writes as a configuration update mechanism.
 
 ## 8.5 Lifecycle
 
-```
-           (condition holds tOnDelay)          (condition clears tOffDelay)
-raw   ─┘┐ ┌──────────────────────────────┐   ┌──────────────────┐
-           └─┘                              └───┘                  └──
-debounced ──────────────┌──────────────────┐   ┌───────────────────
-                           │                  │   │
-active (no ack)         │                  │   │
-                        ───┘                  └───┘...
+1. Valid trip evidence must remain true for `tOnDelay` before the debounced condition becomes true.
+2. An active condition remains established until valid clear evidence lasts for `tOffDelay`.
+3. With acknowledgment required, the alarm also remains active until Ack. Ack while the condition holds records acknowledgment without clearing the alarm.
+4. Invalid evidence interrupts timing and preserves established state. Recovery must supply fresh evidence.
 
-active (with ack)     ──┘                                     (until Ack())
-latched (with ack)    ──┘                                     (until Ack())
-acked                 ────────────────────────▲───────────────
-                                                 │
-                                           Ack(OPERATOR)
-```
+Changing trip/clear delays or acknowledgment policy restarts pending transition timing. Threshold direction/value and deviation mode/bound changes also restart timing, so new criteria cannot inherit timer credit from old criteria.
 
-- **Without `bRequireAck`:** `active` follows `debounced` directly. Self-clearing. `latched` is always FALSE.
-- **With `bRequireAck`:** `active` goes TRUE on the rising edge of `debounced` and stays TRUE until `Ack()` is called *and* `debounced` is FALSE. If the operator acks while the condition still holds, `acked` goes TRUE but `active` remains — this lets the HMI stop flashing while clearly showing the condition is still present.
+Latch and acknowledgment flags are `VAR PERSISTENT`. Persistence requires the application's TwinCAT persistent-data configuration and remains subject to the repository's restart/persistence qualification. Severity and timestamps are not a durable alarm-history store.
 
----
+When those flags are restored, an unacknowledged latch still requires Ack. An acknowledged latch preserves that acknowledgment and requires valid clear evidence, without a second Ack merely because the runtime restarted. On the first enabled evaluation, a restored latch publishes the configured severity when that severity is recognized, even if process input is invalid. Subsequent invalid evaluations preserve the established severity. Configure the alarm before its first cyclic call; an explicitly disabled call clears the restored latch under the normal suppression policy.
 
 ## 8.6 `FB_AlarmBase` — The Shared Engine
 
-All concrete alarm FBs extend `FB_AlarmBase`. The base owns:
+`FB_AlarmSimple`, `FB_AlarmThreshold`, `FB_AlarmDeviation` and `FB_AlarmRateOfChange` extend the abstract base. `FB_AlarmLimit` instead composes four threshold instances and implements `I_Alarm`.
 
-- Debounce timers (`TON` / `TOF`)
-- Latch / ack state (`VAR PERSISTENT`, so an unexpected restart doesn't silently "un-latch" an unacknowledged critical alarm)
-- Timestamp bookkeeping
-- The `Ack(eRequester)` RPC method
-- A `_cycleGuard : FB_CycleGuard` equivalent so calling the FB twice in a cycle is a no-op
-- A protected hook: `_EvaluateCondition() : BOOL`
-
-Concrete alarms only override `_EvaluateCondition`, returning TRUE when the raw trip condition holds. They never touch timers, latches, or the status struct directly.
+The base owns separate `TON` timers for trip and clear transitions, latch/ack state, timestamps, status, source locking and the operator mailbox. A child classifies its configuration and inputs, computes its raw condition only when valid, then calls `_Evaluate` once from its cyclic body:
 
 ```iecst
-FUNCTION_BLOCK FB_AlarmThreshold EXTENDS FB_AlarmBase
-VAR_INPUT
-    cfg      : ST_AlarmThreshold_Cfg;   // includes ST_Alarm_Cfg fields first
-    inpValue : REAL;
-END_VAR
-
-METHOD PROTECTED _EvaluateCondition : BOOL
-    IF cfg.bFailHigh THEN
-        _EvaluateCondition := inpValue > cfg.fThreshold;
-    ELSIF cfg.bFailLow THEN
-        _EvaluateCondition := inpValue < cfg.fThreshold;
-    END_IF;
+_Evaluate(
+    cfgCommon := cfg.common,
+    bRawCondition := rawCondition,
+    evaluation := evaluationState,
+    resetTiming := criteriaChanged
+);
 ```
 
-The base's body resolves to `_EvaluateCondition → debounce → latch/ack → status`, so every alarm behaves identically around the edges.
-
----
+The child supplies its own local condition, evaluation-state and configuration-change variables. `_Evaluate` is the protected implementation API; there is no `_EvaluateCondition` override or cycle guard. Each alarm instance must have one owning task and one cyclic evaluation per scan. Call only the limit ladder's body when using `FB_AlarmLimit`; its child calls are internal.
 
 ## 8.7 Concrete Alarms
 
 ### 8.7.1 `FB_AlarmSimple`
 
-Debounced / lat-chable boolean mirror. Use to wrap any digital condition the HMI should see as an alarm.
-
-- **Inputs:** `cfg : ST_AlarmSimple_Cfg`, `inpActive : BOOL`
-- **Outputs:** `sts : ST_Alarm_Sts`
-- **Extra cfg:** *none* (just the common fields)
-
-Typical use: promote a device header flag (`dev.sts.header.faulted`) or a plant condition (`door.sts.stsOpen`) into the alarm display vocabulary without writing any logic.
+Inputs are `cfg : ST_AlarmSimple_Cfg`, `inpActive : BOOL` and `inpValid`. The output is `sts : ST_Alarm_Sts`. Use it for a missing-part condition or a device fault indication whose quality is known separately.
 
 ### 8.7.2 `FB_AlarmThreshold`
 
-Single-direction threshold monitor against a REAL input.
+Inputs are `cfg : ST_AlarmThreshold_Cfg`, `inpValue : REAL` and `inpValid`. Configuration adds `fThreshold`, `bFailHigh` and `bFailLow`.
 
-- **Inputs:** `cfg : ST_AlarmThreshold_Cfg`, `inpValue : REAL`
-- **Outputs:** `sts : ST_Alarm_Sts`
-- **Extra cfg:** `fThreshold : REAL`, `bFailHigh : BOOL`, `bFailLow : BOOL`
-
-Uses strict `>` / `<` (exact threshold does not trip). If both `bFailHigh` and `bFailLow` are TRUE, `bFailHigh` wins — that's almost always a config mistake; check your cfg before expecting both.
+Exactly one direction must be selected while enabled. Both directions or neither direction produce `InvalidConfig`. Comparisons are strict: equality to the threshold does not trip. Non-finite thresholds are invalid configuration; non-finite input values are invalid input.
 
 ### 8.7.3 `FB_AlarmLimit`
 
-Four-level ladder (HiHi / Hi / Lo / LoLo) built on four composed `FB_AlarmThreshold` instances. Each level has its own full `ST_AlarmThreshold_Cfg`, so each can have its own delay, severity, ack requirement, message.
+Inputs are `cfg : ST_AlarmLimit_Cfg`, `inpPv : REAL` and `inpValid`. The ladder has `HiHi`, `Hi`, `Lo` and `LoLo` threshold configurations and child statuses.
 
-- **Inputs:** `cfg : ST_AlarmLimit_Cfg` (four sub-configs), `inpPv : REAL`
-- **Outputs:** `sts : ST_AlarmLimit_Sts` (four `ST_Alarm_Sts` sub-statuses + rollups)
-- **Suppression:** `HiHi` suppresses `Hi`, `LoLo` suppresses `Lo` on the rollup flags, so the HMI sees exactly one level active per direction. The individual sub-statuses stay raw for forensics.
+`HiHi` suppresses `Hi` on rollup active flags, and `LoLo` suppresses `Lo`. Individual child statuses remain available. `anyActive` and `eSeverity` aggregate alarm state. The input-valid gate reaches every child; composite validity covers enabled levels only. Disabled unused levels do not invalidate an enabled level, while an entirely disabled ladder reports `Disabled`.
 
 ### 8.7.4 `FB_AlarmDeviation`
 
-Asymmetric deviation check — absolute limits *or* setpoint-relative.
+Inputs are `cfg : ST_AlarmDeviation_Cfg`, `inpPv : REAL`, `inpSetpoint : REAL` and `inpValid`.
 
-- **Inputs:** `cfg : ST_AlarmDeviation_Cfg`, `inpPv : REAL`, `inpSetpoint : REAL`
-- **Outputs:** `sts : ST_Alarm_Sts`
-- **Extra cfg:** `fHighLimit : REAL`, `fLowLimit : REAL`, `bUseSetpoint : BOOL`
+- Absolute mode: alarm outside `fLowLimit..fHighLimit`; the limits must be ordered. The unused setpoint does not affect validity.
+- Setpoint mode (`bUseSetpoint := TRUE`): alarm above setpoint plus `fHighLimit`, or below setpoint minus `fLowLimit`. Both deviations must be nonnegative.
 
-- Absolute mode (`bUseSetpoint = FALSE`): alarm when `inpPv > fHighLimit` OR `inpPv < fLowLimit`. `inpSetpoint` is ignored.
-- Deviation mode (`bUseSetpoint = TRUE`): alarm when `inpPv > inpSetpoint + fHighLimit` OR `inpPv < inpSetpoint - fLowLimit`. Tracks moving setpoints.
+All participating values must be finite. Bounds use LREAL intermediates so adding or subtracting large finite REAL values does not overflow.
 
 ### 8.7.5 `FB_AlarmRateOfChange`
 
-Runaway / sensor-drop detector.
+Inputs are `cfg : ST_AlarmRateOfChange_Cfg`, `inpPv : REAL` and `inpValid`. `outRateOfChange : LREAL` reports units per second. Configuration adds finite, nonnegative `fRateLimit`; the alarm tests the absolute rate against it.
 
-- **Inputs:** `cfg : ST_AlarmRateOfChange_Cfg`, `inpPv : REAL`
-- **Outputs:** `sts : ST_Alarm_Sts`, plus `outRateOfChange : REAL` (units per second — always exposed, alarm or not).
-- **Extra cfg:** `fRateLimit : REAL` (units / s)
+Rate uses the configured task period through `F_GetTaskCycleTime()` and LREAL arithmetic. The helper has millisecond resolution: use tasks of at least 1 ms. Zero period is invalid configuration. This is a per-task-sample rate, not a measurement of ADS arrival intervals or actual scheduling jitter.
 
-Rate is computed from the task's cycle time via `F_GetTaskCycleTime()`. The first scan initialises the previous sample and reports zero rate — no false trip at power-on.
+Startup, re-enable, invalid input/configuration, rate-limit or debounce/ack-policy changes, a different task, and task-period changes discard history. The first valid sample reports `Initializing` and zero diagnostic rate; it cannot clear an existing alarm. The second valid sample supplies a usable rate.
 
----
+Before assigning a different signal source, call application-only `ReassignInput()` in the owning task. It immediately invalidates rate history while preserving the established alarm. The next valid sample establishes the new baseline. A cycle with `inpValid := FALSE` also invalidates history.
 
 ## 8.8 Ack Semantics and `I_Alarm`
 
-The `I_Alarm` interface unifies how any code (HMI gateway, parent device, test harness) talks to an alarm:
+`I_Alarm` exposes the program methods `Ack(eRequester)` and `LockSource(bLock)`. Direct program calls execute in the owning task. `Ack` validates requester identity and source locking; a locked alarm rejects operator acknowledgment with `REJECTED_SOURCE_NOT_ALLOWED`.
 
-```iecst
-INTERFACE I_Alarm
-    METHOD Ack : E_RpcMethodResponse
-        VAR_INPUT
-            eRequester : E_Requester := E_Requester.PROG;
-        END_VAR
-```
+Repeated accepted acknowledgment of an existing latch refreshes `tsAcked` and `ackRequester`. Ack with no latch is an accepted no-op. `FB_AlarmLimit.Ack` cascades to its four levels.
 
-Every concrete alarm FB implements `I_Alarm`. `Ack` uses `F_ValidateRequester` the same way device methods do — a source-locked alarm (for program-only acknowledgment) rejects `OPERATOR` calls with `REJECTED_SOURCE_NOT_ALLOWED`. By default alarms are *not* source-locked; the operator always acks.
+External ADS/OPC UA clients use the queued RPC methods:
 
-`Ack` is idempotent — repeated calls on the same latch just refresh `tsAcked` / `ackRequester`. A failing `Ack` (source rejection) is reported through the RPC response and never changes state.
+1. Call `OperatorAck(requestId)` with a nonzero request ID unique across clients and PLC restarts.
+2. `QUEUED` means admitted to the mailbox, not acknowledged yet.
+3. Read `OperatorCommandResult(requestId)` for the owning task's execution result.
 
-Aggregators can walk a heterogeneous alarm list:
-
-```iecst
-VAR
-    alarms : ARRAY[0..N] OF I_Alarm;   // populate at init with any alarm FB
-END_VAR
-FOR i := 0 TO N DO
-    IF alarms[i].Ack(eRequester := E_Requester.OPERATOR) = E_RpcMethodResponse.ACCEPTED THEN
-        // ok
-    END_IF;
-END_FOR;
-```
-
----
+The RPC wrapper fixes the requester to `OPERATOR`. `Ack` and `LockSource` are not RPC-enabled. Admission may return busy or another rejection; follow the bounded mailbox protocol in [HMI integration](9-HMI-Integration.md). A successful execution result still does not imply the alarm condition cleared.
 
 ## 8.9 Wiring Alarms to Devices
 
-Two common patterns:
-
 ### 8.9.1 Device composes alarms internally
 
-The device owns several alarm FB instances, reads `alarm.sts.active`, and promotes selected ones to its own fault codes. Used when the alarm is a device-specific concern (a clamp's position-deviation alarm, a pump's pressure Hi).
+A device can own an alarm for a specific concern, such as clamp-force deviation. Its cyclic body supplies the signal and quality, evaluates the alarm once, then explicitly decides whether `sts.active` or invalid evaluation should affect the device. There is no automatic alarm-to-fault conversion.
+
+### 8.9.2 Standalone alarm in a program
+
+This complete program example supplies a clamp-force threshold alarm. The application's IO adapter assigns `clampForceN` and `forceQuality` before the program evaluates the alarm.
 
 ```iecst
-FUNCTION_BLOCK FB_Pump EXTENDS FB_DeviceBase
+PROGRAM PRG_ClampAlarm
 VAR
-    almHighTemp : FB_AlarmThreshold;
+    clampForceN : REAL;
+    forceQuality : TcForge.E_IO_Quality := TcForge.E_IO_Quality.UNKNOWN;
+    alarm : TcForge.FB_AlarmThreshold;
 END_VAR
-// body:
-almHighTemp(cfg := cfg.almHighTemp, inpValue := sts.stsMotorTempC);
-IF almHighTemp.sts.active AND cfg.bPromoteHighTempToFault THEN
-    _Raise(
-        code   := E_Pump_Fault.MotorOverTemp,
-        source := 'ALM_TEMP',
-        reason := almHighTemp.sts.sMessage
-    );
-END_IF;
+
+alarm.cfg.common.bEnable := TRUE;
+alarm.cfg.common.eSeverity := TcForge.E_AlarmSeverity.WARNING;
+alarm.cfg.common.sMessage := 'Clamp force above 500 N';
+alarm.cfg.common.tOnDelay := T#50MS;
+alarm.cfg.fThreshold := 500.0;
+alarm.cfg.bFailHigh := TRUE;
+alarm.cfg.bFailLow := FALSE;
+alarm(
+    inpValue := clampForceN,
+    inpValid := forceQuality = TcForge.E_IO_Quality.GOOD
+);
 ```
 
-### 8.9.2 Standalone alarm in `GVL_HW` or a program
-
-The alarm watches a plant signal and is consumed by HMI directly. Use when the condition doesn't belong to any single device — e.g. a building-level tank-overfill alarm.
-
-```iecst
-GVL_ALARMS.almTankOverfill.cfg.bEnable   := TRUE;
-GVL_ALARMS.almTankOverfill.cfg.fThreshold := 95.0;
-GVL_ALARMS.almTankOverfill.cfg.bFailHigh  := TRUE;
-GVL_ALARMS.almTankOverfill.cfg.eSeverity  := E_AlarmSeverity.CRITICAL;
-GVL_ALARMS.almTankOverfill.cfg.sMessage   := 'Tank 1 level > 95%';
-GVL_ALARMS.almTankOverfill(inpValue := GVL_HW.LEVEL_SENSOR_1.sts.value);
-```
-
-The HMI binds to `GVL_ALARMS.almTankOverfill.sts.active`, `.eSeverity`, `.sMessage`, `.tsTripped` — and can call `.Ack()` over OPC UA because all alarm FBs expose that method as an RPC.
-
----
+Here the application deliberately requires `GOOD` quality. Choose how to treat `CLAMPED` according to the signal's meaning. HMI pages bind `alarm.sts.active`, `.valid`, `.evaluationState`, `.eSeverity` and `.sMessage`; acknowledgment uses `OperatorAck(requestId)` and its result query.
 
 ## 8.10 Anti-Patterns
 
-- **Bypassing the alarm module to inline `IF inpValue > limit THEN …` logic in device bodies.** You lose debounce, ack, severity, timestamps, and make diffs noisy. If it's worth warning about, wrap it in an alarm FB.
-- **Re-using a fault code as an alarm.** Faults are for device failure, alarms for process conditions. Keep the ring buffer crisp by not mixing them.
-- **Setting `bRequireAck = TRUE` on every alarm.** Latching every wiggle creates ack fatigue. Reserve it for `CRITICAL` / `SHUTDOWN` tier alarms and for anything that must be reviewed by an operator.
-- **Writing into `sts` from the consumer.** The alarm owns `sts`; mutate `cfg` only.
-- **Evaluating an alarm twice in one cycle.** The base's cycle guard handles it safely, but it still indicates confused ownership. One cyclic call per alarm instance.
-
----
+- Treating `active = FALSE` as proof of a healthy signal when `valid = FALSE`.
+- Disabling the alarm on IO loss instead of setting `inpValid := FALSE`.
+- Writing configuration or status through OPC UA; configuration belongs to the application and status to the alarm.
+- Calling an instance from multiple tasks or multiple times per scan. There is no automatic duplicate-call suppression.
+- Reassigning the rate detector to a new signal without invalidating its history.
+- Treating mailbox admission or Ack as proof that the machine condition cleared.
 
 ## 8.11 Checklist for a New Alarm FB
 
-1. Define `ST_Alarm<Type>_Cfg` with the six common fields first (`bEnable`, `tOnDelay`, `tOffDelay`, `bRequireAck`, `eSeverity`, `sMessage`) followed by your type-specific knobs.
-2. Extend `FB_AlarmBase` and declare `cfg` + any extra signal inputs.
-3. Override `_EvaluateCondition : BOOL` — pure function of `cfg` and inputs. No side effects, no state writes.
-4. Implement `I_Alarm` — `FB_AlarmBase` already provides the `Ack` body; your FB just has to tag the interface.
-5. Update `cfg`'s OPC UA pragmas following §9 so the HMI can drive it.
-6. Add an entry to [§8.7](#87-concrete-alarms) so the docs list stays accurate.
+1. Define a configuration with nested `common : ST_Alarm_Cfg` and its own criteria.
+2. Extend `FB_AlarmBase`, declare the configuration, signal inputs and `inpValid := TRUE`. The base already implements `I_Alarm`.
+3. Classify numeric operands before comparisons, conversions or arithmetic. Validate criterion-specific configuration.
+4. Compute the condition only for valid evidence and call `_Evaluate` exactly once per cyclic body. Pass `resetTiming` when changed criteria invalidate pending debounce credit.
+5. Keep state changes in the owning task, expose configuration/status read-only, and use the inherited queued operator acknowledgment API.
+6. Test invalidity, recovery, configuration changes, acknowledgment, timing and numeric extremes; update this page.

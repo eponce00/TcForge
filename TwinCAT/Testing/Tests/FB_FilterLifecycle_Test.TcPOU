@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_FilterLifecycle_Test" Id="{e5a0c78a-d6be-4c2b-b5e6-c0ebf9ae85bb}"><Declaration><![CDATA[FUNCTION_BLOCK FB_FilterLifecycle_Test EXTENDS TcUnit.FB_TestSuite
+VAR _done : BOOL; END_VAR]]></Declaration><Implementation><ST><![CDATA[IF _done THEN RETURN; END_IF;
+ScalingChangeReseedsInCurrentUnits();
+TauOnlyChangeRetainsHistory();
+ReenabledFilterReseedsFreshSample();
+RawBypassReturnReseedsScaledSample();
+PendingReseedWaitsForUsableSample();
+SourceReassignmentInvalidatesHeldIdentity();
+RawTypeChangeReseedsFreshInterpretation();
+ExplicitSeedRejectsExceptionalBits();
+_done := TRUE;]]></ST></Implementation>
+<Method Name="ScalingChangeReseedsInCurrentUnits" Id="{15a4db21-9c00-4e5b-bbef-3c8ca9b8ba21}"><Declaration><![CDATA[METHOD ScalingChangeReseedsInCurrentUnits
+VAR fb : TcForge.FB_AnalogInput; held : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('ScalingChangeReseedsInCurrentUnits');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.cfg.filterTau := T#1S;
+fb.inRaw.fReal := 80.0;
+fb();
+held := fb.sts.value;
+AssertTrue(Condition := held > 0.0 AND held < 80.0, Message := 'Initial configured filtering remains zero seeded');
+fb.cfg.euMax := 1000.0;
+fb();
+AssertTrue(Condition := ABS(fb.sts.value - 800.0) < 0.001, Message := 'Scale change cannot blend old engineering units');
+fb.inRaw.fReal := 0.0; fb();
+AssertTrue(Condition := fb.sts.value > 0.0 AND fb.sts.value < 800.0, Message := 'Subsequent samples filter normally after reseed');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="TauOnlyChangeRetainsHistory" Id="{b02191ef-3e0d-4bb0-acaa-3951c65a7a68}"><Declaration><![CDATA[METHOD TauOnlyChangeRetainsHistory
+VAR fb : TcForge.FB_AnalogInput; held : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('TauOnlyChangeRetainsHistory');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.cfg.filterTau := T#1S;
+fb.inRaw.fReal := 80.0;
+fb();
+held := fb.sts.value;
+fb.cfg.filterTau := T#2S; fb();
+AssertTrue(Condition := fb.sts.value > held AND fb.sts.value < 80.0, Message := 'Tau tuning changes response without reseeding');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ReenabledFilterReseedsFreshSample" Id="{8df7d44d-e0ed-4700-bb1a-688dbb136920}"><Declaration><![CDATA[METHOD ReenabledFilterReseedsFreshSample
+VAR fb : TcForge.FB_AnalogInput; held : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('ReenabledFilterReseedsFreshSample');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.cfg.filterTau := T#1S;
+fb.inRaw.fReal := 80.0;
+fb();
+held := fb.sts.value;
+fb.cfg.filterTau := T#0MS; fb.inRaw.fReal := 40.0; fb();
+AssertTrue(Condition := fb.sts.value = 40.0, Message := 'Disabled filtering passes fresh scaled value');
+fb.cfg.filterTau := T#1S; fb.inRaw.fReal := 60.0; fb();
+AssertTrue(Condition := fb.sts.value = 60.0, Message := 'Reenabled filtering cannot reuse old history');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RawBypassReturnReseedsScaledSample" Id="{0d8cd557-d512-4dc6-93a3-909adf71898f}"><Declaration><![CDATA[METHOD RawBypassReturnReseedsScaledSample
+VAR fb : TcForge.FB_AnalogInput; held : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RawBypassReturnReseedsScaledSample');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.cfg.filterTau := T#1S;
+fb.inRaw.fReal := 80.0;
+fb();
+held := fb.sts.value;
+fb.cfg.useRawValue := TRUE; fb.inRaw.fReal := 45.0; fb();
+AssertTrue(Condition := fb.sts.value = 45.0, Message := 'Bypass uses fresh raw value');
+fb.cfg.useRawValue := FALSE; fb.inRaw.fReal := 30.0; fb();
+AssertTrue(Condition := fb.sts.value = 30.0, Message := 'Leaving bypass seeds current scaled input');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="PendingReseedWaitsForUsableSample" Id="{d4147ebd-be71-4056-a923-f1d5e93a1c3f}"><Declaration><![CDATA[METHOD PendingReseedWaitsForUsableSample
+VAR fb : TcForge.FB_AnalogInput; held : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('PendingReseedWaitsForUsableSample');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.cfg.filterTau := T#1S;
+fb.inRaw.fReal := 80.0;
+fb();
+held := fb.sts.value;
+fb.cfg.euMax := 200.0; fb.inRaw.fReal := 30.0;
+fb(inpQuality := TcForge.E_IO_Quality.BAD); fb();
+AssertTrue(Condition := fb.sts.value = held, Message := 'Bad quality preserves last output while configuration changes');
+fb.cfg.rawMax := 0.0; fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(Condition := fb.sts.value = held AND fb.IsFaulted(), Message := 'Invalid scaling cannot consume pending reseed');
+fb.cfg.rawMax := 100.0; fb();
+AssertTrue(Condition := fb.sts.value = 60.0 AND NOT fb.IsFaulted(), Message := 'First usable sample after repair performs pending reseed');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="SourceReassignmentInvalidatesHeldIdentity" Id="{74598539-092c-4535-ba69-898905911bf3}"><Declaration><![CDATA[METHOD SourceReassignmentInvalidatesHeldIdentity
+VAR fb : TcForge.FB_AnalogInput; held : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('SourceReassignmentInvalidatesHeldIdentity');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.cfg.filterTau := T#1S;
+fb.inRaw.fReal := 80.0;
+fb();
+held := fb.sts.value;
+fb.ReassignInput();
+AssertEquals_DINT(Expected := TcForge.E_IO_Quality.UNKNOWN, Actual := fb.sts.quality, Message := 'Reassignment immediately invalidates previous source quality');
+AssertTrue(Condition := fb.sts.value = 0.0 AND fb.sts.rawReal = 0.0 AND fb.sts.scaled = 0.0, Message := 'Previous source measurements are no longer published');
+fb(inpQuality := TcForge.E_IO_Quality.UNKNOWN);
+AssertTrue(Condition := fb.sts.value = 0.0, Message := 'Waiting for source cannot restore previous measurement');
+fb.inRaw.fReal := 25.0; fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(Condition := fb.sts.value = 25.0, Message := 'Same-config new source gets fresh history');
+fb.inRaw.fReal := 0.0; fb();
+AssertTrue(Condition := fb.sts.value > 0.0 AND fb.sts.value < 25.0, Message := 'New source then follows normal filtering');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RawTypeChangeReseedsFreshInterpretation" Id="{30d4a168-73aa-4d5c-b390-2f49ec28397c}"><Declaration><![CDATA[METHOD RawTypeChangeReseedsFreshInterpretation
+VAR fb : TcForge.FB_AnalogInput; held : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RawTypeChangeReseedsFreshInterpretation');
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_REAL;
+fb.cfg.rawMax := 100.0;
+fb.cfg.filterTau := T#1S;
+fb.inRaw.fReal := 80.0;
+fb();
+held := fb.sts.value;
+fb.cfg.inputType := __SYSTEM.TYPE_CLASS.TYPE_INT;
+fb.inRaw.nInt := 20; fb();
+AssertTrue(Condition := fb.sts.value = 20.0, Message := 'Raw representation change cannot reuse prior history');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="ExplicitSeedRejectsExceptionalBits" Id="{1e3e7814-8fcc-4128-91ea-99e23fa74cd8}"><Declaration><![CDATA[METHOD ExplicitSeedRejectsExceptionalBits
+VAR filter : TcForge.FB_LPF_FirstOrder_IIR; invalidBits : ULINT; invalid : LREAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('ExplicitSeedRejectsExceptionalBits');
+filter.Seed(value := 30.0);
+invalidBits := ULINT#16#7FF8000000000000;
+Tc2_System.MEMCPY(destAddr := ADR(invalid), srcAddr := ADR(invalidBits), n := SIZEOF(invalid));
+AssertFalse(Condition := filter.Seed(value := invalid), Message := 'NaN seed rejected without floating exception');
+AssertTrue(Condition := filter.fOutput = 30.0, Message := 'Rejected seed leaves output unchanged');
+filter(fInput := 10.0, fDt := 1.0, fTau := 1.0);
+AssertTrue(Condition := filter.fOutput = 20.0, Message := 'Rejected seed also preserves history');
+TEST_FINISHED();]]></ST></Implementation></Method>
+</POU></TcPlcObject>

@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_SimulationBridge" Id="{cda7da18-db35-40a0-8f86-d99f1451774a}"><Declaration><![CDATA[// Isolated simulation composition: no physical IO mapping and no persistent sessions.
+FUNCTION_BLOCK FB_SimulationBridge
+VAR_INPUT recoverOnOnlineChange : BOOL := TRUE; END_VAR
+VAR_OUTPUT
+    outAdvance, outRetract : BOOL;
+END_VAR
+VAR
+    continuity : TcForge.FB_ExecutionContinuity;
+    machine : FB_ReferenceMachine;
+    mutex : BOOL;
+    boot, cycle, session, submitted, applied, lastAck : ULINT;
+    pending, hasFrame, freshPrevious, newClaim : BOOL;
+    pendingAdvanced, pendingRetracted, pendingShutdown, pendingQuality : BOOL;
+    advanced, retracted, shutdown, good : BOOL;
+    pendingCommand : UINT;
+    command : E_ReferenceCommand;
+    quality : TcForge.E_IO_Quality;
+    watchdog : TON;
+    owner : DINT;
+    ownershipConflict : BOOL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[// All exchange state and timer updates share the same bounded lock.
+IF NOT Tc2_System.TestAndSet(mutex) THEN RETURN; END_IF;
+IF owner = 0 THEN
+    owner := Tc2_System.GETCURTASKINDEXEX();
+    IF owner <= 0 THEN owner := 0; mutex := FALSE; RETURN; END_IF;
+    boot := Tc2_System.F_GetSystemTime();
+END_IF;
+IF Tc2_System.GETCURTASKINDEXEX() <> owner THEN
+    ownershipConflict := TRUE; session := 0; pending := FALSE; hasFrame := FALSE;
+    outAdvance := FALSE; outRetract := FALSE; mutex := FALSE; RETURN;
+END_IF;
+// Gaps always invalidate sessions; compatible online edits follow explicit application policy.
+continuity(taskIndex := owner, cycleCounter := TwinCAT_SystemInfoVarList._TaskInfo[owner].CycleCount,
+    onlineChangeCounter := TwinCAT_SystemInfoVarList._AppInfo.OnlineChangeCnt,
+    recoverOnOnlineChange := recoverOnOnlineChange);
+IF continuity.interrupted THEN
+    boot := Tc2_System.F_GetSystemTime();
+    session := 0; pending := FALSE; hasFrame := FALSE; freshPrevious := FALSE; newClaim := FALSE;
+    submitted := 0; applied := 0; lastAck := 0; pendingCommand := 0;
+    watchdog(IN := FALSE, PT := T#250MS);
+END_IF;
+// Only the owning cyclic task advances the timer; RPCs never call the machine.
+watchdog(IN := session <> 0 AND NOT freshPrevious, PT := T#250MS);
+freshPrevious := FALSE;
+IF newClaim THEN watchdog(IN := FALSE, PT := T#250MS); newClaim := FALSE; END_IF;
+IF watchdog.Q OR ownershipConflict THEN
+    session := 0; pending := FALSE; hasFrame := FALSE;
+END_IF;
+command := E_ReferenceCommand.None;
+IF pending AND session <> 0 THEN
+    advanced := pendingAdvanced; retracted := pendingRetracted;
+    shutdown := pendingShutdown; good := pendingQuality;
+    CASE pendingCommand OF
+    1: command := E_ReferenceCommand.Home;
+    2: command := E_ReferenceCommand.Start;
+    3: command := E_ReferenceCommand.Stop;
+    4: command := E_ReferenceCommand.Abort;
+    5: command := E_ReferenceCommand.Reset;
+    END_CASE;
+    applied := submitted; pending := FALSE; hasFrame := TRUE; freshPrevious := TRUE;
+END_IF;
+IF hasFrame AND session <> 0 AND good AND NOT ownershipConflict THEN
+    quality := TcForge.E_IO_Quality.GOOD;
+ELSE quality := TcForge.E_IO_Quality.BAD;
+END_IF;
+// The canonical machine executes on every available PLC scan, never in RPC context.
+machine(command := command, recoverOnOnlineChange := recoverOnOnlineChange,
+    inAdvanced := advanced, inRetracted := retracted,
+    inputQuality := quality, outputQuality := quality,
+    shutdownConfirmed := shutdown, shutdownQuality := quality);
+outAdvance := machine.outAdvance AND quality = TcForge.E_IO_Quality.GOOD;
+outRetract := machine.outRetract AND quality = TcForge.E_IO_Quality.GOOD;
+cycle := cycle + 1;
+mutex := FALSE;]]></ST></Implementation><Method Name="Identity" Id="{ab63e9a4-1390-4f2e-ae93-85a29b4a1195}"><Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC Identity : STRING(80)]]></Declaration><Implementation><ST><![CDATA[Identity := 'TcForge.DiscreteSimulation/1';]]></ST></Implementation></Method><Method Name="Claim" Id="{7aa0e04b-4453-4956-9032-c6c93b2f5913}"><Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC Claim : DINT
+VAR_INPUT client : ULINT; expectedBoot : ULINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[Claim := 30;
+IF client = 0 THEN RETURN; END_IF;
+Claim := 22; IF NOT Tc2_System.TestAndSet(mutex) THEN RETURN; END_IF;
+IF boot = 0 OR owner = 0 THEN Claim := 12;
+ELSIF ownershipConflict THEN Claim := 13;
+ELSIF expectedBoot <> boot THEN Claim := 34;
+ELSIF session <> 0 THEN
+    IF client = session THEN Claim := 0; ELSE Claim := 11; END_IF;
+ELSE
+    session := client; submitted := 0; applied := 0; lastAck := 0;
+    pending := FALSE; hasFrame := FALSE; newClaim := TRUE; Claim := 0;
+END_IF;
+mutex := FALSE;]]></ST></Implementation></Method><Method Name="Exchange" Id="{4e3fa12d-8736-422b-a284-c8d3e4777168}"><Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC Exchange : DINT
+VAR_INPUT
+    client, expectedBoot, frame, outputFrame : ULINT;
+    inAdvanced, inRetracted, shutdownConfirmed, qualityGood : BOOL;
+    requestedCommand : UINT;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[Exchange := 30;
+IF client = 0 OR frame = 0 OR requestedCommand > 5 THEN RETURN; END_IF;
+Exchange := 22; IF NOT Tc2_System.TestAndSet(mutex) THEN RETURN; END_IF;
+IF expectedBoot <> boot THEN Exchange := 34;
+ELSIF session = 0 OR watchdog.Q THEN Exchange := 12;
+ELSIF client <> session THEN Exchange := 11;
+ELSIF frame <= submitted THEN Exchange := 35;
+ELSIF frame <> submitted + 1 OR outputFrame <= lastAck OR outputFrame > cycle THEN Exchange := 30;
+ELSIF NOT pending THEN
+    pendingAdvanced := inAdvanced; pendingRetracted := inRetracted;
+    pendingShutdown := shutdownConfirmed; pendingQuality := qualityGood;
+    pendingCommand := requestedCommand; submitted := frame; lastAck := outputFrame;
+    pending := TRUE; Exchange := 1;
+END_IF;
+mutex := FALSE;]]></ST></Implementation></Method><Method Name="Release" Id="{bc1d824f-c731-4236-a795-9dd4b0530cb9}"><Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC Release : DINT
+VAR_INPUT client, expectedBoot : ULINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[Release := 22; IF NOT Tc2_System.TestAndSet(mutex) THEN RETURN; END_IF;
+IF expectedBoot <> boot THEN Release := 34;
+ELSIF session = 0 OR client <> session THEN Release := 11;
+ELSE
+    session := 0; hasFrame := FALSE; pending := FALSE;
+    Release := 0;
+END_IF;
+mutex := FALSE;]]></ST></Implementation></Method><Method Name="Snapshot" Id="{88648abe-099f-4e5f-83a2-895a0c4b98e0}"><Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC Snapshot : STRING(255)]]></Declaration><Implementation><ST><![CDATA[Snapshot := '22'; IF NOT Tc2_System.TestAndSet(mutex) THEN RETURN; END_IF;
+Snapshot := '0';
+Snapshot := CONCAT(Snapshot, CONCAT(',', ULINT_TO_STRING(boot)));
+Snapshot := CONCAT(Snapshot, CONCAT(',', ULINT_TO_STRING(cycle)));
+Snapshot := CONCAT(Snapshot, CONCAT(',', ULINT_TO_STRING(applied)));
+Snapshot := CONCAT(Snapshot, CONCAT(',', DINT_TO_STRING(BOOL_TO_UINT(outAdvance))));
+Snapshot := CONCAT(Snapshot, CONCAT(',', DINT_TO_STRING(BOOL_TO_UINT(outRetract))));
+Snapshot := CONCAT(Snapshot, CONCAT(',', DINT_TO_STRING(machine.sequence.State)));
+Snapshot := CONCAT(Snapshot, CONCAT(',', DINT_TO_STRING(BOOL_TO_UINT(machine.faulted))));
+Snapshot := CONCAT(Snapshot, CONCAT(',', DINT_TO_STRING(BOOL_TO_UINT(machine.outputsInhibited))));
+Snapshot := CONCAT(Snapshot, CONCAT(',', DINT_TO_STRING(machine.lastResponse)));
+Snapshot := CONCAT(Snapshot, CONCAT(',', ULINT_TO_STRING(session)));
+Snapshot := CONCAT(Snapshot, CONCAT(',', DINT_TO_STRING(owner)));
+Snapshot := CONCAT(Snapshot, CONCAT(',', DINT_TO_STRING(BOOL_TO_UINT(quality = TcForge.E_IO_Quality.GOOD AND NOT watchdog.Q))));
+mutex := FALSE;]]></ST></Implementation></Method></POU></TcPlcObject>

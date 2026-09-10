@@ -53,3 +53,14 @@ repository once the build/release evidence is reproducible (D1/D2 and Q2).
 
 References: [SPT setup](https://beckhoff-usa-community.github.io/SPT-Libraries/Getting_Started/setup.html)
 and [pinning libraries](https://beckhoff-usa-community.github.io/SPT-Libraries/V4%20Release%20Notes/PinningLibraries.html).
+
+## Implemented diagnostic foundation
+
+The follow-up review compared SPT runtime-device, master and SyncUnit diagnostics.
+Its periodic discovery/event reporting belongs outside the cyclic quality gate;
+see [SPT diagnostic blocks](https://beckhoff-usa-community.github.io/SPT-Libraries/SPT_Diagnostic/functionblocks.html).
+TcForge now provides an original `FB_IOQualityMonitor` and a small EtherCAT slave
+status mapping, with no SPT dependency or copied implementation. Tests cover
+freshness, communication/device loss and recovery that does not rearm outputs.
+See [IO diagnostics](15-IO-Diagnostics.md). Source-level adaptation of SPT components
+remains a separate candidate-by-candidate decision.

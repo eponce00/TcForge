@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="F_EtherCATSlaveDataValid" Id="{0459e86c-7af6-429b-b856-47f19d109e6c}"><Declaration><![CDATA[// Original mapping of documented Beckhoff InfoData.State and WcState.
+// See docs/15-IO-Diagnostics.md. Link the actual slave diagnostic symbols in the application.
+FUNCTION F_EtherCATSlaveDataValid : BOOL
+VAR_INPUT
+    diagnosticsAvailable : BOOL;
+    wcState : BOOL := TRUE;
+    slaveState : WORD;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[// Low nibble: OP. Error/identity/missing/link flags invalidate data.
+// Upper nibble reports communication ports, not error severity.
+F_EtherCATSlaveDataValid := diagnosticsAvailable AND NOT wcState
+    AND ((slaveState AND WORD#16#000F) = WORD#16#0008)
+    AND ((slaveState AND WORD#16#0F30) = WORD#16#0000);]]></ST></Implementation></POU></TcPlcObject>

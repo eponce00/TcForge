@@ -14,8 +14,8 @@ FUNCTION_BLOCK FB_AlarmThreshold_Test EXTENDS TcUnit.FB_TestSuite]]></Declaratio
 FailHighIgnoresAtOrBelowThreshold();
 FailLowTripsStrictlyBelowThreshold();
 FailLowIgnoresAtOrAboveThreshold();
-FailHighWinsWhenBothFlagsSet();
-NeitherFlagNeverTrips();
+BothDirectionsAreInvalid();
+NeitherDirectionIsInvalid();
 DisabledSuppressesTripRegardlessOfValue();
 SeverityFlowsThroughBaseOnActive();
 LatchingHoldsAfterValueReturnsToSafe();
@@ -121,61 +121,35 @@ AssertFalse(
 TEST_FINISHED();]]></ST>
       </Implementation>
     </Method>
-    <Method Name="FailHighWinsWhenBothFlagsSet" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f05}">
-      <Declaration><![CDATA[METHOD FailHighWinsWhenBothFlagsSet
+    <Method Name="BothDirectionsAreInvalid" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f05}">
+      <Declaration><![CDATA[METHOD BothDirectionsAreInvalid
 VAR
     fb : TcForge.FB_AlarmThreshold;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[TEST('FailHighWinsWhenBothFlagsSet');
-
-// The FB contract says bFailHigh wins if both flags are (mis)configured.
-// A value below the threshold must NOT trip when bFailHigh=TRUE AND
-// bFailLow=TRUE, because fail-high ignores the low side entirely.
+        <ST><![CDATA[TEST('BothDirectionsAreInvalid');
 fb.cfg.common.bEnable := TRUE;
-fb.cfg.fThreshold     := 50.0;
-fb.cfg.bFailHigh      := TRUE;
-fb.cfg.bFailLow       := TRUE;
-
-fb(inpValue := 40.0);
-AssertFalse(
-    Condition := fb.sts.active,
-    Message   := 'When both flags are set, fail-high wins so a low reading must not trip');
-
+fb.cfg.bFailHigh := TRUE; fb.cfg.bFailLow := TRUE;
 fb(inpValue := 60.0);
-AssertTrue(
-    Condition := fb.sts.active,
-    Message   := 'When both flags are set, fail-high still trips on a high reading');
-
+AssertFalse(Condition := fb.sts.valid, Message := 'Exactly one direction is required');
+AssertEquals_DINT(Expected := TcForge.E_AlarmEvaluation.InvalidConfig, Actual := fb.sts.evaluationState, Message := 'Invalid configuration is visible');
+AssertFalse(Condition := fb.sts.active, Message := 'Invalid fresh configuration does not invent a trip');
 TEST_FINISHED();]]></ST>
       </Implementation>
     </Method>
-    <Method Name="NeitherFlagNeverTrips" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f06}">
-      <Declaration><![CDATA[METHOD NeitherFlagNeverTrips
+    <Method Name="NeitherDirectionIsInvalid" Id="{b1c2d3e4-f5a6-7890-abcd-000000000f06}">
+      <Declaration><![CDATA[METHOD NeitherDirectionIsInvalid
 VAR
     fb : TcForge.FB_AlarmThreshold;
 END_VAR]]></Declaration>
       <Implementation>
-        <ST><![CDATA[TEST('NeitherFlagNeverTrips');
-
-// No direction configured => the alarm must stay quiet regardless of
-// inpValue. This guards against "a Threshold FB was instantiated but
-// forgot its direction flag" silently tripping on the first scan.
+        <ST><![CDATA[TEST('NeitherDirectionIsInvalid');
 fb.cfg.common.bEnable := TRUE;
-fb.cfg.fThreshold     := 50.0;
-fb.cfg.bFailHigh      := FALSE;
-fb.cfg.bFailLow       := FALSE;
-
-fb(inpValue := -100.0);
-AssertFalse(
-    Condition := fb.sts.active,
-    Message   := 'Alarm with neither direction flag must not trip on a low reading');
-
-fb(inpValue := 100.0);
-AssertFalse(
-    Condition := fb.sts.active,
-    Message   := 'Alarm with neither direction flag must not trip on a high reading');
-
+fb.cfg.bFailHigh := FALSE; fb.cfg.bFailLow := FALSE;
+fb(inpValue := 60.0);
+AssertFalse(Condition := fb.sts.valid, Message := 'Exactly one direction is required');
+AssertEquals_DINT(Expected := TcForge.E_AlarmEvaluation.InvalidConfig, Actual := fb.sts.evaluationState, Message := 'Invalid configuration is visible');
+AssertFalse(Condition := fb.sts.active, Message := 'Invalid fresh configuration does not invent a trip');
 TEST_FINISHED();]]></ST>
       </Implementation>
     </Method>

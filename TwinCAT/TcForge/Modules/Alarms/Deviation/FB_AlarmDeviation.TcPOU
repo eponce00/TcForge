@@ -16,6 +16,8 @@
 {attribute 'OPC.UA.DA' := '1'}
 FUNCTION_BLOCK FB_AlarmDeviation EXTENDS FB_AlarmBase
 VAR_INPUT
+    // Application quality gate; FALSE means no trustworthy new evidence.
+    inpValid : BOOL := TRUE;
     {attribute 'OPC.UA.DA' := '1'}
     {attribute 'OPC.UA.DA.Access' := '1'}
     cfg         : ST_AlarmDeviation_Cfg;
@@ -26,18 +28,46 @@ VAR_INPUT
     inpSetpoint : REAL;
 END_VAR
 VAR
+    _criteriaKnown : BOOL;
+    _criteriaChanged : BOOL;
+    _previousCriteria : ST_AlarmDeviation_Cfg;
+    _evaluation : E_AlarmEvaluation;
+    _high : LREAL;
+    _low : LREAL;
     {attribute 'OPC.UA.DA' := '0'}
     _raw : BOOL;
 END_VAR]]></Declaration>
     <Implementation>
-      <ST><![CDATA[IF cfg.bUseSetpoint THEN
-    _raw := (inpPv > (inpSetpoint + cfg.fHighLimit))
-         OR (inpPv < (inpSetpoint - cfg.fLowLimit));
-ELSE
-    _raw := (inpPv > cfg.fHighLimit) OR (inpPv < cfg.fLowLimit);
+      <ST><![CDATA[_criteriaChanged := FALSE;
+IF _criteriaKnown THEN
+    IF NOT (F_IsFiniteReal(cfg.fHighLimit) AND F_IsFiniteReal(cfg.fLowLimit) AND F_IsFiniteReal(_previousCriteria.fHighLimit) AND F_IsFiniteReal(_previousCriteria.fLowLimit)) THEN _criteriaChanged := TRUE;
+    ELSE _criteriaChanged := cfg.fHighLimit <> _previousCriteria.fHighLimit OR cfg.fLowLimit <> _previousCriteria.fLowLimit OR cfg.bUseSetpoint <> _previousCriteria.bUseSetpoint; END_IF;
 END_IF;
-
-_Evaluate(cfgCommon := cfg.common, bRawCondition := _raw);]]></ST>
+_criteriaKnown := TRUE; _previousCriteria := cfg;
+_raw := FALSE;
+_evaluation := E_AlarmEvaluation.Valid;
+IF NOT F_IsFiniteReal(cfg.fHighLimit) OR NOT F_IsFiniteReal(cfg.fLowLimit) THEN
+    _evaluation := E_AlarmEvaluation.InvalidConfig;
+ELSE
+    IF cfg.bUseSetpoint THEN
+        IF cfg.fHighLimit < 0.0 OR cfg.fLowLimit < 0.0 THEN _evaluation := E_AlarmEvaluation.InvalidConfig; END_IF;
+    ELSIF cfg.fLowLimit > cfg.fHighLimit THEN _evaluation := E_AlarmEvaluation.InvalidConfig;
+    END_IF;
+END_IF;
+IF _evaluation = E_AlarmEvaluation.Valid THEN
+    IF NOT inpValid OR NOT F_IsFiniteReal(inpPv) THEN _evaluation := E_AlarmEvaluation.InvalidInput;
+    ELSIF cfg.bUseSetpoint AND NOT F_IsFiniteReal(inpSetpoint) THEN _evaluation := E_AlarmEvaluation.InvalidInput;
+    END_IF;
+END_IF;
+IF _evaluation = E_AlarmEvaluation.Valid THEN
+    _high := REAL_TO_LREAL(cfg.fHighLimit); _low := REAL_TO_LREAL(cfg.fLowLimit);
+    IF cfg.bUseSetpoint THEN
+        _high := REAL_TO_LREAL(inpSetpoint) + _high;
+        _low := REAL_TO_LREAL(inpSetpoint) - _low;
+    END_IF;
+    _raw := REAL_TO_LREAL(inpPv) > _high OR REAL_TO_LREAL(inpPv) < _low;
+END_IF;
+_Evaluate(cfgCommon := cfg.common, bRawCondition := _raw, evaluation := _evaluation, resetTiming := _criteriaChanged);]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>

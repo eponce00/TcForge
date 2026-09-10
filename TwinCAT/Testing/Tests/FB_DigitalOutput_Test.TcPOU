@@ -275,6 +275,7 @@ VAR
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('BadQualityHoldsLastKnownGoodOutput');
+fb.cfg.holdOnBadQuality := TRUE;
 
 // Establish HIGH under GOOD quality.
 fb.SetOn(eRequester := TcForge.E_Requester.PROG);
@@ -306,6 +307,7 @@ VAR
 END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('StsCommandedMirrorsRequestEvenUnderBadQuality');
+fb.cfg.holdOnBadQuality := TRUE;
 
 // Even when the hardware write is vetoed by quality, commanded must
 // still echo the live request so HMIs can show "operator asked for OFF

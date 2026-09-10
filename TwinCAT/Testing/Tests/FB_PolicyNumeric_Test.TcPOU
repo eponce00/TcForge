@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_PolicyNumeric_Test" Id="{8355e387-b203-4811-ac07-0cde1590b322}"><Declaration><![CDATA[FUNCTION_BLOCK FB_PolicyNumeric_Test EXTENDS TcUnit.FB_TestSuite
+VAR _done : BOOL; END_VAR]]></Declaration><Implementation><ST><![CDATA[IF _done THEN RETURN; END_IF;
+PermissiveRevokesExistingBypass();
+PermissionRestoreDoesNotRestoreBypass();
+InterlockRevocationPreservesLatchedFailure();
+InterlockResetPreservesAuthorizedBypass();
+FilterRejectsNaNAndRecovers();
+FilterRejectsNonfiniteTiming();
+FilterRejectsInfinityDuringBypass();
+FilterHandlesOppositeFiniteExtremes();
+FilterHandlesLargeFiniteTiming();
+RealFiniteClassificationHandlesExceptionalBits();
+LRealFiniteClassificationHandlesExceptionalBits();
+_done := TRUE;]]></ST></Implementation>
+<Method Name="PermissiveRevokesExistingBypass" Id="{dd7ff986-e4bb-4f39-b770-cfeadc8b4951}"><Declaration><![CDATA[METHOD PermissiveRevokesExistingBypass
+VAR fb : TcForge.FB_Permissives; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('PermissiveRevokesExistingBypass');
+fb.cfg.nRequired := 1; fb.cfg.nBypassable := 1;
+fb.MapInput(bitIndex := 0, inputValue := FALSE); fb();
+fb.SetBypass(bitIndex := 0, bEnable := TRUE); fb();
+AssertTrue(Condition := fb.sts.bOK, Message := 'Precondition: authorized bypass suppresses mapped false condition');
+fb.cfg.nBypassable := 0; fb();
+AssertFalse(Condition := fb.sts.bOK OR fb.sts.aFaceplates[0].bypassed, Message := 'Revocation immediately removes effective bypass');
+AssertTrue(Condition := fb.sts.nBypassMask = 0, Message := 'Revoked bypass intent is erased');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="PermissionRestoreDoesNotRestoreBypass" Id="{4825bb5d-0634-425f-967c-2494c49101c5}"><Declaration><![CDATA[METHOD PermissionRestoreDoesNotRestoreBypass
+VAR fb : TcForge.FB_Permissives; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('PermissionRestoreDoesNotRestoreBypass');
+fb.cfg.nBypassable := 1; fb.MapInput(bitIndex := 0, inputValue := FALSE);
+fb.SetBypass(bitIndex := 0, bEnable := TRUE); fb();
+fb.cfg.nBypassable := 0; fb();
+fb.cfg.nBypassable := 1; fb();
+AssertFalse(Condition := fb.sts.bOK, Message := 'Reauthorizing permission does not silently re-enable bypass');
+fb.SetBypass(bitIndex := 0, bEnable := TRUE); fb();
+AssertTrue(Condition := fb.sts.bOK, Message := 'Explicit new bypass remains available');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="InterlockRevocationPreservesLatchedFailure" Id="{63dbc9d7-db5d-4436-9db4-a55e6eeb2f01}"><Declaration><![CDATA[METHOD InterlockRevocationPreservesLatchedFailure
+VAR fb : TcForge.FB_Interlock; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('InterlockRevocationPreservesLatchedFailure');
+fb.cfg.nRequired := 1; fb.cfg.nBypassable := 1;
+fb.MapInput(bitIndex := 0, inputValue := FALSE); fb();
+fb.SetBypass(bitIndex := 0, bEnable := TRUE); fb();
+AssertTrue(Condition := fb.sts.bOK, Message := 'Precondition: authorized interlock bypass');
+fb.cfg.nBypassable := 0; fb();
+AssertFalse(Condition := fb.sts.bOK, Message := 'Revocation exposes latched bad condition immediately');
+fb.MapInput(bitIndex := 0, inputValue := TRUE); fb();
+fb.cfg.nBypassable := 1; fb();
+AssertFalse(Condition := fb.sts.bOK, Message := 'Healthy signal and renewed permission do not release latch');
+fb.Reset(); fb.MapInput(bitIndex := 0, inputValue := TRUE); fb();
+AssertTrue(Condition := fb.sts.bOK AND fb.sts.nBypassMask = 0, Message := 'Healthy explicit Reset recovers without resurrecting bypass');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="InterlockResetPreservesAuthorizedBypass" Id="{c57c9961-ce37-40c1-9472-2f97db75a7b9}"><Declaration><![CDATA[METHOD InterlockResetPreservesAuthorizedBypass
+VAR fb : TcForge.FB_Interlock; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('InterlockResetPreservesAuthorizedBypass');
+fb.cfg.nBypassable := 1; fb.MapInput(bitIndex := 0, inputValue := FALSE);
+fb.SetBypass(bitIndex := 0, bEnable := TRUE); fb(); fb.Reset(); fb();
+AssertTrue(Condition := fb.sts.bOK AND fb.sts.nBypassMask = 1, Message := 'Reset deliberately preserves still-authorized bypass');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="FilterRejectsNaNAndRecovers" Id="{1ef91959-f3a9-43ed-b56e-9b349d8d398d}"><Declaration><![CDATA[METHOD FilterRejectsNaNAndRecovers
+VAR fb : TcForge.FB_LPF_FirstOrder_IIR; invalid : LREAL; invalidBits : ULINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('FilterRejectsNaNAndRecovers');
+fb(fInput := 10.0, fDt := 1.0, fTau := 1.0);
+invalidBits := ULINT#16#7FF8000000000000;
+Tc2_System.MEMCPY(destAddr := ADR(invalid), srcAddr := ADR(invalidBits), n := SIZEOF(invalid));
+fb(fInput := invalid, fDt := 1.0, fTau := 1.0);
+AssertTrue(Condition := fb.bError AND fb.fOutput = 5.0, Message := 'NaN sample holds finite history and reports error');
+fb(fInput := 10.0, fDt := 1.0, fTau := 1.0);
+AssertTrue(Condition := NOT fb.bError AND ABS(fb.fOutput - 7.5) < 1E-9, Message := 'Valid sample recovers without poisoned history');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="FilterRejectsNonfiniteTiming" Id="{fb75d318-0771-4cd9-8099-abd3e4ddab25}"><Declaration><![CDATA[METHOD FilterRejectsNonfiniteTiming
+VAR fb : TcForge.FB_LPF_FirstOrder_IIR; invalid : LREAL; invalidBits : ULINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('FilterRejectsNonfiniteTiming');
+fb(fInput := 10.0, fDt := 1.0, fTau := 1.0);
+invalidBits := ULINT#16#7FF8000000000000;
+Tc2_System.MEMCPY(destAddr := ADR(invalid), srcAddr := ADR(invalidBits), n := SIZEOF(invalid));
+fb(fInput := 50.0, fDt := invalid, fTau := 1.0);
+AssertTrue(Condition := fb.bError AND fb.fOutput = 5.0, Message := 'NaN timing cannot poison state');
+invalidBits := ULINT#16#7FF0000000000000;
+Tc2_System.MEMCPY(destAddr := ADR(invalid), srcAddr := ADR(invalidBits), n := SIZEOF(invalid));
+fb(fInput := 50.0, fDt := 1.0, fTau := invalid);
+AssertTrue(Condition := fb.bError AND fb.fOutput = 5.0, Message := 'Infinite timing is rejected explicitly');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="FilterRejectsInfinityDuringBypass" Id="{6783dd58-d7ba-4a61-baba-8515bf034ebf}"><Declaration><![CDATA[METHOD FilterRejectsInfinityDuringBypass
+VAR fb : TcForge.FB_LPF_FirstOrder_IIR; invalid : LREAL; invalidBits : ULINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('FilterRejectsInfinityDuringBypass');
+fb(fInput := 8.0, fDt := 0.0, fTau := 1.0);
+invalidBits := ULINT#16#7FF0000000000000;
+Tc2_System.MEMCPY(destAddr := ADR(invalid), srcAddr := ADR(invalidBits), n := SIZEOF(invalid));
+fb(fInput := invalid, fDt := 0.0, fTau := 1.0);
+AssertTrue(Condition := fb.bError AND fb.fOutput = 8.0, Message := 'Pass-through cannot copy nonfinite input into history');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="FilterHandlesOppositeFiniteExtremes" Id="{a507db1f-678d-4f97-ba06-fc6aa1deba41}"><Declaration><![CDATA[METHOD FilterHandlesOppositeFiniteExtremes
+VAR fb : TcForge.FB_LPF_FirstOrder_IIR; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('FilterHandlesOppositeFiniteExtremes');
+fb(fInput := LREAL#1.7E308, fDt := 0.0, fTau := 1.0);
+fb(fInput := LREAL#-1.7E308, fDt := 1.0, fTau := 1.0);
+AssertTrue(Condition := NOT fb.bError AND ABS(fb.fOutput) < LREAL#1E292, Message := 'Finite opposite extremes average without subtraction overflow');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="FilterHandlesLargeFiniteTiming" Id="{554ce866-e213-4932-9198-160feb1a742c}"><Declaration><![CDATA[METHOD FilterHandlesLargeFiniteTiming
+VAR fb : TcForge.FB_LPF_FirstOrder_IIR; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('FilterHandlesLargeFiniteTiming');
+fb(fInput := 10.0, fDt := LREAL#1.7E308, fTau := LREAL#1.7E308);
+AssertTrue(Condition := NOT fb.bError AND ABS(fb.fOutput - 5.0) < 1E-9, Message := 'Large finite timing preserves ratio without sum overflow');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="RealFiniteClassificationHandlesExceptionalBits" Id="{677d83bd-c3a3-4fd4-9998-61e56e62e4bb}"><Declaration><![CDATA[METHOD RealFiniteClassificationHandlesExceptionalBits
+VAR sample : REAL; bits : DWORD; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('RealFiniteClassificationHandlesExceptionalBits');
+bits := DWORD#16#7F800000;
+Tc2_System.MEMCPY(destAddr := ADR(sample), srcAddr := ADR(bits), n := SIZEOF(sample));
+AssertFalse(Condition := TcForge.F_IsFiniteReal(value := sample), Message := 'Reject exponent-all-ones without floating arithmetic');
+bits := DWORD#16#FF800000;
+Tc2_System.MEMCPY(destAddr := ADR(sample), srcAddr := ADR(bits), n := SIZEOF(sample));
+AssertFalse(Condition := TcForge.F_IsFiniteReal(value := sample), Message := 'Reject exponent-all-ones without floating arithmetic');
+bits := DWORD#16#7FC00000;
+Tc2_System.MEMCPY(destAddr := ADR(sample), srcAddr := ADR(bits), n := SIZEOF(sample));
+AssertFalse(Condition := TcForge.F_IsFiniteReal(value := sample), Message := 'Reject exponent-all-ones without floating arithmetic');
+bits := DWORD#16#7F800001;
+Tc2_System.MEMCPY(destAddr := ADR(sample), srcAddr := ADR(bits), n := SIZEOF(sample));
+AssertFalse(Condition := TcForge.F_IsFiniteReal(value := sample), Message := 'Reject exponent-all-ones without floating arithmetic');
+bits := 1;
+Tc2_System.MEMCPY(destAddr := ADR(sample), srcAddr := ADR(bits), n := SIZEOF(sample));
+AssertTrue(Condition := TcForge.F_IsFiniteReal(value := sample), Message := 'Subnormal is finite');
+AssertTrue(Condition := TcForge.F_IsFiniteReal(value := 0.0), Message := 'Zero is finite');
+TEST_FINISHED();]]></ST></Implementation></Method>
+<Method Name="LRealFiniteClassificationHandlesExceptionalBits" Id="{72cc6414-4b49-4ea3-8a08-6d7b1ffcb607}"><Declaration><![CDATA[METHOD LRealFiniteClassificationHandlesExceptionalBits
+VAR sample : LREAL; bits : ULINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('LRealFiniteClassificationHandlesExceptionalBits');
+bits := ULINT#16#7FF0000000000000;
+Tc2_System.MEMCPY(destAddr := ADR(sample), srcAddr := ADR(bits), n := SIZEOF(sample));
+AssertFalse(Condition := TcForge.F_IsFiniteLReal(value := sample), Message := 'Reject exponent-all-ones without floating arithmetic');
+bits := ULINT#16#FFF0000000000000;
+Tc2_System.MEMCPY(destAddr := ADR(sample), srcAddr := ADR(bits), n := SIZEOF(sample));
+AssertFalse(Condition := TcForge.F_IsFiniteLReal(value := sample), Message := 'Reject exponent-all-ones without floating arithmetic');
+bits := ULINT#16#7FF8000000000000;
+Tc2_System.MEMCPY(destAddr := ADR(sample), srcAddr := ADR(bits), n := SIZEOF(sample));
+AssertFalse(Condition := TcForge.F_IsFiniteLReal(value := sample), Message := 'Reject exponent-all-ones without floating arithmetic');
+bits := ULINT#16#7FF0000000000001;
+Tc2_System.MEMCPY(destAddr := ADR(sample), srcAddr := ADR(bits), n := SIZEOF(sample));
+AssertFalse(Condition := TcForge.F_IsFiniteLReal(value := sample), Message := 'Reject exponent-all-ones without floating arithmetic');
+bits := 1;
+Tc2_System.MEMCPY(destAddr := ADR(sample), srcAddr := ADR(bits), n := SIZEOF(sample));
+AssertTrue(Condition := TcForge.F_IsFiniteLReal(value := sample), Message := 'Subnormal is finite');
+AssertTrue(Condition := TcForge.F_IsFiniteLReal(value := 0.0), Message := 'Zero is finite');
+TEST_FINISHED();]]></ST></Implementation></Method>
+</POU></TcPlcObject>

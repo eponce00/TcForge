@@ -11,6 +11,7 @@ Status outputs for FB_Interlock.
 {attribute 'OPC.UA.DA.StructuredType' := '1'}
 TYPE ST_Interlock_Status :
 STRUCT
+    nMissing : ULINT; // Required but not refreshed within the mapping timeout.
 	{attribute 'OPC.UA.DA.Description' := 'Overall status - TRUE when all interlocks are good'}
 	bOK : BOOL := FALSE;
 	{attribute 'OPC.UA.DA.Description' := 'Effective interlock status after latch + bypass (1=good, 0=bad)'}

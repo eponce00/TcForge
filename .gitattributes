@@ -1,0 +1,12 @@
+*.TcPOU text eol=crlf
+*.TcDUT text eol=crlf
+*.TcIO text eol=crlf
+*.TcGVL text eol=crlf
+*.TcTTO text eol=crlf
+*.plcproj text eol=crlf
+*.tsproj text eol=crlf
+*.sln text eol=crlf
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf

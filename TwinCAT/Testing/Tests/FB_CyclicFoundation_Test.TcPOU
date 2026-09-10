@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_CyclicFoundation_Test" Id="{5a231b59-97f8-445c-8b9d-5bda55a7fd1c}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_CyclicFoundation_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    _pulse : TcForge.FB_DigitalOutput;
+    _pulseClock : TON;
+    _pulsePhase : UINT;
+    _pulseDone : BOOL;
+    _output : TcForge.FB_DigitalOutput;
+    _actuator : TcForge.FB_TwoPosActuator;
+    _timer : TON;
+    _phase : UINT;
+    _done : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[PulseLifecycle();
+IF _done THEN RETURN; END_IF;
+TEST('CyclicWatchdogAndMotionTimeout');
+CASE _phase OF
+0:
+    _output.cfg.qualityFaultAfter := T#50MS;
+    _output.SetOn(); _output();
+    _actuator.cfg.advTimeoutS := 1;
+    _actuator(inRetracted := TRUE);
+    _actuator.Advance();
+    _phase := 1;
+1:
+    _timer(IN := TRUE, PT := T#1500MS);
+    _output(inpQuality := TcForge.E_IO_Quality.BAD);
+    _actuator(inRetracted := FALSE, inAdvanced := FALSE);
+    IF _timer.Q THEN
+        AssertTrue(Condition := _output.IsFaulted(), Message := 'Real multi-scan watchdog expires');
+        AssertFalse(Condition := _output.sts.value, Message := 'Faulted output stays safe');
+        AssertEquals_DINT(Expected := TcForge.E_TwoPosActuator_Fault.AdvanceTimeout, Actual := _actuator.GetFaultCode(), Message := 'Travel timeout expires across scans');
+        AssertFalse(Condition := _actuator.outAdvance OR _actuator.outRetract, Message := 'Timed-out actuator has no outputs');
+        _output.Reset(); _output(inpQuality := TcForge.E_IO_Quality.GOOD);
+        AssertFalse(Condition := _output.sts.value, Message := 'Reset does not restore saved command');
+        _done := TRUE;
+        TEST_FINISHED();
+    END_IF;
+END_CASE;]]></ST>
+    </Implementation>
+    <Method Name="PulseLifecycle" Id="{6649bb79-9f64-4095-8665-3d593b979b7f}">
+      <Declaration><![CDATA[METHOD PulseLifecycle]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _pulseDone THEN RETURN; END_IF;
+TEST('CyclicDebounceAndSinglePulse');
+CASE _pulsePhase OF
+0:
+    _pulse.cfg.mode := TcForge.E_DigitalOutput_Mode.SinglePulse;
+    _pulse.cfg.debounceOn := T#50MS;
+    _pulse.cfg.pulseOn := T#100MS;
+    _pulse.SetOn(); _pulse();
+    AssertFalse(Condition := _pulse.outSignal, Message := 'Debounce prevents an immediate pulse');
+    _pulseClock(IN := TRUE, PT := T#2S);
+    _pulsePhase := 1;
+1:
+    _pulseClock(IN := TRUE, PT := T#2S); _pulse();
+    IF _pulse.outSignal THEN
+        _pulseClock(IN := FALSE);
+        _pulsePhase := 2;
+    ELSIF _pulseClock.Q THEN
+        AssertTrue(Condition := FALSE, Message := 'Pulse did not start within two seconds');
+        _pulseDone := TRUE; TEST_FINISHED();
+    END_IF;
+2:
+    _pulseClock(IN := TRUE, PT := T#300MS); _pulse();
+    IF _pulseClock.Q THEN
+        AssertFalse(Condition := _pulse.outSignal, Message := 'Single pulse ends and held command cannot retrigger it');
+        _pulseDone := TRUE; TEST_FINISHED();
+    END_IF;
+END_CASE;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

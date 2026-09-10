@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_ReferenceMachine" Id="{2af723d9-a311-4e07-abf9-d96daabdafd7}"><Declaration><![CDATA[// Application composition. Call exactly once per scan from one owning task.
+// No RPC entry points. command is sampled by this cyclic body on value changes.
+FUNCTION_BLOCK FB_ReferenceMachine
+VAR_INPUT
+    // Explicit application policy for compatible engineering edits; gaps still cancel motion.
+    recoverOnOnlineChange : BOOL := TRUE;
+    command : E_ReferenceCommand;
+    inAdvanced, inRetracted : BOOL;
+    inputQuality : TcForge.E_IO_Quality := TcForge.E_IO_Quality.UNKNOWN;
+    outputQuality : TcForge.E_IO_Quality := TcForge.E_IO_Quality.UNKNOWN;
+    // Independent feedback from the application/plant, never synthesized from command bits.
+    shutdownConfirmed : BOOL;
+    shutdownQuality : TcForge.E_IO_Quality := TcForge.E_IO_Quality.UNKNOWN;
+END_VAR
+VAR_OUTPUT
+    outAdvance, outRetract : BOOL;
+    sequence : TcForge.ST_SM_Status;
+    actuator : TcForge.ST_TwoPosActuator_Sts;
+    faulted, qualityGood, outputsInhibited : BOOL;
+    lastResponse : TcForge.E_RpcMethodResponse;
+END_VAR
+VAR
+    continuity : TcForge.FB_ExecutionContinuity;
+    taskIndex : DINT;
+    recoveryRequired : BOOL;
+    sm : TcForge.FB_StateMachine;
+    clamp : TcForge.FB_TwoPosActuator;
+    advanceOutput, retractOutput : TcForge.FB_DigitalOutput;
+    homeStep, advanceStep, retractStep, stopCancelStep, stopRetractStep, abortStep : TcForge.FB_Step;
+    previousCommand : E_ReferenceCommand;
+    freshCommand, resetPending, confirmed, permitMotion : BOOL;
+    response : TcForge.E_RpcMethodResponse;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[// Execution interruption cancels intent before command admission or output evaluation.
+taskIndex := Tc2_System.GETCURTASKINDEXEX();
+IF taskIndex > 0 THEN
+    continuity(taskIndex := taskIndex, cycleCounter := TwinCAT_SystemInfoVarList._TaskInfo[taskIndex].CycleCount,
+        onlineChangeCounter := TwinCAT_SystemInfoVarList._AppInfo.OnlineChangeCnt,
+        recoverOnOnlineChange := recoverOnOnlineChange);
+ELSE continuity(taskIndex := taskIndex); END_IF;
+IF continuity.interrupted THEN
+    recoveryRequired := TRUE; sm.Abort(); clamp.Abort();
+    advanceOutput.ForceSafe(); retractOutput.ForceSafe();
+END_IF;
+// 1. Sample quality and configure/map required conditions before any command.
+qualityGood := inputQuality = TcForge.E_IO_Quality.GOOD AND outputQuality = TcForge.E_IO_Quality.GOOD;
+confirmed := shutdownConfirmed AND shutdownQuality = TcForge.E_IO_Quality.GOOD;
+sm.cfgHome.nRequired := 1; sm.cfgStart.nRequired := 1; sm.cfgAuto.nRequired := 1; sm.cfgRunning.nRequired := 1;
+sm.MapHomeCondition(bitIndex := 0, bGood := qualityGood);
+sm.MapStartCondition(bitIndex := 0, bGood := qualityGood);
+sm.MapAutoCondition(bitIndex := 0, bGood := qualityGood);
+sm.MapRunningIntlk(bitIndex := 0, bGood := qualityGood);
+clamp.cfgAdvancePermissives.nRequired := 1; clamp.cfgRetractPermissives.nRequired := 1;
+clamp.MapAdvanceCondition(bitIndex := 0, bGood := qualityGood);
+clamp.MapRetractCondition(bitIndex := 0, bGood := qualityGood);
+resetPending := FALSE;
+freshCommand := command <> E_ReferenceCommand.None AND command <> previousCommand;
+previousCommand := command;
+
+IF freshCommand AND continuity.interrupted THEN
+    lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED;
+END_IF;
+// 2. Commands are consumed once. A held or rejected command cannot become latent work.
+IF freshCommand AND NOT continuity.interrupted THEN
+    CASE command OF
+    E_ReferenceCommand.Home:
+        IF qualityGood AND NOT recoveryRequired THEN lastResponse := sm.Home(); ELSE lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED; END_IF;
+    E_ReferenceCommand.Start:
+        IF qualityGood AND NOT recoveryRequired THEN lastResponse := sm.Start(); ELSE lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED; END_IF;
+    E_ReferenceCommand.Stop: lastResponse := sm.Stop();
+    E_ReferenceCommand.Abort: lastResponse := sm.Abort();
+    E_ReferenceCommand.Reset:
+        IF sm.Status.State <> TcForge.E_SM_State.STOPPED THEN
+            lastResponse := TcForge.E_RpcMethodResponse.REJECTED_WRONG_STATE;
+        ELSIF NOT qualityGood OR NOT confirmed OR (inAdvanced AND inRetracted) THEN
+            lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED;
+        ELSE
+            clamp.Reset(); advanceOutput.Reset(); retractOutput.Reset();
+            sm.ResetRunningIntlk(); resetPending := TRUE;
+        END_IF;
+    ELSE lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER;
+    END_CASE;
+END_IF;
+
+// 3. State machine runs once, then every step once (including inactive steps).
+sm(inpSubmoduleFaulted := clamp.IsFaulted() OR advanceOutput.IsFaulted() OR retractOutput.IsFaulted(), inpShutdownConfirmed := confirmed);
+IF resetPending THEN
+    lastResponse := sm.Reset();
+    IF lastResponse = TcForge.E_RpcMethodResponse.ACCEPTED THEN recoveryRequired := FALSE; END_IF;
+END_IF;
+
+homeStep(sm := sm, nStep := 1000, nNextStep := 0, nRequired := 3, nTimeout := 6, sName := 'Retract clamp');
+IF homeStep.Entry THEN
+    response := clamp.Retract();
+    IF response <> TcForge.E_RpcMethodResponse.ACCEPTED AND response <> TcForge.E_RpcMethodResponse.REJECTED_ALREADY_AT_TARGET THEN
+        homeStep.RaiseFault(code := TcForge.E_SM_Fault.StepUserFault, reason := 'Clamp rejected motion command');
+    END_IF;
+END_IF;
+IF homeStep.Execute THEN
+    homeStep.MapPerm(nIndex := 0, sDescription := 'Position confirmed', bValue := inRetracted AND NOT inAdvanced);
+    homeStep.MapPerm(nIndex := 1, sDescription := 'IO quality good', bValue := qualityGood);
+END_IF;
+
+advanceStep(sm := sm, nStep := 3000, nNextStep := 3002, nRequired := 3, nTimeout := 6, sName := 'Advance clamp');
+IF advanceStep.Entry THEN
+    response := clamp.Advance();
+    IF response <> TcForge.E_RpcMethodResponse.ACCEPTED AND response <> TcForge.E_RpcMethodResponse.REJECTED_ALREADY_AT_TARGET THEN
+        advanceStep.RaiseFault(code := TcForge.E_SM_Fault.StepUserFault, reason := 'Clamp rejected motion command');
+    END_IF;
+END_IF;
+IF advanceStep.Execute THEN
+    advanceStep.MapPerm(nIndex := 0, sDescription := 'Position confirmed', bValue := inAdvanced AND NOT inRetracted);
+    advanceStep.MapPerm(nIndex := 1, sDescription := 'IO quality good', bValue := qualityGood);
+END_IF;
+
+retractStep(sm := sm, nStep := 3002, nNextStep := 0, nRequired := 3, nTimeout := 6, sName := 'Retract clamp');
+IF retractStep.Entry THEN
+    response := clamp.Retract();
+    IF response <> TcForge.E_RpcMethodResponse.ACCEPTED AND response <> TcForge.E_RpcMethodResponse.REJECTED_ALREADY_AT_TARGET THEN
+        retractStep.RaiseFault(code := TcForge.E_SM_Fault.StepUserFault, reason := 'Clamp rejected motion command');
+    END_IF;
+END_IF;
+IF retractStep.Execute THEN
+    retractStep.MapPerm(nIndex := 0, sDescription := 'Position confirmed', bValue := inRetracted AND NOT inAdvanced);
+    retractStep.MapPerm(nIndex := 1, sDescription := 'IO quality good', bValue := qualityGood);
+END_IF;
+
+stopRetractStep(sm := sm, nStep := 2002, nNextStep := 0, nRequired := 3, nTimeout := 6, sName := 'Retract clamp');
+IF stopRetractStep.Entry THEN
+    response := clamp.Retract();
+    IF response <> TcForge.E_RpcMethodResponse.ACCEPTED AND response <> TcForge.E_RpcMethodResponse.REJECTED_ALREADY_AT_TARGET THEN
+        stopRetractStep.RaiseFault(code := TcForge.E_SM_Fault.StepUserFault, reason := 'Clamp rejected motion command');
+    END_IF;
+END_IF;
+IF stopRetractStep.Execute THEN
+    stopRetractStep.MapPerm(nIndex := 0, sDescription := 'Position confirmed', bValue := inRetracted AND NOT inAdvanced);
+    stopRetractStep.MapPerm(nIndex := 1, sDescription := 'IO quality good', bValue := qualityGood);
+END_IF;
+
+stopCancelStep(sm := sm, nStep := 2000, nNextStep := 2002, nRequired := 0, nTimeout := 2, sName := 'Cancel motion before retract');
+IF stopCancelStep.Entry THEN clamp.Abort(); END_IF;
+abortStep(sm := sm, nStep := 5000, nNextStep := 0, nRequired := 1, nTimeout := 2, sName := 'Confirm shutdown');
+IF abortStep.Entry THEN clamp.Abort(); END_IF;
+IF abortStep.Execute THEN abortStep.MapPerm(nIndex := 0, sDescription := 'Independent shutdown feedback', bValue := confirmed); END_IF;
+
+// 4. Monitor the actuator with this scan's feedback and permissives.
+// Inhibition also cancels internal motion so stale intent cannot reappear later.
+permitMotion := qualityGood AND NOT recoveryRequired AND NOT sm.IsFaulted() AND NOT sm.Status.ShutdownFailed AND
+    (sm.Status.State = TcForge.E_SM_State.HOMING OR sm.Status.State = TcForge.E_SM_State.RUNNING OR sm.Status.State = TcForge.E_SM_State.STOPPING);
+IF NOT permitMotion THEN clamp.Abort(); END_IF;
+clamp(inAdvanced := inAdvanced, inRetracted := inRetracted);
+
+// 5. Final output policy runs AFTER all fault detection and lifecycle commands.
+permitMotion := permitMotion AND NOT clamp.IsFaulted() AND NOT advanceOutput.IsFaulted() AND NOT retractOutput.IsFaulted();
+IF permitMotion THEN
+    IF clamp.outAdvance THEN advanceOutput.SetOn(); ELSE advanceOutput.SetOff(); END_IF;
+    IF clamp.outRetract THEN retractOutput.SetOn(); ELSE retractOutput.SetOff(); END_IF;
+ELSE
+    advanceOutput.ForceSafe(); retractOutput.ForceSafe();
+END_IF;
+advanceOutput(inpQuality := outputQuality); retractOutput(inpQuality := outputQuality);
+outAdvance := advanceOutput.outSignal; outRetract := retractOutput.outSignal;
+outputsInhibited := NOT permitMotion;
+faulted := sm.IsFaulted() OR clamp.IsFaulted() OR advanceOutput.IsFaulted() OR retractOutput.IsFaulted();
+sequence := sm.Status; actuator := clamp.sts;
+]]></ST></Implementation></POU></TcPlcObject>
