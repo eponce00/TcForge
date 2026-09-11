@@ -150,8 +150,20 @@ dispatch for an already logged-in XAE session. It never falls back to download,
 activation or restart. A dispatch receipt explicitly has `RuntimeVerified=false`;
 the qualification runner separately checks the runtime counter and retained state.
 The runner uses activation only for baseline preparation/restoration and keeps
-that evidence separate. It does not yet provide a general MCP deployment endpoint
-or explicit control of the boot-project update option.
+that evidence separate.
+
+The sibling [TwinCAT MCP online-change command](https://github.com/eponce00/twincat-mcp/blob/main/docs/online-change.md)
+adds explicit target/port checks, requires the requested PLC to be the sole logged-in
+PLC, checks an expected online-change counter and verifies one increment with
+advancing cycles. It never replays a failed host request. Its receipt does not
+prove continuous motion or application recovery; those need the fixture assertions.
+The MCP session must already have a matching baseline login and compile information.
+Preparing that session and updating the boot project are separate operations.
+
+Use `--command-backend mcp` to exercise that primitive from the qualification
+runner. `--automation` can select an isolated C# build without replacing a running
+MCP executable. The default `fixture` backend continues to use the PowerShell
+dispatch helper. See `PROGRESS.md` for current bench evidence and open acceptance.
 
 To exercise the experimental compatible implementation-edit path on an isolated
 bench, use `scripts/verify_online_change.py` with `--kind implementation --mode moving

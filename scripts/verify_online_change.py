@@ -42,6 +42,13 @@ try {
  $bin=Split-Path $cfg.automation
  Add-Type -ReferencedAssemblies @((Join-Path $bin 'Interop.TCatSysManagerLib.dll'),(Join-Path $bin 'Interop.EnvDTE.dll'),(Join-Path $bin 'Interop.EnvDTE80.dll')) -TypeDefinition @'
 public static class OnlineChangeFixture {
+ public static void ResolveAdsDependency(string bin) {
+  // PowerShell does not read TcAutomation.exe.config's binding redirects.
+  // Match the shipped redirect for ADS' older Unsafe reference in this owned process.
+  var assembly=System.Reflection.Assembly.LoadFrom(System.IO.Path.Combine(bin,"System.Runtime.CompilerServices.Unsafe.dll"));
+  System.AppDomain.CurrentDomain.AssemblyResolve += (sender,args) =>
+   new System.Reflection.AssemblyName(args.Name).Name=="System.Runtime.CompilerServices.Unsafe" ? assembly : null;
+ }
  public static void Edit(object pou, string kind) {
   if(kind=="declaration") {
    var d=(TCatSysManagerLib.ITcPlcDeclaration)pou;
@@ -63,6 +70,7 @@ public static class OnlineChangeFixture {
  }
 }
 '@
+ if ($cfg.backend -eq 'mcp') {[OnlineChangeFixture]::ResolveAdsDependency($bin)}
  [TcAutomation.Core.MessageFilter]::Register(); $registered=$true
  $project=[TcAutomation.Core.TcFileUtilities]::FindTwinCATProjectFile($cfg.solution)
  $version=[TcAutomation.Core.TcFileUtilities]::GetTcVersion($project)
@@ -118,7 +126,12 @@ public static class OnlineChangeFixture {
  if (Test-Path -LiteralPath $cfg.cancel) {throw 'Online change canceled'}
  [IO.File]::WriteAllText($cfg.started,[DateTime]::UtcNow.ToString('o'))
  # VisualStudioInstance sets SilentMode. Never click or bypass a confirmation.
- $dispatch=Invoke-TcForgeOnlineChange -Dte $vs.Dte -Plc $plc -ExpectedCommand $chosen
+ if ($cfg.backend -eq 'mcp') {
+  $expected=[uint32](Get-Content -LiteralPath $cfg.trigger -Raw)
+  $dispatch=[TcAutomation.Commands.OnlineChangeCommand]::ExecuteInSession($vs,$cfg.target,'Simulation',854,'MAIN.lifecycle.cycles',$expected,10000)
+ } else {
+  $dispatch=Invoke-TcForgeOnlineChange -Dte $vs.Dte -Plc $plc -ExpectedCommand $chosen
+ }
  [xml]$status=$plc.ProduceXml($false)
  [IO.File]::WriteAllText($cfg.afterXml,$status.OuterXml)
  $dispatch.TargetNetId=$cfg.target
@@ -212,8 +225,10 @@ def run(args, evidence):
     (control / 'FB_ReferenceMachine.original.TcPOU').write_bytes(baseline)
     evidence['control_directory'] = str(control)
     evidence['source_sha256'] = hashlib.sha256(baseline).hexdigest()
+    evidence['automation_sha256'] = hashlib.sha256(args.automation.read_bytes()).hexdigest()
     paths = {key: control / key for key in ('ready', 'trigger', 'cancel', 'started', 'result', 'build', 'beforeXml', 'afterXml', 'inventory')}
     settings = dict(automation=str(args.automation), solution=str(root / 'TwinCAT/TcForge.Simulation.sln'),
+                    backend=args.command_backend,
                     source=str(source), target=args.target, platform=args.platform, kind=args.kind,
                     commands=str(root / 'scripts/online_change_commands.ps1'),
                     generatedTmc=str(root / 'scripts/prepare_generated_tmc.ps1'), repo=str(root),
@@ -255,7 +270,7 @@ def run(args, evidence):
             evidence['count_before'] = count_before
             old_session, old_frame = session.session, session.sequence
             plant = session.plant
-            paths['trigger'].write_text('online-change', encoding='ascii')
+            paths['trigger'].write_text(str(count_before), encoding='ascii')
             deadline = time.perf_counter() + args.change_timeout
             observations = []
             evidence['observations'] = observations
@@ -343,6 +358,9 @@ def run(args, evidence):
             result = json.loads(paths['result'].read_text(encoding='utf-8-sig'))
             evidence['command_result'] = result
             require(result.get('Dispatched') is True and result.get('Operation') == 'OnlineChange', 'No online command dispatch evidence')
+            if args.command_backend == 'mcp':
+                require(result.get('Success') is True and result.get('RuntimeVerified') is True,
+                        'MCP online-change runtime verification did not pass')
             evidence['persistent_after_change'] = capture(args.target, 854)
             validate_retained(evidence['persistent_before'], evidence['persistent_after_change'])
             plant.jammed = False
@@ -385,6 +403,11 @@ def run(args, evidence):
             except Exception as exc:
                 errors.append('Helper shutdown: ' + str(exc))
         # Restore only after the XAE helper has exited and released file ownership.
+        if paths['result'].exists():
+            try:
+                evidence['command_result'] = json.loads(paths['result'].read_text(encoding='utf-8-sig'))
+            except (OSError, ValueError) as exc:
+                errors.append('Command receipt: ' + str(exc))
         source.write_bytes(baseline)
         evidence['source_restored'] = source.read_bytes() == baseline
         if prepared:
@@ -409,6 +432,8 @@ def main():
     parser.add_argument('--policy', choices=('recover', 'preserve'), default='recover',
                         help='Preserve is experimental qualification of compatible implementation edits only')
     parser.add_argument('--mcp-root', type=Path, default=root.parent / 'twincat-mcp')
+    parser.add_argument('--command-backend', choices=('fixture', 'mcp'), default='fixture')
+    parser.add_argument('--automation', type=Path, help='Optional isolated MCP assembly build')
     parser.add_argument('--transport', type=Path, default=root / 'artifacts/simulation-rpc/SimulationRpc.exe')
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--timeout', type=float, default=600)
@@ -422,11 +447,12 @@ def main():
         if not math.isfinite(getattr(args, key)) or not 0 < getattr(args, key) <= 900:
             parser.error('Invalid timeout')
     args.mcp_root = args.mcp_root.resolve(strict=True)
-    args.automation = (args.mcp_root / 'TcAutomation/bin/Release/TcAutomation.exe').resolve(strict=True)
+    args.automation = (args.automation or args.mcp_root / 'TcAutomation/bin/Release/TcAutomation.exe').resolve(strict=True)
     args.transport = args.transport.resolve(strict=True)
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
-    evidence = dict(target=args.target, kind=args.kind, mode=args.mode, policy=args.policy, passed=False, sources=SOURCES)
+    evidence = dict(target=args.target, kind=args.kind, mode=args.mode, policy=args.policy,
+                    command_backend=args.command_backend, passed=False, sources=SOURCES)
     suite = ET.Element('testsuite', name='TcForge actual online change', tests='1')
     case = ET.SubElement(suite, 'testcase', name=args.kind + '_' + args.mode)
     try:

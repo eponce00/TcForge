@@ -1,6 +1,6 @@
 # TcForge progress
 
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 
 ## Goal and current status
 
@@ -26,9 +26,11 @@ and before/after documentation are not required.
 
 ## Next action
 
-Implement a dedicated MCP online-change operation with explicit PLC selection,
-matching login/compile state, command availability and runtime outcome verification.
-Then finish the remaining declaration/layout and interruption cases. Compatible
+Finish the MCP session preparation workflow (matching baseline login and editing),
+then resolve the current live RPC timing failure and finish moving declaration/layout
+and interruption cases. A dedicated online-change primitive and MCP wrapper now
+exist in sibling `twincat-mcp`; the running MCP server still needs the updated build
+and a reload before advertising the new tool. Compatible
 implementation edits during healthy motion and the controlled missing/backup/
 malformed-image recovery cases now have bench evidence. Keep real execution-gap
 and IO-loss protection. Physical power cuts, physical IO, fresh-PC qualification
@@ -50,9 +52,10 @@ acceptance remains unproven, not completed.
 - **High — engineering tool usability:** extract a reusable online-change operation
   from the qualification fixture, with explicit target/PLC selection, baseline
   checks, command availability, outcome verification and no restart fallback.
-  Assess exposing it through the TwinCAT MCP once its server source/capabilities
-  are located. The installed MCP now exposes runtime/engineering tools, but no
-  dedicated online-change operation. Preserve separate
+  Source implementation now includes `twincat_online_change`, explicit target/port,
+  sole logged-in PLC context, expected counter and runtime counter/cycle checks.
+  Host errors are never replayed through CLI fallback. Matching-session preparation
+  and end-to-end validation through a reloaded MCP server remain open. Preserve separate
   online-change and activation operations and explicit boot-project update behavior.
 - **High — Q4 recovery:** exercise invalid/missing/backup persistent images and
   deterministic recovery. SSH permits an orderly Windows reboot; this does not
@@ -84,6 +87,41 @@ Engineering references:
 [Login choices](https://infosys.beckhoff.com/content/1033/tc3_plc_intro/2531393419.html).
 
 ### Latest verification batch
+
+2026-09-11 MCP online-change batch:
+
+- [x] Added the C# online-change primitive, persistent-host-only MCP wrapper,
+  direct/batch safety gates and documentation in sibling `twincat-mcp`.
+  It refuses target/port mismatch, missing login, multiple online PLCs, unavailable
+  command or stale expected count. It never logs in, downloads, activates, restarts,
+  updates the boot project or retries an uncertain dispatch.
+- [x] MCP Python tests: 11 pass, including no retry after host failure and no
+  replacement of the current session. C# helper builds against the local MCP
+  working tree; its pre-existing XAE/ADS dependency changes are separate.
+- [x] Qualification runner can exercise the MCP primitive using `--command-backend
+  mcp` and an optional isolated `--automation` build, retaining its structured
+  receipt and assembly hash. Baseline activation/restoration stay separate.
+- [x] Idle declaration change through the C# primitive applied on the real bench:
+  ADS 854, online-change count 0 → 1, cyclic count 11070 → 11971. Receipt records
+  `RuntimeVerified=true`. Evidence: `artifacts/mcp-online-idle-v3/`. This is command
+  verification, not moving-machine or full MCP-client qualification. Original
+  source and baseline restored; cleanup confirmed outputs inhibited.
+- [x] Final Example restoration: ADS 851 RUN, authenticated OPC UA device error 0,
+  ForceSafe completed on owner task 1, duplicate rejected and output off.
+  Evidence: `artifacts/mcp-online-final-ready.json` and
+  `artifacts/mcp-online-final-opcua.json`. All 77 TcForge tooling tests, source
+  checks and strict documentation build pass. No PLC source change or new full
+  TcUnit qualification is claimed by this batch.
+- [ ] Moving declaration/layout qualification is currently blocked by live RPC
+  timing: two runs failed before online-change dispatch, first on initial scheduling
+  and then on frame confirmation. Both restored baseline/source and inhibited
+  outputs. Evidence: `artifacts/mcp-declaration-moving/` and
+  `artifacts/mcp-declaration-moving-warm/`. Read-only RPC snapshots measured roughly
+  90–110 ms while ping measured 2–5 ms. Metadata caching did not improve it and was
+  reverted; watchdog and scheduling limits remain unchanged.
+- [ ] Reload the MCP server with the new build and validate the complete MCP
+  workflow. The primitive requires an already matching, logged-in session;
+  automated baseline login/edit preparation is not implemented yet.
 
 2026-09-10 controlled recovery batch:
 
@@ -152,8 +190,8 @@ Engineering references:
   `scripts/online_change_commands.ps1`; dispatch is explicitly not runtime success,
   and unavailable/logged-out sessions cannot fall back to activation or download.
   66 tooling tests pass, including these command and TMC preflight checks.
-- [ ] Standalone engineering interface / MCP integration and layout-change
-  qualification remain open. MCP source was located in sibling `twincat-mcp`.
+- [ ] Full MCP workflow and moving layout-change qualification remain open;
+  see the newer batch above for the implemented command and current timing failure.
 - [ ] Restart robustness follow-up: the earlier Secure ADS TLS failure required
   a pinned route refresh. The current batch recovered without one, including an
   orderly Windows reboot. Repeated reboot endurance and the cause of that earlier
