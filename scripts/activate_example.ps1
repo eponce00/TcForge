@@ -74,7 +74,10 @@ try {
     if (-not $activation.Success) { throw $activation.ErrorMessage }
     $restart = [TcAutomation.Commands.RestartCommand]::ExecuteInSession($vs, $solution, $Target)
     if (-not $restart.Success) { throw $restart.ErrorMessage }
-    & $python (Join-Path $PSScriptRoot 'verify_cyclic_task.py') --target $Target --port 851
+    $readyConfig = Join-Path $runDirectory 'readiness-config.json'
+    @{ target=$Target; fixture='Example'; port=851; ads_dll_directory='C:/Program Files (x86)/Beckhoff/TwinCAT/Common64' } |
+        ConvertTo-Json | Set-Content -LiteralPath $readyConfig -Encoding UTF8
+    & $python (Join-Path $PSScriptRoot 'wait_runtime_ready.py') --config $readyConfig --output (Join-Path $runDirectory 'readiness.json') --timeout 300
     if ($LASTEXITCODE -ne 0) { throw 'Example activation did not produce an executing cyclic task.' }
     $restart | ConvertTo-Json
 } finally {

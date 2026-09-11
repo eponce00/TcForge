@@ -75,6 +75,13 @@ try {
     if (-not $activation.Success) { throw $activation.ErrorMessage }
     $restart = [TcAutomation.Commands.RestartCommand]::ExecuteInSession($vs, $solution, $Target)
     if (-not $restart.Success) { throw $restart.ErrorMessage }
+    $readyDirectory = Join-Path $artifacts ('simulation-readiness-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $readyDirectory | Out-Null
+    $readyConfig = Join-Path $readyDirectory 'config.json'
+    @{ target=$Target; fixture='Simulation'; port=854; ads_dll_directory='C:/Program Files (x86)/Beckhoff/TwinCAT/Common64' } |
+        ConvertTo-Json | Set-Content -LiteralPath $readyConfig -Encoding UTF8
+    & $python (Join-Path $PSScriptRoot 'wait_runtime_ready.py') --config $readyConfig --output (Join-Path $readyDirectory 'readiness.json') --timeout 300
+    if ($LASTEXITCODE -ne 0) { throw 'Simulation did not reach verified cyclic readiness.' }
     & $python -c 'import sys; from pathlib import Path; from tcforge_sim.live import RpcTransport; r=RpcTransport(Path(sys.argv[1]),sys.argv[2],854); s=r.snapshot(); r.close(); assert s[''boot''] > 0 and s[''owner''] > 0, s; print(s)' $transport $Target
     if ($LASTEXITCODE -ne 0) { throw 'Activation did not produce a running simulation endpoint on port 854.' }
     $restart | ConvertTo-Json

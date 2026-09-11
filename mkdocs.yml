@@ -80,6 +80,7 @@ nav:
   - Development:
       - Simulation: 12-Simulation.md
       - OPC UA qualification: 17-OPC-UA-Qualification.md
+      - Runtime recovery: 18-Runtime-Recovery.md
       - SPT review: 13-SPT-Review.md
       - Maintaining this site: documentation-site.md
 

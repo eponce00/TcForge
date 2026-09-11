@@ -26,13 +26,13 @@ and before/after documentation are not required.
 
 ## Next action
 
-Finish Q4 backup-only and corrupt-with-backup persistent-image tests using the
-proven XAE restart path. The raw ADS CONFIG/RUN runner could not reliably observe
-recovery after a restart; do not confuse that timeout with a completed image test.
-Compatible implementation online change during healthy simulated motion now has
-bench evidence. Next extend engineering usability and declaration/layout coverage.
-Keep genuine execution-gap and IO-loss protection. Preserve Docker, Hyper-V and
-Windows security settings.
+Implement a dedicated MCP online-change operation with explicit PLC selection,
+matching login/compile state, command availability and runtime outcome verification.
+Then finish the remaining declaration/layout and interruption cases. Compatible
+implementation edits during healthy motion and the controlled missing/backup/
+malformed-image recovery cases now have bench evidence. Keep real execution-gap
+and IO-loss protection. Physical power cuts, physical IO, fresh-PC qualification
+and distribution work remain deferred; SPT adaptations follow at medium priority.
 
 ### Current priorities (user scope, 2026-09-10)
 
@@ -51,7 +51,8 @@ acceptance remains unproven, not completed.
   from the qualification fixture, with explicit target/PLC selection, baseline
   checks, command availability, outcome verification and no restart fallback.
   Assess exposing it through the TwinCAT MCP once its server source/capabilities
-  are located; no TwinCAT MCP tool is callable in this session. Preserve separate
+  are located. The installed MCP now exposes runtime/engineering tools, but no
+  dedicated online-change operation. Preserve separate
   online-change and activation operations and explicit boot-project update behavior.
 - **High — Q4 recovery:** exercise invalid/missing/backup persistent images and
   deterministic recovery. SSH permits an orderly Windows reboot; this does not
@@ -84,6 +85,47 @@ Engineering references:
 
 ### Latest verification batch
 
+2026-09-10 controlled recovery batch:
+
+- [x] Read-only readiness runner verifies system RUN, cyclic execution and optional
+  authenticated OPC UA device health with consecutive successes and bounded,
+  fresh-process attempts. Separate restart-only XAE operation reports dispatch,
+  not runtime success. See [runtime recovery](docs/18-Runtime-Recovery.md).
+- [x] Orderly SSH/Windows reboot recovered Example and OPC UA with no route repair:
+  `artifacts/recovery-ready-after-reboot.json`, 41 probes, 197.047 seconds from
+  monitoring start. Existing pinned certificate authentication remained intact.
+  One successful reboot does not establish worst-case startup time or eliminate
+  the earlier intermittent TLS failure.
+- [x] Controlled persistent-image runner: baseline backup, verified CONFIG,
+  exact file readback, XAE restart, readiness, policy assertions and restoration.
+  Bench-local CONFIG runs through pinned SSH with bounded state verification.
+  No route repair was used in this batch.
+- [x] Missing and backup-only cases passed in
+  `artifacts/recovery-persistent-matrix-bounded/evidence.json`; both also completed
+  baseline restoration and output cleanup. That report remains **failed overall**
+  because its initial corrupt-image expectation incorrectly required backup loading.
+- [x] A targeted repeat with an explicit reinitialization expectation passed:
+  `artifacts/recovery-corrupt-reinitialize/evidence.json`. The malformed current
+  file was rejected despite the valid backup being present: image flags cleared,
+  markers/history initialized and outputs inhibited. Original images were restored,
+  restored state checked and outputs cleared. This result covers the selected
+  malformed-file fixture, not every corruption pattern or sudden power loss.
+- [x] Example and Simulation activation now use bounded cyclic readiness rather
+  than a single check after a fixed delay. Standalone monitoring can additionally
+  require authenticated OPC UA device readiness.
+- [x] Final Example restoration passed the integrated cyclic readiness gate.
+  Authenticated OPC UA became ready after another 65.985 seconds of monitoring;
+  ForceSafe queued/completed in owner task 1, duplicate rejected, output off.
+  Evidence: `artifacts/recovery-final-example.log`, `recovery-final-ready.json`,
+  `recovery-final-opcua.json` (all under `artifacts/`).
+- [x] 77 tooling tests, source validation (132 XML / 31 suites / 380 declarations),
+  PowerShell syntax checks and strict documentation build pass. No PLC library
+  behavior changed in this batch; the earlier 380-test runtime result is separate.
+  The final Example activation exercised the new integration on the bench;
+  Simulation uses the same monitor, which was exercised throughout the image tests.
+
+
+
 2026-09-10 online-change and recovery batch:
 
 - [x] Separate `executionInterrupted` from `onlineChanged`. The default
@@ -112,18 +154,10 @@ Engineering references:
   66 tooling tests pass, including these command and TMC preflight checks.
 - [ ] Standalone engineering interface / MCP integration and layout-change
   qualification remain open. MCP source was located in sibling `twincat-mcp`.
-- Missing-image startup was observed manually: no loaded/backup image, default
-  markers, inhibited outputs. Original saved images were subsequently restored
-  and their loaded state read back; outputs were explicitly cleared:
-  `artifacts/persistent-post-recovery-confirmation.json`.
-- [ ] Backup-only and corrupt-with-backup cases were **not reached**. Failed
-  exploratory runs remain under `artifacts/persistent-images-*`; they are not
-  acceptance evidence. Replace unreliable raw CONFIG/RUN polling before retrying.
-- [ ] Restart durability: after bench reboot, Secure ADS required supported
-  `Add-AdsRoute -SelfSigned -FingerPrint ... -Force` refresh with the existing
-  pinned certificate. No trust downgrade. The exact failure cause and unattended
-  reconnect across restarts remain unproven. OPC UA required a fresh XAE-managed
-  restart and additional startup time before accepting connections.
+- [ ] Restart robustness follow-up: the earlier Secure ADS TLS failure required
+  a pinned route refresh. The current batch recovered without one, including an
+  orderly Windows reboot. Repeated reboot endurance and the cause of that earlier
+  failure remain unqualified; do not imply certificate trust was weakened.
 - Example was reactivated successfully on port 851 with zero build warnings and
   advancing cyclic-owner counters: `artifacts/architecture-example-final.log`.
   Final authenticated OPC UA check passed: device error zero, ForceSafe queued
@@ -366,8 +400,9 @@ the selected versions belong in [toolchain.json](toolchain.json).
 - [x] **Q1c: Verify the complete build/test workflow.** The current library is
   exported/installed, all three consumers build cleanly, and the local PLC reaches
   RUN with its TC3 PLC trial license. The latest network-bench runs report
-  377/377 tests across 31 suites at both task periods; individual ADS results pass
-  the JUnit gate. Production qualification
+  380/380 tests across 31 suites at 10 ms. The earlier 1 ms baseline has 377/377
+  tests; it does not cover the three added continuity tests. Individual ADS results
+  pass the JUnit gate. Production qualification
   remains separate under Q2–Q7.
 
 MCP is registered in Codex as `twincat-automation` using the sibling repo's `.venv`,
@@ -458,15 +493,15 @@ available locally, and current runtime qualification uses the dedicated RT bench
   including persistent configuration, alarm latch and diagnostic history.
   Reset-origin now passes with confirmed engineering logout and application removal
   before same-source reload; persistent markers, intent, alarms and history initialize.
-  Evidence: `artifacts/q4-reset-origin/`. Invalid/backup-image handling, power loss
-  and remaining online-change cases remain open. Implementation-only online change
+  Evidence: `artifacts/q4-reset-origin/`. Controlled missing, backup-only and
+  malformed-image cases now have evidence in the latest recovery batch above.
+  Physical power loss and remaining online-change cases remain open. Implementation-only online change
   while idle now passes via the actual Online Change command: counter increment,
   retained lifecycle state, epoch/session invalidation, stale-request rejection
   and explicit recovery. Evidence: `artifacts/q4-online-direct-idle/`.
   The earlier logged-in full solution build returned COM `E_FAIL`; removing that
-  unrelated build step resolved the engineering failure. A moving attempt is
-  inconclusive because motion faulted in the old epoch before the change applied
-  (`artifacts/q4-online-direct-moving/`); repeat without concurrent desktop work.
+  unrelated build step resolved the engineering failure. A later compatible implementation change during healthy motion passed with
+  the same session and a completed cycle (`artifacts/online-compatible-moving/`).
   Declaration-changing online change while idle also passes, including retained
   state and explicit recovery (`artifacts/q4-online-declaration-idle-retry/`).
   Its first attempt failed engineering login before editing; the fresh session
