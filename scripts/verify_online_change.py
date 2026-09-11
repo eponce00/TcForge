@@ -175,7 +175,7 @@ def validate_change(before, after, count_before, count_after, mode, policy='reco
     require(after['session'] == 0, 'Old simulator session survived online change')
     require(count_after == count_before + 1, 'Exactly one actual OnlineChangeCnt increment required')
     if mode == 'moving':
-        require(before['advance'] and not before['retract'] and not before['faulted'],
+        require(bool(before['advance']) != bool(before['retract']) and not before['faulted'],
                 'No healthy active motion precondition')
     require(not after['advance'] and not after['retract'] and after['inhibited'],
             'Online change retained motion intent')
@@ -214,6 +214,14 @@ def activate(args, path):
         require(wait_process(process, args.timeout) == 0, 'Baseline activation failed: ' + str(path))
 
 
+def cycle_command(snapshot):
+    # Ready intentionally inhibits output commands between cycles.
+    require(not snapshot['faulted'] and snapshot['healthy'] and
+            (snapshot['state'] == 16 or not snapshot['inhibited']),
+            'Cyclic operation became unhealthy before online change')
+    return 2 if snapshot['state'] == 16 else 0
+
+
 def run(args, evidence):
     from tcforge_sim.live import RpcTransport, AssemblySession
     from tcforge_sim.models import TwoPositionCylinder
@@ -238,6 +246,7 @@ def run(args, evidence):
     script = control / 'online-change.ps1'
     script.write_text(HELPER, encoding='utf-8')
     process = rpc = session = conn = directory = None
+    count_handle = None
     prepared = False
     original_error = None
     try:
@@ -253,9 +262,14 @@ def run(args, evidence):
                 time.sleep(.1)
             evidence['persistent_before'] = capture(args.target, 854, 'safe')
             directory, pyads, conn = connect(args.target, 854)
+            count_handle = conn.get_handle('MAIN.lifecycle.onlineChangeCount')
             conn.write_by_name('MAIN.simulation.recoverOnOnlineChange', args.policy == 'recover', pyads.PLCTYPE_BOOL)
             rpc = RpcTransport(args.transport, args.target, 854)
-            session = AssemblySession(rpc, trace, TwoPositionCylinder(travel_s=.5))
+            cycling = args.kind == 'declaration' and args.mode == 'moving'
+            # Longer normal strokes reduce idle-boundary ambiguity while staying
+            # below the reference machine's six-second movement timeout.
+            evidence['travel_seconds'] = 2.0 if cycling else .5
+            session = AssemblySession(rpc, trace, TwoPositionCylinder(travel_s=evidence['travel_seconds']))
             session.until(lambda s: s['state'] == 0, command=4)
             session.tick()
             require(session.tick(5)['response'] == 0, 'Initial Reset rejected')
@@ -263,10 +277,10 @@ def run(args, evidence):
             if args.mode == 'moving':
                 session.until(lambda s: s['state'] == 16, command=1)
                 session.until(lambda s: s['advance'] and .15 <= session.plant.position <= .8, command=2)
-                session.plant.jammed = True
+                session.plant.jammed = not cycling
             before = session.tick()
             evidence['before'] = before
-            count_before = conn.read_by_name('MAIN.lifecycle.onlineChangeCount', pyads.PLCTYPE_UDINT)
+            count_before = conn.read_by_name('', pyads.PLCTYPE_UDINT, handle=count_handle)
             evidence['count_before'] = count_before
             old_session, old_frame = session.session, session.sequence
             plant = session.plant
@@ -275,11 +289,13 @@ def run(args, evidence):
             observations = []
             evidence['observations'] = observations
             after = None
+            preceding = before
+            next_command = 0
             while time.perf_counter() < deadline:
                 current = None
                 if session:
                     try:
-                        current = session.tick()
+                        current = session.tick(next_command)
                         old_frame = session.sequence
                     except Exception as exc:
                         evidence['old_session_rejection'] = str(exc)
@@ -294,7 +310,18 @@ def run(args, evidence):
                     # synchronous RPC here needlessly consumes the IO feed budget.
                     if current is None:
                         current = rpc.snapshot()
-                    count = conn.read_by_name('MAIN.lifecycle.onlineChangeCount', pyads.PLCTYPE_UDINT)
+                    if count_handle is None:
+                        count_handle = conn.get_handle('MAIN.lifecycle.onlineChangeCount')
+                    try:
+                        count = conn.read_by_name('', pyads.PLCTYPE_UDINT, handle=count_handle)
+                    except pyads.ADSError as exc:
+                        if exc.err_code == 1809:  # Symbol version changed: read-only handle recovery.
+                            try:
+                                conn.release_handle(count_handle)
+                            except pyads.ADSError:
+                                pass
+                            count_handle = None
+                        raise
                 except Exception as exc:
                     observations.append(dict(transient_error=str(exc)))
                     if rpc:
@@ -304,11 +331,16 @@ def run(args, evidence):
                     continue
                 observations.append(dict(snapshot=current, count=count))
                 if args.mode == 'moving' and current['boot'] == before['boot']:
-                    require(current['advance'] and not current['retract'] and not current['faulted'],
-                            'Motion ended in the old epoch before online change; acceptance is inconclusive')
+                    if cycling:
+                        next_command = cycle_command(current)
+                    else:
+                        require(current['advance'] and not current['retract'] and not current['faulted'],
+                                'Motion ended in the old epoch before online change; acceptance is inconclusive')
                 if count != count_before and (args.policy == 'preserve' or current['boot'] != before['boot']):
                     after = current
                     break
+                if count == count_before:
+                    preceding = current
                 if process.poll() is not None and process.returncode != 0:
                     raise AssertionError('Online-change helper failed')
             evidence['observations'] = observations
@@ -317,6 +349,12 @@ def run(args, evidence):
             after = rpc.snapshot()
             evidence['after'] = after
             evidence['count_after'] = count
+            if cycling:
+                # Use the last observed pre-change frame, not motion that occurred
+                # seconds earlier at dispatch. An idle boundary is inconclusive.
+                evidence['at_dispatch'] = before
+                before = preceding
+                evidence['before'] = before
             validate_change(before, after, count_before, count, args.mode, args.policy)
             if args.policy == 'preserve':
                 require(session is not None and not session.failed, 'Compatible edit lost the IO feed')
@@ -382,10 +420,18 @@ def run(args, evidence):
             validate_retained(evidence['persistent_before'], evidence['persistent_after'])
     except BaseException as exc:
         original_error = exc
+        # Preserve the cause while potentially lengthy baseline restoration runs.
+        evidence['failure'] = traceback.format_exc()
+        (args.output / 'online-change-evidence.json').write_text(json.dumps(evidence, indent=2), encoding='utf-8')
         raise
     finally:
         paths['cancel'].write_text('cancel', encoding='ascii')
         errors = []
+        if conn and count_handle is not None:
+            try:
+                conn.release_handle(count_handle)
+            except Exception:
+                pass  # It may have been invalidated by the tested online change.
         if session:
             try:
                 session.close()
@@ -437,7 +483,8 @@ def main():
     parser.add_argument('--transport', type=Path, default=root / 'artifacts/simulation-rpc/SimulationRpc.exe')
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--timeout', type=float, default=600)
-    parser.add_argument('--change-timeout', type=float, default=4)
+    parser.add_argument('--change-timeout', type=float, default=30,
+                        help='Engineering compilation/application deadline; does not change IO or motion timeouts')
     args = parser.parse_args()
     if args.policy == 'preserve' and args.kind != 'implementation':
         parser.error('Declaration/layout preservation has not been qualified; use recover policy')

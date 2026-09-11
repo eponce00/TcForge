@@ -33,6 +33,17 @@ uncertain write. The live runner uses a PLC-owned frame exchange, exclusive sess
 boot identity and watchdog. It advances physics using wall-clock time and requires
 explicit recovery after lost communication.
 
+The C# transport validates the simulation identity and RPC signatures at startup,
+then retains method handles for its connection lifetime. Each RPC uses one ADS
+read/write round trip. A method failure terminates the transport; it does not
+refresh a handle and replay an uncertain command. Identity/signature discovery
+has a separate 30-second startup deadline before any IO session is claimed. This
+does not relax the 200 ms live scheduling or 150 ms frame-confirmation budgets.
+
+Use `scripts/benchmark_simulation_rpc.py --target <AMS-Net-ID> --port 854
+--transport artifacts/simulation-rpc/SimulationRpc.exe --output artifacts/rpc-timing.json`
+to measure read-only snapshot latency. This benchmark does not qualify cyclic IO.
+
 ## Live assembly testing
 
 Build/install TcForge, build the narrow ADS RPC transport, and activate the isolated

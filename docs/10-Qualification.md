@@ -237,7 +237,7 @@ stopped or detect a stop/start that misses no system-task tick.
 | Cold reset / reset origin / missing or incompatible persistent image | Apply the documented reset-class storage semantics; default operating intent remains inhibited |
 | Reference machine running, PLC stop/start that skips system-task cycles | First resumed scan cancels intent and inhibits outputs; explicit Reset/Home and fresh Start required |
 | Same with a stop shorter than the simulation watchdog | Counter interruption must still invalidate session/epoch; do not rely on watchdog expiry |
-| Implementation-only and declaration-changing online changes, idle and moving | Changed online-change counter cancels reference-machine intent and invalidates simulation epoch; qualify both paths |
+| Implementation-only and declaration-changing online changes, idle and moving | Default recovery policy cancels intent and invalidates epoch. Explicit compatible-implementation preservation requires no execution gap or owner fault; declaration/layout changes require recovery. Qualify each policy separately |
 | Home/Start coincident with detected interruption | Command is rejected/consumed, cannot execute later while held; explicit recovery and a fresh command edge required |
 | Queued remote command then runtime restart | Pending intent and results are cleared; unknown result must not trigger automatic replay |
 | OPC UA server restart/reconnect with PLC still running | PLC mailbox state remains authoritative; reconcile results/status without replaying uncertain intent |
@@ -251,8 +251,10 @@ the full matrix remains open. On the dedicated 3.1.4026.17 bench, short/long
 PLC stop/start passes at 1 ms and 10 ms. Direct ADS RESET/RUN and orderly system
 restart pass the standalone fixture's saved-intent/configuration, alarm-latch and
 fault-history checks. ForceSafe/Reset invalidation survives both operations.
-These do not qualify backup/invalid images, sudden power loss or actual online
-changes. Reset-origin passes separately: engineering logout and controller
+Separate controlled missing/backup/malformed-image cases and actual online changes
+now have bench evidence in PROGRESS.md, including moving declaration recovery and
+compatible implementation preservation. Sudden power loss remains unqualified.
+Reset-origin passes separately: engineering logout and controller
 application removal are verified before same-source reload; persistent markers,
 intent, alarms and history then initialize. The separate XAE cold-reset path passes after
 confirming engineering login, waiting for reset STOP, and verifying subsequent

@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from verify_online_change import validate_change, validate_retained
+from verify_online_change import validate_change, validate_retained, cycle_command
 
 
 class OnlineChangeEvidenceTests(unittest.TestCase):
@@ -14,6 +14,20 @@ class OnlineChangeEvidenceTests(unittest.TestCase):
     def test_one_change_new_epoch_and_inhibited_passes(self):
         for mode in ('idle', 'moving'):
             validate_change(self.before, self.after, 5, 6, mode)
+
+    def test_cycling_restarts_ready_but_rejects_faults_and_lost_io(self):
+        ready = dict(state=16, faulted=0, healthy=1, inhibited=1)
+        self.assertEqual(cycle_command(ready), 2)
+        self.assertEqual(cycle_command(dict(ready, state=1, inhibited=0)), 0)
+        for invalid in (dict(ready, faulted=1), dict(ready, healthy=0), dict(ready, state=1)):
+            with self.assertRaises(AssertionError):
+                cycle_command(invalid)
+
+    def test_retracting_is_motion_but_idle_and_conflicting_coils_are_not(self):
+        validate_change(dict(self.before, advance=0, retract=1), self.after, 5, 6, 'moving')
+        for advance, retract in ((0, 0), (1, 1)):
+            with self.assertRaises(AssertionError):
+                validate_change(dict(self.before, advance=advance, retract=retract), self.after, 5, 6, 'moving')
 
     def test_download_restart_or_no_change_cannot_pass(self):
         for count, boot in ((5, 124), (0, 124), (7, 124), (6, 123), (6, 0)):

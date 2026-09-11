@@ -233,6 +233,14 @@ configuration, analog samples and queued analog commands use these guards.
 
 ## Remaining lifecycle qualification
 
+The declaration-change fixture runs repeated assembly cycles while XAE generates
+the delta. Its engineering deadline is separate from the IO watchdog and actuator
+travel timeout. Moving acceptance uses the last observed frame before the runtime
+online-change counter advances: exactly one coil must be active without a fault.
+An idle boundary is inconclusive. A layout change must invalidate the old session,
+remove motion intent and require explicit recovery; the runner also checks retained
+history, stale-request rejection and a complete new cycle.
+
 The implemented configuration, conditioning, alarm and execution-continuity
 policies require target-specific acceptance evidence. Tests that inject saved
 fields prove startup decisions, not persistent-image durability. Actual

@@ -26,11 +26,14 @@ and before/after documentation are not required.
 
 ## Next action
 
-Finish the MCP session preparation workflow (matching baseline login and editing),
-then resolve the current live RPC timing failure and finish moving declaration/layout
-and interruption cases. A dedicated online-change primitive and MCP wrapper now
-exist in sibling `twincat-mcp`; the running MCP server still needs the updated build
-and a reload before advertising the new tool. Compatible
+Next, qualify a real execution gap with compatible-edit preservation enabled and
+a Home/Start request at the interruption boundary: old intent must be consumed,
+outputs inhibited, and explicit recovery plus a fresh command required. Then
+exercise two cyclic tasks attempting to own one device instance. Moving declaration/layout recovery and
+the actual MCP matching-login/edit/Online Change workflow now pass on the bench.
+The MCP source tools exist
+in sibling `twincat-mcp`; the installed server needs the updated build on its next
+launch before advertising those tools. Compatible
 implementation edits during healthy motion and the controlled missing/backup/
 malformed-image recovery cases now have bench evidence. Keep real execution-gap
 and IO-loss protection. Physical power cuts, physical IO, fresh-PC qualification
@@ -55,7 +58,7 @@ acceptance remains unproven, not completed.
   Source implementation now includes `twincat_online_change`, explicit target/port,
   sole logged-in PLC context, expected counter and runtime counter/cycle checks.
   Host errors are never replayed through CLI fallback. Matching-session preparation
-  and end-to-end validation through a reloaded MCP server remain open. Preserve separate
+  and end-to-end validation through an updated MCP server now pass. Preserve separate
   online-change and activation operations and explicit boot-project update behavior.
 - **High — Q4 recovery:** exercise invalid/missing/backup persistent images and
   deterministic recovery. SSH permits an orderly Windows reboot; this does not
@@ -88,6 +91,58 @@ Engineering references:
 
 ### Latest verification batch
 
+2026-09-11 simulator transport and engineering-session batch:
+
+- [x] Retain validated ADS RPC method handles for each transport connection.
+  Snapshot calls measured roughly 29–36 ms on the bench, versus the earlier
+  90–110 ms high-level RPC calls. Every cyclic request uses one read/write round
+  trip. Signature/identity checks remain mandatory and failed commands are never
+  replayed. `scripts/benchmark_simulation_rpc.py` reproduces read-only timing.
+- [x] Separate read-only transport initialization from cyclic IO deadlines;
+  retain the 200 ms scheduling and 150 ms frame-confirmation budgets. Cache the
+  qualification counter's read handle, too; only this read-only handle may be
+  reacquired after a symbol-version change.
+- [x] Declaration qualification cycles the machine during compilation and judges
+  motion from the last pre-change observation. Normal inhibited Ready between
+  cycles is allowed; faults, lost IO and inhibition during motion still fail.
+  Tooling tests: 79 pass. Simulation tests: 18 pass.
+- [x] Implement matching-login, source read and hash-checked source edit tools in
+  sibling `twincat-mcp`; isolated C# build and 17 MCP tests pass. Login cancels
+  change/download prompts, edits require the existing logged-in host, and neither
+  mutation is replayed through a fallback process.
+- [x] Moving declaration/layout change and explicit recovery pass on ADS 854:
+  counter 0 → 1, healthy advance immediately before the change, both coils off and
+  old session invalidated afterward; stale claim/exchange return 34. Reset/Home
+  and a new complete cycle pass, as do retained-history assertions. Source and
+  baseline restored with no cleanup errors. Evidence:
+  `artifacts/declaration-moving-two-second-stroke/`. The trace has 107 confirmed
+  frames, maximum measured feed interval 157.3 ms. This is one bench configuration,
+  not a general latency or production-load guarantee.
+- [x] Actual MCP client completed matching login, source read, stale-hash rejection,
+  source edit, object check and verified Online Change in the same owned host.
+  Explicit baseline configuration/platform are selected and verified. Wrong ADS
+  port was rejected before login. Source restored and owned host/DTE closed.
+  Evidence: `artifacts/mcp-session-live.json` and `artifacts/mcp-session-live-v3.log`.
+  Object checking succeeded with one XAE warning about the ignored generated
+  `Simulation.tmc` file version; this was not a zero-warning check. The dedicated
+  qualification fixture retires ignored generated TMC files before opening XAE.
+  Delivered command failures now retain their structured receipts instead of
+  being misreported as host failure or replayed through CLI.
+- [x] Five synthetic UI cases verify cancellation of owned download/change/
+  overwrite dialogs and noninterference with other PIDs/unrelated dialogs.
+  Existing pending MCP launch/version fixes also pass 20 focused checks and are
+  included with the workflow's required build/ADS prerequisites.
+- [x] Restored Example on ADS 851. Consecutive authenticated OPC UA readiness
+  checks report device error 0. ForceSafe completed on owner task 1, duplicate
+  request rejected (35), output off. Evidence:
+  `artifacts/session-workflow-final-ready.json` and
+  `artifacts/session-workflow-final-opcua.json`. Source checks and strict docs
+  build pass; no new full TcUnit run is claimed for these transport/tooling edits.
+  MCP implementation and its prerequisites are committed as `77c9aea`.
+- Earlier moving-test attempts found
+  startup timeout, a Ready-state harness assertion and an idle application boundary;
+  those incomplete runs are not counted as moving qualification.
+
 2026-09-11 MCP online-change batch:
 
 - [x] Added the C# online-change primitive, persistent-host-only MCP wrapper,
@@ -112,16 +167,12 @@ Engineering references:
   `artifacts/mcp-online-final-opcua.json`. All 77 TcForge tooling tests, source
   checks and strict documentation build pass. No PLC source change or new full
   TcUnit qualification is claimed by this batch.
-- [ ] Moving declaration/layout qualification is currently blocked by live RPC
-  timing: two runs failed before online-change dispatch, first on initial scheduling
-  and then on frame confirmation. Both restored baseline/source and inhibited
-  outputs. Evidence: `artifacts/mcp-declaration-moving/` and
-  `artifacts/mcp-declaration-moving-warm/`. Read-only RPC snapshots measured roughly
-  90–110 ms while ping measured 2–5 ms. Metadata caching did not improve it and was
-  reverted; watchdog and scheduling limits remain unchanged.
-- [ ] Reload the MCP server with the new build and validate the complete MCP
-  workflow. The primitive requires an already matching, logged-in session;
-  automated baseline login/edit preparation is not implemented yet.
+- [x] Moving declaration/layout timing follow-up completed in the newer batch
+  above. Retained RPC method handles resolved the extra ADS round trips; moving
+  recovery now has a full passing scenario with unchanged cyclic watchdog limits.
+- [x] Complete MCP-client workflow validated using an isolated updated server/build
+  in the newer batch above. An existing installed server advertises its loaded
+  tool set until its next launch; this does not alter a running engineering session.
 
 2026-09-10 controlled recovery batch:
 
@@ -190,8 +241,8 @@ Engineering references:
   `scripts/online_change_commands.ps1`; dispatch is explicitly not runtime success,
   and unavailable/logged-out sessions cannot fall back to activation or download.
   66 tooling tests pass, including these command and TMC preflight checks.
-- [ ] Full MCP workflow and moving layout-change qualification remain open;
-  see the newer batch above for the implemented command and current timing failure.
+- [x] Full MCP workflow and moving layout-change qualification pass in the newer batch;
+  see that batch for the completed timing fix and retained runtime evidence.
 - [ ] Restart robustness follow-up: the earlier Secure ADS TLS failure required
   a pinned route refresh. The current batch recovered without one, including an
   orderly Windows reboot. Repeated reboot endurance and the cause of that earlier
@@ -542,10 +593,8 @@ available locally, and current runtime qualification uses the dedicated RT bench
   the same session and a completed cycle (`artifacts/online-compatible-moving/`).
   Declaration-changing online change while idle also passes, including retained
   state and explicit recovery (`artifacts/q4-online-declaration-idle-retry/`).
-  Its first attempt failed engineering login before editing; the fresh session
-  succeeded. The isolated motion repeat also exceeded the host feed budget, so
-  concurrent desktop work is not established as the cause. Removing a redundant
-  snapshot request improves the feed interval but has not qualified motion.
+  Moving declaration/layout recovery now also passes with cached method handles
+  and repeated two-second strokes (`artifacts/declaration-moving-two-second-stroke/`).
   Each run restores exact POU source
   and reactivates the baseline application.
   XAE cold reset during motion now passes with verified login,

@@ -18,7 +18,9 @@ class RpcTransport:
         self.lines: queue.Queue = queue.Queue()
         threading.Thread(target=self._read, daemon=True).start()
         try:
-            if not self._response().get('ready'):
+            # Initial identity/signature discovery is read-only and occurs before
+            # claiming an IO session. It is not a cyclic feed deadline.
+            if not self._response(timeout=30).get('ready'):
                 raise RuntimeError('Simulation transport did not identify the application')
         except Exception:
             self.close()
@@ -29,9 +31,9 @@ class RpcTransport:
             self.lines.put(line)
         self.lines.put(None)
 
-    def _response(self):
+    def _response(self, timeout=5):
         try:
-            line = self.lines.get(timeout=5)
+            line = self.lines.get(timeout=timeout)
         except queue.Empty:
             self.close()
             raise TimeoutError('Uncertain RPC outcome; session must be reconciled') from None
