@@ -208,6 +208,42 @@ engineering lock is still held. Re-exporting old results cannot create a bound r
 
 ## Restart and persistence acceptance matrix
 
+### Execution-boundary and cyclic-ownership fixture
+
+The standalone Simulation project includes two unmapped reference machines and
+an isolated digital output for architecture qualification. On a dedicated bench,
+first run `scripts/activate_simulation.ps1` with the explicit target/platform,
+then run:
+
+```powershell
+artifacts/sim-venv/Scripts/python.exe scripts/verify_architecture_boundaries.py --target <AMS-Net-ID> --output artifacts/architecture-boundaries
+```
+
+The output directory must be new. The runner verifies that the second program
+is cyclic, starts simulated movement, stops only PLC application 854 through ADS,
+writes Home/Start while execution is stopped, then resumes it. Both machines use
+`recoverOnOnlineChange := FALSE`; actual execution gaps must still inhibit motion.
+The PLC captures command responses and both coil bits on the first resumed scan.
+The runner checks held commands, explicit recovery and completion of a fresh cycle.
+This fixture has no IO watchdog and uses real system-task counters. It does not
+apply an online edit or measure electrical outputs while PLC execution is stopped.
+
+The ownership case first executes an operator command in the owner task. It then
+queues a second command and yields the instance to a different cyclic task for
+one call. The owner resumes after that call, checks cancellation of the queued
+command and rejection of a new command, and verifies the latched ownership fault.
+The handoff serializes these deliberately invalid calls; passing does not make
+arbitrary concurrent FB calls or direct program methods safe. Each device still
+requires exactly one cyclic owner. See Beckhoff's
+[PLC task linking interface](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242921611.html).
+
+JSON and JUnit record the observed results, and cleanup returns the application
+to RUN with the fixture outputs off. This ownership case is one-shot: reactivate
+a fresh fixture before repeating it. Restore the normal application separately
+after qualification.
+
+### Acceptance cases
+
 Use an isolated test project with no physical IO. Call each block once per scan.
 For each case, record before/after command, applied output, fault and history.
 Capture the first resumed scan as well as settled status. Distinguish a PLC

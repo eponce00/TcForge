@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="FB_ArchitectureFixture" Id="{c3c6ce94-0068-431d-a0f6-1a15b9ff2011}"><Declaration><![CDATA[// Dedicated unmapped bench fixture. Commands/sensors are driven only by the qualification runner.
+FUNCTION_BLOCK FB_ArchitectureFixture
+VAR_INPUT
+    enabled : BOOL;
+    homeCommand, startCommand : E_ReferenceCommand;
+    advanced : BOOL;
+    retracted : BOOL := TRUE;
+END_VAR
+VAR_OUTPUT
+    homeMachine, startMachine : FB_ReferenceMachine;
+    cycles : ULINT;
+    owner : DINT;
+    gapCount, gapCycleDelta : UDINT;
+    gapHomeResponse, gapStartResponse : TcForge.E_RpcMethodResponse;
+    gapHomeAdvance, gapHomeRetract, gapStartAdvance, gapStartRetract : BOOL;
+    gapHomeInhibited, gapStartInhibited : BOOL;
+END_VAR
+VAR known, gap : BOOL; current, previous, expected : UDINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[IF NOT enabled THEN RETURN; END_IF;
+owner := Tc2_System.GETCURTASKINDEXEX();
+IF owner <= 0 THEN RETURN; END_IF;
+current := TwinCAT_SystemInfoVarList._TaskInfo[owner].CycleCount;
+IF previous = UDINT#16#FFFFFFFF THEN expected := 0; ELSE expected := previous + 1; END_IF;
+gap := known AND current <> previous AND current <> expected;
+// No synthetic counter injection and no IO watchdog: this isolates real execution-gap protection.
+homeMachine(command := homeCommand, recoverOnOnlineChange := FALSE,
+    inAdvanced := advanced, inRetracted := retracted,
+    inputQuality := TcForge.E_IO_Quality.GOOD, outputQuality := TcForge.E_IO_Quality.GOOD,
+    shutdownConfirmed := TRUE, shutdownQuality := TcForge.E_IO_Quality.GOOD);
+startMachine(command := startCommand, recoverOnOnlineChange := FALSE,
+    inAdvanced := advanced, inRetracted := retracted,
+    inputQuality := TcForge.E_IO_Quality.GOOD, outputQuality := TcForge.E_IO_Quality.GOOD,
+    shutdownConfirmed := TRUE, shutdownQuality := TcForge.E_IO_Quality.GOOD);
+IF gap THEN
+    gapCount := gapCount + 1; gapCycleDelta := current - previous;
+    gapHomeResponse := homeMachine.lastResponse; gapStartResponse := startMachine.lastResponse;
+    gapHomeAdvance := homeMachine.outAdvance; gapHomeRetract := homeMachine.outRetract;
+    gapStartAdvance := startMachine.outAdvance; gapStartRetract := startMachine.outRetract;
+    gapHomeInhibited := homeMachine.outputsInhibited; gapStartInhibited := startMachine.outputsInhibited;
+END_IF;
+known := TRUE; previous := current; cycles := cycles + 1;]]></ST></Implementation></POU></TcPlcObject>

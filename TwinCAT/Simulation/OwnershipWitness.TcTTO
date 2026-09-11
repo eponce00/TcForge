@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><Task Name="OwnershipWitness" Id="{38c8f0bc-e9df-4f5c-abed-a32898a3c530}">
+<CycleTime>10000</CycleTime><Priority>3</Priority><PouCall><Name>PRG_OwnershipWitness</Name></PouCall>
+<TaskFBGuid>{aa9c0c82-8a6f-477a-a09d-1901cab81514}</TaskFBGuid>
+<Fb_init>{a0060da7-2f44-4851-b064-e9cdb20b38d1}</Fb_init><Fb_exit>{3b711f9d-08d8-47d1-999d-37f83f5be237}</Fb_exit>
+<CycleUpdate>{c78aaab6-b73b-4b0a-a035-e2c88c5bd085}</CycleUpdate><PostCycleUpdate>{eaf157ea-4667-43cd-9c28-57645d61a88c}</PostCycleUpdate>
+</Task></TcPlcObject>

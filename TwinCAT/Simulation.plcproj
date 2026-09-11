@@ -18,6 +18,9 @@
     <LibraryReferences>{9cb5cafc-4542-48ec-b41d-7d591c6bb7eb}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Simulation\FB_ArchitectureFixture.TcPOU"><SubType>Code</SubType></Compile>
+    <Compile Include="Simulation\PRG_OwnershipWitness.TcPOU"><SubType>Code</SubType></Compile>
+    <Compile Include="Simulation\OwnershipWitness.TcTTO"><SubType>Code</SubType></Compile>
     <Compile Include="Simulation\FB_LifecycleFixture.TcPOU">
       <SubType>Code</SubType>
     </Compile>

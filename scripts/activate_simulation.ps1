@@ -25,6 +25,9 @@ Add-Type -ReferencedAssemblies @(
     (Join-Path $bin 'Interop.TCatSysManagerLib.dll')
 ) -TypeDefinition @'
 public static class TcForgeBuild {
+    public static void BindWitness(object item) {
+        ((TCatSysManagerLib.ITcPlcTaskReference)item).LinkedTask = "TIRT^OwnershipWitness";
+    }
     public static void EnableBoot(object plc) {
         ((TCatSysManagerLib.ITcPlcProject)plc).BootProjectAutostart = true;
     }
@@ -63,11 +66,13 @@ try {
     [TcForgeBuild]::SelectTarget($vs.Dte, $Platform)
     $sm = $vs.GetSystemManager()
     $sm.SetTargetNetId($Target)
+    [TcForgeBuild]::BindWitness($sm.LookupTreeItem('TIPC^Simulation^Simulation Project^Simulation^OwnershipWitness'))
     $build = [TcAutomation.Commands.BuildCommand]::ExecuteInSession($vs, $true)
     $build | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 (Join-Path $artifacts 'simulation-activation-build.json')
     if (-not $build.Success) { throw $build.Summary }
     $task = $sm.LookupTreeItem('TIRT^Simulation')
     $task.ConsumeXml('<TreeItem><TaskDef><Disabled>false</Disabled><AutoStart>true</AutoStart></TaskDef></TreeItem>')
+    $sm.LookupTreeItem('TIRT^OwnershipWitness').ConsumeXml('<TreeItem><TaskDef><Disabled>false</Disabled><AutoStart>true</AutoStart></TaskDef></TreeItem>')
     [TcForgeBuild]::EnableBoot($sm.LookupTreeItem('TIPC^Simulation'))
     $automation = [TcAutomation.Core.AutomationInterface]::new($vs)
     $automation.SetDontCheckTarget($Target)

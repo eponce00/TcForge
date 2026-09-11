@@ -26,18 +26,19 @@ and before/after documentation are not required.
 
 ## Next action
 
-Next, qualify a real execution gap with compatible-edit preservation enabled and
-a Home/Start request at the interruption boundary: old intent must be consumed,
-outputs inhibited, and explicit recovery plus a fresh command required. Then
-exercise two cyclic tasks attempting to own one device instance. Moving declaration/layout recovery and
-the actual MCP matching-login/edit/Online Change workflow now pass on the bench.
-The MCP source tools exist
-in sibling `twincat-mcp`; the installed server needs the updated build on its next
-launch before advertising those tools. Compatible
-implementation edits during healthy motion and the controlled missing/backup/
-malformed-image recovery cases now have bench evidence. Keep real execution-gap
-and IO-loss protection. Physical power cuts, physical IO, fresh-PC qualification
-and distribution work remain deferred; SPT adaptations follow at medium priority.
+Next, perform the medium-priority SPT candidate implementation audit: compare
+its Components/Utilities and Event Logger blocks with our existing discrete-assembly
+contracts, select a concrete missing capability, and adapt it with tests and
+provenance. Start by assessing an optional Event Logger adapter for existing
+faults; keep vendor logging dependencies outside the core control path. Do not
+add a PackML hierarchy without a machine-coordination use case.
+
+The immediate high-priority bench cases now pass: matching-session Online Change,
+healthy-motion preservation, moving declaration recovery, controlled persistent-image
+recovery, a real execution gap with preservation enabled and Home/Start pending,
+and serialized ownership misuse by two real cyclic tasks. Keep execution-gap and
+IO-loss protection. Physical power cuts, physical IO, fresh-PC qualification,
+commissioned permissions and distribution work remain deferred and unqualified.
 
 ### Current priorities (user scope, 2026-09-10)
 
@@ -65,7 +66,8 @@ acceptance remains unproven, not completed.
   reproduce abrupt removal of electrical power. Retain that distinction in reports.
 - **Supporting robustness — Q5:** conflicting ownership means two cyclic tasks
   inside one PLC calling the same FB instance, not two PLCs commanding one device.
-  Keep the single-owner contract; defer the dedicated misuse fixture behind Q4.
+  The dedicated serialized misuse fixture now passes on the bench; keep the
+  single-owner contract. Arbitrary concurrent FB calls remain unsupported.
   Deployment-specific operator accounts/permissions are later commissioning work.
 - **Medium — R1/A7/A8:** after the high-priority lifecycle/tooling work, evaluate
   and adapt useful SPT utilities, device patterns and documentation integration
@@ -90,6 +92,31 @@ Engineering references:
 [Login choices](https://infosys.beckhoff.com/content/1033/tc3_plc_intro/2531393419.html).
 
 ### Latest verification batch
+
+2026-09-11 execution-boundary and ownership batch:
+
+- [x] Real ADS STOP/RUN with both reference machines advancing and compatible-edit
+  preservation enabled. System-task counter delta 26; PLC fixture cycles stayed
+  frozen at 87 while stopped. First resumed scan rejected pending Home and Start
+  with response 51, both coils off and outputs inhibited. Held requests stayed
+  rejected; explicit recovery and fresh commands completed a full cycle.
+  This isolated fixture has no IO watchdog and performs no online edit.
+- [x] Two actual cyclic tasks (owner 1, witness 2): initial owner command executed,
+  queued command cancelled (2), subsequent command rejected as wrong-task (13),
+  conflict latched and output off. The deliberate handoff serializes calls;
+  this does not qualify concurrent FB access or direct cross-task program methods.
+- [x] Repeatable runner with fresh JSON/JUnit output, second-task liveness preflight,
+  cleanup and negative evidence tests. Simulation compiled with zero errors/warnings;
+  135 source XML files, 31 suites and 380 ST declarations checked. All 85 tooling
+  tests and 18 simulator tests pass. No new TcUnit runtime run is claimed for this
+  fixture-only batch. Evidence: `artifacts/architecture-boundaries-10ms-final/`.
+  Earlier failed fixture setup attempts are retained separately and not counted as passes.
+- [x] Restored Example on ADS 851. Authenticated OPC UA readiness passed after
+  69 seconds; initial server-start timeouts remain in the report. ForceSafe
+  completed in the owner task, duplicate rejection passed, and both reference
+  coils are off/inhibited. Evidence: `artifacts/architecture-final-ready.json`,
+  `artifacts/architecture-final-opcua.json`, `artifacts/architecture-final-output-state.json`.
+  Strict documentation build passes.
 
 2026-09-11 simulator transport and engineering-session batch:
 
@@ -584,7 +611,7 @@ available locally, and current runtime qualification uses the dedicated RT bench
   before same-source reload; persistent markers, intent, alarms and history initialize.
   Evidence: `artifacts/q4-reset-origin/`. Controlled missing, backup-only and
   malformed-image cases now have evidence in the latest recovery batch above.
-  Physical power loss and remaining online-change cases remain open. Implementation-only online change
+  Physical power loss remains open. Implementation-only online change
   while idle now passes via the actual Online Change command: counter increment,
   retained lifecycle state, epoch/session invalidation, stale-request rejection
   and explicit recovery. Evidence: `artifacts/q4-online-direct-idle/`.
@@ -595,6 +622,9 @@ available locally, and current runtime qualification uses the dedicated RT bench
   state and explicit recovery (`artifacts/q4-online-declaration-idle-retry/`).
   Moving declaration/layout recovery now also passes with cached method handles
   and repeated two-second strokes (`artifacts/declaration-moving-two-second-stroke/`).
+  A real execution gap with preservation enabled and pending Home/Start now passes,
+  including first-resumed-scan rejection, held-command rejection and explicit
+  recovery (`artifacts/architecture-boundaries-10ms-final/`).
   Each run restores exact POU source
   and reactivates the baseline application.
   XAE cold reset during motion now passes with verified login,
@@ -648,8 +678,10 @@ available locally, and current runtime qualification uses the dedicated RT bench
   enforcement pass at 10 ms and 1 ms. Observer read/method denial passes through
   the runner at 1 ms; temporary OS account removal is recorded in
   `artifacts/q5-readonly-role-batch-cleanup.json`. Example's 12 inhibition cases
-  also pass through the runner. Remaining Q5: commissioned operator-role/node
-  permissions and actual conflicting-task scenarios. An initial test attempt
+  also pass through the runner. A separate real two-task ownership fixture passes
+  serialized misuse, cancellation and subsequent rejection on ADS 854
+  (`artifacts/architecture-boundaries-10ms-final/`). Remaining Q5: commissioned
+  operator-role/node permissions. An initial test attempt
   timed out during OPC UA server restart; the ready-server repeat passed. No
   failed attempt is counted as successful acceptance.
 - [ ] **Q6 — Hardware and task-load acceptance.** Validate the integrated example
@@ -755,7 +787,7 @@ The standalone simulator allocates 10 MiB (about 0.5 MiB used), so TcUnit storag
 is not a production application memory estimate. Review target memory and task
 load during Q6.
 
-All 18 Python simulation tests and 60 script/evidence-gate tests pass. Recompute counts
+All 18 Python simulation tests and 85 script/evidence-gate tests pass. Recompute counts
 after changing tests; they are not a fixed acceptance target. Run from repo root:
 
 ```powershell
@@ -764,6 +796,7 @@ python -m unittest discover -s scripts/tests -v
 git diff --check
 ```
 
-Q2/Q4/Q5/Q6/Q7 remain open. Passing functional tests does not qualify physical IO,
-power-loss persistence, online changes, OPC UA authorization or worst-case load.
+Q2/Q4/Q5/Q6/Q7 remain open for the deferred acceptance described above. Passing
+bench cases does not qualify physical IO, abrupt-power-loss persistence,
+machine-specific OPC UA permissions or worst-case load.
 Keep qualification metadata at `pending-validation` until the release gate closes.

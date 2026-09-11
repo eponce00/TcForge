@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1"><POU Name="PRG_OwnershipWitness" Id="{7d8a4c3b-e306-4df9-b91d-f8aef83a5c71}"><Declaration><![CDATA[PROGRAM PRG_OwnershipWitness
+VAR taskIndex : DINT; cycles : ULINT; END_VAR]]></Declaration><Implementation><ST><![CDATA[taskIndex := Tc2_System.GETCURTASKINDEXEX(); cycles := cycles + 1;
+// The owner deliberately yields this instance until this one conflicting call is complete.
+// This proves deterministic ownership detection, not arbitrary cross-task memory safety.
+IF MAIN.ownershipHandoff AND NOT MAIN.ownershipWitnessDone THEN
+    MAIN.sharedOutput();
+    MAIN.ownershipWitnessTask := taskIndex;
+    MAIN.ownershipWitnessDone := TRUE;
+END_IF;]]></ST></Implementation></POU></TcPlcObject>

@@ -3,6 +3,9 @@
 	<Project ProjectGUID="{91C2A04D-0347-4229-904F-98475490B26B}" Target64Bit="true" ShowHideConfigurations="#x6">
 		<System>
 			<Tasks>
+				<Task Id="3" Priority="3" CycleTime="100000" AmsPort="352" AdtTasks="true" AutoStart="true">
+					<Name>OwnershipWitness</Name>
+				</Task>
 				<Task Id="2" Priority="2" CycleTime="100000" AmsPort="351" AdtTasks="true" AutoStart="false">
 					<Name>Simulation</Name>
 				</Task>
@@ -23,10 +26,20 @@
 							<Priority>2</Priority>
 							<CycleTime>10000000</CycleTime>
 						</Context>
+						<Context>
+							<Id>1</Id>
+							<Name>OwnershipWitness</Name>
+							<ManualConfig>
+								<OTCID>#x02010030</OTCID>
+							</ManualConfig>
+							<Priority>3</Priority>
+							<CycleTime>10000000</CycleTime>
+						</Context>
 					</Contexts>
 					<JsonDynPous><![CDATA[null]]></JsonDynPous>
 					<TaskPouOids>
 						<TaskPouOid Prio="2" OTCID="#x085020c1"/>
+						<TaskPouOid Prio="3" OTCID="#x085020c2"/>
 					</TaskPouOids>
 				</Instance>
 			</Project>

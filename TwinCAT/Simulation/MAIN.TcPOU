@@ -1,3 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?><TcPlcObject Version="1.1.0.1"><POU Name="MAIN" Id="{36635085-d5ca-41a8-8359-e4425be93533}"><Declaration><![CDATA[PROGRAM MAIN
-VAR simulation : FB_SimulationBridge; lifecycle : FB_LifecycleFixture; END_VAR]]></Declaration><Implementation><ST><![CDATA[simulation();
-lifecycle();]]></ST></Implementation></POU></TcPlcObject>
+VAR_INPUT
+    ownershipWitnessDone : BOOL;
+    ownershipWitnessTask : DINT;
+END_VAR
+VAR
+    simulation : FB_SimulationBridge; lifecycle : FB_LifecycleFixture;
+    architecture : FB_ArchitectureFixture;
+    sharedOutput : TcForge.FB_DigitalOutput;
+    ownershipKick, ownershipHandoff : BOOL;
+    ownershipPhase : UINT;
+    ownershipOwnerTask : DINT;
+    ownershipInitialAdmission, ownershipInitialResult, ownershipQueued,
+        ownershipCancelled, ownershipRejected : TcForge.E_RpcMethodResponse;
+    ownershipInitiallyOn, ownershipFinalOutput : BOOL;
+END_VAR]]></Declaration><Implementation><ST><![CDATA[simulation();
+lifecycle();
+architecture();
+IF NOT ownershipHandoff OR ownershipWitnessDone THEN sharedOutput(); END_IF;
+CASE ownershipPhase OF
+0:
+    IF ownershipKick THEN
+        ownershipOwnerTask := Tc2_System.GETCURTASKINDEXEX();
+        ownershipInitialAdmission := sharedOutput.OperatorSetOn(requestId := 101);
+        ownershipPhase := 1;
+    END_IF;
+1:
+    ownershipInitialResult := sharedOutput.OperatorCommandResult(requestId := 101);
+    IF ownershipInitialResult = TcForge.E_RpcMethodResponse.ACCEPTED AND sharedOutput.outSignal THEN
+        ownershipInitiallyOn := TRUE; sharedOutput.ForceSafe(); ownershipPhase := 2;
+    END_IF;
+2:
+    IF NOT sharedOutput.outSignal THEN
+        ownershipQueued := sharedOutput.OperatorSetOn(requestId := 102);
+        ownershipHandoff := TRUE; ownershipPhase := 3;
+    END_IF;
+3:
+    IF ownershipWitnessDone THEN
+        ownershipCancelled := sharedOutput.OperatorCommandResult(requestId := 102);
+        ownershipRejected := sharedOutput.OperatorSetOn(requestId := 103);
+        ownershipFinalOutput := sharedOutput.outSignal; ownershipPhase := 4;
+    END_IF;
+END_CASE;]]></ST></Implementation></POU></TcPlcObject>
