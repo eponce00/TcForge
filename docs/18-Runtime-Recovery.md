@@ -53,7 +53,7 @@ On an authorized dedicated target:
 
 ```powershell
 powershell.exe -NoProfile -File scripts/restart_runtime.ps1 `
-  -Target 172.18.236.100.1.1 -Solution TwinCAT/TcForge.sln `
+  -Target 172.18.236.100.1.1 -Solution TwinCAT/TcForge.Example.sln `
   -Output artifacts/restart-dispatch.json
 ```
 

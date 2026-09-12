@@ -1,9 +1,10 @@
 # Rebuilds and runs TcUnit on a dedicated target using an explicit platform.
 # This replaces the target's active TwinCAT configuration. Use a dedicated test runtime.
-param([Parameter(Mandatory=$true)][string]$Target, [Parameter(Mandatory=$true)][ValidateSet("TwinCAT OS (x64)", "TwinCAT RT (x64)")][string]$Platform, [ValidateSet(1,10)][int]$CycleTimeMs = 10, [string]$McpRoot, [string]$BuildEvidence, [string]$RunDirectory, [string]$InstalledLibrary)
+param([Parameter(Mandatory=$true)][string]$Target, [Parameter(Mandatory=$true)][ValidateSet("TwinCAT OS (x64)", "TwinCAT RT (x64)")][string]$Platform, [ValidateSet(1,10)][int]$CycleTimeMs = 10, [string]$McpRoot, [string]$BuildEvidence, [string]$RunDirectory, [string]$InstalledLibrary, [switch]$Development)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'initialize_twincat_environment.ps1')
 . (Join-Path $PSScriptRoot 'prepare_generated_tmc.ps1')
+. (Join-Path $PSScriptRoot 'installed_reference_profile.ps1')
 if (-not $McpRoot) { $McpRoot = Join-Path $PSScriptRoot '../../twincat-mcp' }
 if ($PSVersionTable.PSEdition -ne 'Desktop') {
     throw 'Use powershell.exe (Windows PowerShell 5.1) for the .NET Framework COM helper.'
@@ -22,16 +23,18 @@ $runReport = Join-Path $RunDirectory 'tcunit.xml'
 $runBuild = Join-Path $RunDirectory 'activation-build.json'
 $lock = Get-Content (Join-Path $repo 'toolchain.json') -Raw | ConvertFrom-Json
 if ($Platform -ne $lock.platform) { throw 'Evidence workflow requires the qualified toolchain platform.' }
-if (-not $InstalledLibrary) {
+if (-not $Development -and -not $InstalledLibrary) {
     [xml]$libraryProject = Get-Content (Join-Path $repo 'TwinCAT/TcForge/TcForge.plcproj') -Raw
     $publisher = [string]($libraryProject.Project.PropertyGroup.Company | Where-Object { $_ } | Select-Object -First 1)
     $InstalledLibrary = Join-Path $env:ProgramData ('Beckhoff/TwinCAT/PlcEngineering/Managed Libraries/' + $publisher + '/TcForge/' + $lock.libraryVersion + '/TcForge.library')
 }
 
+if (-not $Development) {
 $declaredBuild = Get-Content -LiteralPath $BuildEvidence -Raw | ConvertFrom-Json
 $declaredHelperRoot = (Resolve-Path -LiteralPath ([string]$declaredBuild.helper.root)).Path
 $selectedHelperRoot = (Resolve-Path -LiteralPath $McpRoot).Path
 if ($selectedHelperRoot -ne $declaredHelperRoot) { throw 'Selected MCP helper root differs from build provenance.' }
+}
 
 [Reflection.Assembly]::LoadFrom((Join-Path $bin 'TcAutomation.exe')) | Out-Null
 Add-Type -ReferencedAssemblies @(
@@ -76,9 +79,17 @@ $originalSystemProject = [IO.File]::ReadAllText($systemProjectPath)
 $originalSystemTask = [regex]::Match($originalSystemProject, '<Task\b[^>]*AmsPort="351"[^>]*>').Value
 $utf8 = [Text.UTF8Encoding]::new($false)
 $completed = $false
+$referenceProfiles = @{}
+foreach ($relative in @('Testing.plcproj','Simulation.plcproj','TcForgeExample/TcForgeExample.plcproj','TcForgeReference.plcproj')) {
+    $path = Join-Path $repo ('TwinCAT/' + $relative)
+    $referenceProfiles[$path] = [IO.File]::ReadAllBytes($path)
+}
 try {
+    if (-not $Development) {
     & python (Join-Path $PSScriptRoot 'build_evidence.py') begin-test --build $BuildEvidence --library (Join-Path $artifacts 'TcForge.library') --installed-library $InstalledLibrary --cycle-ms $CycleTimeMs --target $Target --output $runToken
     if ($LASTEXITCODE -ne 0) { throw 'Test build provenance validation failed before activation.' }
+    Set-TcForgeInstalledReferences -TwinCATRoot (Join-Path $repo 'TwinCAT')
+    }
     if (-not $originalSystemTask) { throw 'Testing system task definition is missing' }
     # PLC task periods use microseconds; system task periods use 100 ns units.
     # Both definitions must agree before the compiler resolves the task binding.
@@ -104,6 +115,14 @@ try {
     $build | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 $runBuild
     if (-not $build.Success -or $build.WarningCount -ne 0) { throw ($build.Summary + ' ' + $build.BuildOutput) }
     $sm = $vs.GetSystemManager()
+    if ($Development) {
+        $xml = $sm.LookupTreeItem('TIPC^Testing^Testing Project').ProduceXml($false)
+        [IO.File]::WriteAllText((Join-Path $RunDirectory 'source-reference.xml'), $xml)
+        [xml]$resolved = $xml
+        $reference = @($resolved.SelectNodes("//IECProjectDef/References/PlaceholderReference[PlaceholderName='TcForge']"))
+        if ($reference.Count -ne 1 -or [string]$reference[0].EffectiveResolution.LibraryName -ne '[TcForge]') { throw 'Development tests require the TcForge source project.' }
+        @{ scope='Development source-reference run; not installed-artifact release evidence'; target=$Target; cycleTimeMs=$CycleTimeMs } | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $RunDirectory 'development.json')
+    }
     $sm.LookupTreeItem('TIRT^Testing').ConsumeXml('<TreeItem><TaskDef><Disabled>false</Disabled><AutoStart>true</AutoStart></TaskDef></TreeItem>')
     [TcForgeBuild]::EnableBoot($sm.LookupTreeItem('TIPC^Testing'))
     $automation = [TcAutomation.Core.AutomationInterface]::new($vs)
@@ -116,7 +135,9 @@ try {
     # The exporter verifies every source test identity/result, not just totals.
     $deadline = [DateTime]::UtcNow.AddMinutes(2)
     do {
-        & python (Join-Path $PSScriptRoot 'export_tcunit_report.py') --target $Target --helper (Join-Path $bin 'TcAutomation.exe') --output $runReport --expected-cycle-ms $CycleTimeMs --provenance-token $runToken
+        $exportArgs = @('--target', $Target, '--helper', (Join-Path $bin 'TcAutomation.exe'), '--output', $runReport, '--expected-cycle-ms', $CycleTimeMs)
+        if (-not $Development) { $exportArgs += @('--provenance-token', $runToken) }
+        & python (Join-Path $PSScriptRoot 'export_tcunit_report.py') @exportArgs
         if ($LASTEXITCODE -eq 0) { break }
         if ([DateTime]::UtcNow -ge $deadline) { throw 'TcUnit individual result verification failed; see exporter diagnostics.' }
         Start-Sleep -Seconds 2
@@ -128,7 +149,8 @@ try {
         try {
             [IO.File]::WriteAllBytes($plcTaskPath, $originalPlcTaskBytes)
             [IO.File]::WriteAllBytes($systemProjectPath, $originalSystemProjectBytes)
-            if ($completed) {
+            foreach ($path in $referenceProfiles.Keys) { [IO.File]::WriteAllBytes($path, $referenceProfiles[$path]) }
+            if ($completed -and -not $Development) {
                 & python (Join-Path $PSScriptRoot 'build_evidence.py') finish-test --token $runToken --report $runReport --activation-build $runBuild
                 if ($LASTEXITCODE -ne 0) { throw 'Test evidence failed validation after restoring the source profile.' }
             }
@@ -139,4 +161,4 @@ try {
         }
     }
 }
-Write-Output ('Verified test evidence: ' + $runReport)
+Write-Output ('Verified TcUnit results (Development=' + $Development + '): ' + $runReport)

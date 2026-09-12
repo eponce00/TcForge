@@ -1,16 +1,20 @@
 # Run with Windows PowerShell 5.1: powershell.exe -NoProfile -File scripts/build_twincat.ps1
 # Exports the current library and builds consumers. Does not activate a runtime.
-param([string]$McpRoot)
+param([string]$McpRoot, [switch]$CaptureDependencies)
 $ErrorActionPreference = 'Stop'
 if (-not $McpRoot) { $McpRoot = Join-Path $PSScriptRoot '../../twincat-mcp' }
 . (Join-Path $PSScriptRoot 'initialize_twincat_environment.ps1')
 . (Join-Path $PSScriptRoot 'prepare_generated_tmc.ps1')
+. (Join-Path $PSScriptRoot 'installed_reference_profile.ps1')
 if ($PSVersionTable.PSEdition -ne 'Desktop') {
     throw 'Use powershell.exe (Windows PowerShell 5.1) for the .NET Framework COM helper.'
 }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release')).Path
 $artifacts = Join-Path $repo 'artifacts'
+if ($CaptureDependencies) {
+    $artifacts = Join-Path $artifacts ('dependency-candidate-' + [Guid]::NewGuid().ToString('N'))
+}
 New-Item -ItemType Directory -Force $artifacts | Out-Null
 [Reflection.Assembly]::LoadFrom((Join-Path $bin 'TcAutomation.exe')) | Out-Null
 Add-Type -ReferencedAssemblies @(
@@ -52,6 +56,10 @@ function Confirm-EffectiveDependencies($instance, [string]$solutionName, [string
     $references = $instance.GetSystemManager().LookupTreeItem("TIPC^$plcName^$plcName Project^References")
     $capture = Join-Path $artifacts ($solutionName + '-dependencies.xml')
     [IO.File]::WriteAllText($capture, [TcForgeBuild]::DependencyCapture($node, $references), [Text.UTF8Encoding]::new($false))
+    if ($CaptureDependencies) {
+        Write-Output "Dependency candidate capture only: $capture"
+        return
+    }
     & python (Join-Path $PSScriptRoot 'dependency_lock.py') check --lock (Join-Path $repo 'dependencies.lock.json') --project $solutionName --xml $capture
     if ($LASTEXITCODE -ne 0) { throw ($solutionName + ': effective dependency lock check failed') }
 }
@@ -70,8 +78,10 @@ try {
     foreach ($profile in Get-ChildItem (Join-Path $repo 'TwinCAT') -Recurse -File | Where-Object { $_.Extension -in @('.sln', '.tsproj', '.plcproj', '.TcTTO') }) {
         $profiles[$profile.FullName] = [IO.File]::ReadAllBytes($profile.FullName)
     }
-    & python (Join-Path $PSScriptRoot 'build_evidence.py') begin-build --helper-root (Resolve-Path $McpRoot).Path --output $buildToken
-    if ($LASTEXITCODE -ne 0) { throw 'Could not snapshot build source/toolchain identity' }
+    if (-not $CaptureDependencies) {
+        & python (Join-Path $PSScriptRoot 'build_evidence.py') begin-build --helper-root (Resolve-Path $McpRoot).Path --output $buildToken
+        if ($LASTEXITCODE -ne 0) { throw 'Could not snapshot build source/toolchain identity' }
+    }
     $vs.Load()
     $vs.LoadSolution()
     [TcForgeBuild]::SelectWindowsTarget($vs.Dte)
@@ -86,8 +96,10 @@ try {
     if (-not $export.Success) { throw $export.ErrorMessage }
     $refs = $vs.GetSystemManager().LookupTreeItem('TIPC^TcForge^TcForge Project^References')
     [TcForgeBuild]::Install($refs, $library)
+    Set-TcForgeInstalledReferences -TwinCATRoot (Join-Path $repo 'TwinCAT')
     foreach ($name in @('TcForge.Tests', 'TcForge', 'TcForge.Simulation')) {
-        $solution = Join-Path $repo ('TwinCAT/' + $name + '.sln')
+        $profileName = if ($name -eq 'TcForge') { 'TcForge.Example' } else { $name }
+        $solution = Join-Path $repo ('TwinCAT/' + $profileName + '.sln')
         $vs.Close()
         $vs = [TcAutomation.Core.VisualStudioInstance]::new($solution, $version, $null)
         $vs.Load()
@@ -112,7 +124,7 @@ try {
             # XAE can rewrite profile metadata. Restore exact offline bytes before
             # source-bound evidence is finalized; no activation occurs in this script.
             foreach ($profilePath in $profiles.Keys) { [IO.File]::WriteAllBytes($profilePath, $profiles[$profilePath]) }
-            if ($completed) {
+            if ($completed -and -not $CaptureDependencies) {
                 & python (Join-Path $PSScriptRoot 'build_evidence.py') finish-build --token $buildToken --library $library --dependencies (Join-Path $repo 'dependencies.lock.json') --output (Join-Path $artifacts 'build-evidence.json')
                 if ($LASTEXITCODE -ne 0) { throw 'Build completed but source/artifact evidence validation failed' }
             }

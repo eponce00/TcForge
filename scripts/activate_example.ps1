@@ -43,7 +43,7 @@ public static class TcForgeBuild {
 }
 '@
 
-$solution = Join-Path $repo 'TwinCAT/TcForge.sln'
+$solution = Join-Path $repo 'TwinCAT/TcForge.Example.sln'
 $version = (Get-Content (Join-Path $repo 'toolchain.json') -Raw | ConvertFrom-Json).xaeBaseline
 $mutex = [Threading.Mutex]::new($false, 'Local\TcForge.Xae')
 $acquired = $false

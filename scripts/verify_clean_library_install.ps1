@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not $McpRoot) { $McpRoot = Join-Path $PSScriptRoot '../../twincat-mcp' }
 . (Join-Path $PSScriptRoot 'initialize_twincat_environment.ps1')
+. (Join-Path $PSScriptRoot 'installed_reference_profile.ps1')
 if ($PSVersionTable.PSEdition -ne 'Desktop') { throw 'Use Windows PowerShell 5.1.' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $artifact = (Resolve-Path -LiteralPath $Library).Path
@@ -52,7 +53,8 @@ function Write-Record([string]$name, $value) {
 }
 function Open-Consumer([string]$name) {
     $script:activePlc = $projects[$name]
-    $script:vs = [TcAutomation.Core.VisualStudioInstance]::new((Join-Path $copyRoot ($name + '.sln')), $baseline.xaeBaseline, $null)
+    $profileName = if ($name -eq 'TcForge') { 'TcForge.Example' } else { $name }
+    $script:vs = [TcAutomation.Core.VisualStudioInstance]::new((Join-Path $copyRoot ($profileName + '.sln')), $baseline.xaeBaseline, $null)
     $script:vs.Load(); $script:vs.LoadSolution()
     [TcForgeCleanInstall]::SelectPlatform($script:vs.Dte)
     if ($script:vs.EffectiveTwinCATVersion -ne $baseline.xaeBaseline) { throw 'Unexpected engineering version.' }
@@ -111,6 +113,7 @@ try {
         New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
         Copy-Item -LiteralPath $file.FullName -Destination $target
     }
+    Set-TcForgeInstalledReferences -TwinCATRoot $copyRoot
     Open-Consumer 'TcForge.Simulation'
     $refs = Get-References 'Simulation'
     $originalRepositories = @([TcForgeCleanInstall]::Repositories($refs))

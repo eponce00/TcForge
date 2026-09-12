@@ -47,9 +47,12 @@ The docs below cover these in detail.
 
 ## Project layout
 
-- `TwinCAT/TcForge.Library.sln`: library development/export.
-- `TwinCAT/TcForge.sln`: example application.
+- `TwinCAT/TcForge.sln`: main development workspace: library source, Example, Testing and Simulation in one TwinCAT project.
+- `TwinCAT/TcForgeReference.plcproj`: source-only support library holding the shared reference machine and simulation bridge once; all consumers use this same implementation.
+- `TwinCAT/TcForge.Library.sln`: isolated library export.
+- `TwinCAT/TcForge.Example.sln`: isolated example runtime.
 - `TwinCAT/TcForge.Tests.sln`: isolated test application.
+- `TwinCAT/TcForge.Simulation.sln`: isolated simulation runtime.
 - `TwinCAT/TcForge/`: the reusable library.
 - `TwinCAT/TcForgeExample/`: the integrated clamp reference application; see [its operating contract](docs/11-Reference-Machine.md).
 - `TwinCAT/Testing.plcproj`: PLC test project, sharing the reference application source.
@@ -66,7 +69,31 @@ git clone https://github.com/eponce00/TcForge.git
 cd TcForge
 ```
 
-Start with [foundation qualification](docs/10-Qualification.md). Run `python scripts/check_repository.py` without TwinCAT. After installation, build/export the current TcForge library and use `TwinCAT/TcForge.Tests.sln` for isolated testing. `TwinCAT/TcForge.sln` contains the example application; the test solution runs only tests. Both require an explicit runtime target.
+Open **[TwinCAT/TcForge.sln](TwinCAT/TcForge.sln)** in XAE 3.1.4026.26. Under PLC,
+expand **TcForge → TcForge Project** to edit the reusable blocks. Example, Testing
+and Simulation reference `[TcForge]` directly. Library edits are available to
+their next build without exporting, installing or changing the version. The
+source-only `TcForgeReference` project shares application/fixture code without
+copying it or adding it to the reusable core library.
+
+```powershell
+python scripts/check_repository.py
+powershell.exe -NoProfile -File scripts/build_development.ps1
+powershell.exe -NoProfile -File scripts/run_tcunit.ps1 -Development -Target <bench-AMS-Net-ID> -Platform "TwinCAT RT (x64)"
+```
+
+The development build does not activate a runtime. The test command replaces the
+selected bench configuration with the isolated Testing runtime, builds from source,
+and verifies individual TcUnit results. Example and Simulation are separate PLC
+applications with separate instances; changes are applied to each application
+through its own build/login workflow. Simply saving source does not change a
+running PLC. The combined workspace does not autostart the test/simulation tasks;
+use the isolated scripts when deploying one application.
+
+`scripts/build_twincat.ps1` and `run_tcunit.ps1` without `-Development` retain the
+separate exported/installed-artifact qualification workflow. They temporarily
+select installed references and restore the source-reference profiles afterward.
+See [foundation qualification](docs/10-Qualification.md) for release evidence.
 
 ## Documentation
 

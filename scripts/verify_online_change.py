@@ -101,11 +101,11 @@ public static class OnlineChangeFixture {
   }
   return $null
  }
- # The Compile include and Folder entries in Simulation.plcproj place the
- # linked canonical source here, not under the Simulation folder.
+ # The canonical source belongs to the source-only support library.
+ $referenceProject=$sm.LookupTreeItem('TIPC^TcForgeReference^TcForgeReference Project')
  $pou=$null
- try {$pou=$sm.LookupTreeItem('TIPC^Simulation^Simulation Project^TcForgeExample^Reference^FB_ReferenceMachine')} catch {}
- if ($null -eq $pou) {$pou=FindPou $plc}
+ try {$pou=$sm.LookupTreeItem('TIPC^TcForgeReference^TcForgeReference Project^TcForgeExample^Reference^FB_ReferenceMachine')} catch {}
+ if ($null -eq $pou) {$pou=FindPou $referenceProject}
  if ($null -eq $pou) {throw 'Canonical reference POU not found'}
  [OnlineChangeFixture]::Edit($pou,$cfg.kind)
  $vs.Dte.ExecuteCommand('File.SaveAll','')

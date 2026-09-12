@@ -2,6 +2,7 @@
 param([string]$McpRoot = (Join-Path $PSScriptRoot '../../twincat-mcp'))
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'initialize_twincat_environment.ps1')
+. (Join-Path $PSScriptRoot 'installed_reference_profile.ps1')
 if ($PSVersionTable.PSEdition -ne 'Desktop') { throw 'Use Windows PowerShell 5.1.' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release')).Path
@@ -22,10 +23,16 @@ $acquired = $false
 try { $acquired = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $acquired = $true }
 if (-not $acquired) { $mutex.Dispose(); throw 'Another TcForge XAE operation is running.' }
 $vs = $null
+$profiles = @{}
 [TcAutomation.Core.MessageFilter]::Register()
 try {
+    foreach ($file in Get-ChildItem (Join-Path $repo 'TwinCAT') -Recurse -File | Where-Object { $_.Extension -in @('.sln','.tsproj','.plcproj','.TcTTO') }) {
+        $profiles[$file.FullName] = [IO.File]::ReadAllBytes($file.FullName)
+    }
+    Set-TcForgeInstalledReferences -TwinCATRoot (Join-Path $repo 'TwinCAT')
     foreach ($entry in $projects.GetEnumerator()) {
-        $solution = Join-Path $repo ('TwinCAT/' + $entry.Key + '.sln')
+        $profile = if ($entry.Key -eq 'TcForge') { 'TcForge.Example' } else { $entry.Key }
+        $solution = Join-Path $repo ('TwinCAT/' + $profile + '.sln')
         $vs = [TcAutomation.Core.VisualStudioInstance]::new($solution, $version, $null)
         $vs.Load(); $vs.LoadSolution()
         $effective = $vs.EffectiveTwinCATVersion
@@ -41,7 +48,10 @@ try {
     }
 } finally {
     try { if ($vs) { $vs.Close() } } finally {
-        [TcAutomation.Core.MessageFilter]::Revoke()
-        $mutex.ReleaseMutex(); $mutex.Dispose()
+        try { foreach ($path in $profiles.Keys) { [IO.File]::WriteAllBytes($path, $profiles[$path]) } }
+        finally {
+            [TcAutomation.Core.MessageFilter]::Revoke()
+            $mutex.ReleaseMutex(); $mutex.Dispose()
+        }
     }
 }

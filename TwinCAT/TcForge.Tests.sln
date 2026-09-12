@@ -21,13 +21,9 @@ Global
 		{3E4D51A2-D1BE-4913-8E9E-D1A7F74C9358}.Release|TwinCAT RT (x64).ActiveCfg = Release|TwinCAT RT (x64)
 		{3E4D51A2-D1BE-4913-8E9E-D1A7F74C9358}.Release|TwinCAT RT (x64).Build.0 = Release|TwinCAT RT (x64)
 		{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}.Debug|TwinCAT OS (x64).ActiveCfg = Debug|TwinCAT OS (x64)
-		{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}.Debug|TwinCAT OS (x64).Build.0 = Debug|TwinCAT OS (x64)
 		{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}.Debug|TwinCAT RT (x64).ActiveCfg = Debug|TwinCAT RT (x64)
-		{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}.Debug|TwinCAT RT (x64).Build.0 = Debug|TwinCAT RT (x64)
 		{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}.Release|TwinCAT OS (x64).ActiveCfg = Release|TwinCAT OS (x64)
-		{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}.Release|TwinCAT OS (x64).Build.0 = Release|TwinCAT OS (x64)
 		{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}.Release|TwinCAT RT (x64).ActiveCfg = Release|TwinCAT RT (x64)
-		{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}.Release|TwinCAT RT (x64).Build.0 = Release|TwinCAT RT (x64)
 		{4C5489A9-B7F5-4985-B678-81475A8FC2DB}.Debug|TwinCAT OS (x64).ActiveCfg = Debug|TwinCAT OS (x64)
 		{4C5489A9-B7F5-4985-B678-81475A8FC2DB}.Debug|TwinCAT OS (x64).Build.0 = Debug|TwinCAT OS (x64)
 		{4C5489A9-B7F5-4985-B678-81475A8FC2DB}.Debug|TwinCAT RT (x64).ActiveCfg = Debug|TwinCAT RT (x64)
@@ -36,6 +32,10 @@ Global
 		{4C5489A9-B7F5-4985-B678-81475A8FC2DB}.Release|TwinCAT OS (x64).Build.0 = Release|TwinCAT OS (x64)
 		{4C5489A9-B7F5-4985-B678-81475A8FC2DB}.Release|TwinCAT RT (x64).ActiveCfg = Release|TwinCAT RT (x64)
 		{4C5489A9-B7F5-4985-B678-81475A8FC2DB}.Release|TwinCAT RT (x64).Build.0 = Release|TwinCAT RT (x64)
+		{378F46D6-F794-4F74-BBE4-668B995A3B24}.Debug|TwinCAT OS (x64).ActiveCfg = Debug|TwinCAT OS (x64)
+		{378F46D6-F794-4F74-BBE4-668B995A3B24}.Debug|TwinCAT RT (x64).ActiveCfg = Debug|TwinCAT RT (x64)
+		{378F46D6-F794-4F74-BBE4-668B995A3B24}.Release|TwinCAT OS (x64).ActiveCfg = Release|TwinCAT OS (x64)
+		{378F46D6-F794-4F74-BBE4-668B995A3B24}.Release|TwinCAT RT (x64).ActiveCfg = Release|TwinCAT RT (x64)
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

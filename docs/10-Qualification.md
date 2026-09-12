@@ -7,6 +7,18 @@ before release. Installation and qualification progress is tracked in
 
 ## Architecture decisions
 
+Daily development uses `TwinCAT/TcForge.sln`, with the core library and all three
+consumers in one TwinCAT project. `[TcForge]` resolves directly to source; the
+source-only `TcForgeReference` project owns the reference machine and simulation
+bridge shared by those consumers. Beckhoff documents this workflow under
+[referenced PLC libraries](https://infosys.beckhoff.com/content/1033/tc3_plc_intro/12051858443.html).
+Run `scripts/build_development.ps1` for a source build and `run_tcunit.ps1
+-Development` for source-based bench tests. Neither requires a TcForge library
+installation or a version bump. Development results are not installed-artifact
+release receipts. The artifact qualification scripts explicitly select installed
+core-library references before building/testing and restore source profiles after
+closing XAE. Do not run engineering scripts while manually editing the same files.
+
 - Keep the device base, composed alarms and modular library. Use the base fault
   state for command validation. `Status.AtRecoveryStep` describes odd steps;
   `Status.Faulted` mirrors `IsFaulted()` when the machine publishes status.
@@ -122,6 +134,11 @@ requires one concrete matching loaded-library signature; an installed file alone
 is insufficient. Normal builds never update the lock. For deliberate dependency
 changes, capture with `scripts/capture_dependency_resolutions.ps1`, produce a
 candidate with `scripts/dependency_lock.py`, review it, and rebuild.
+When the library also needs rebuilding, `build_twincat.ps1 -CaptureDependencies`
+exports, installs and builds the consumers into a fresh `artifacts/dependency-candidate-*`
+directory. It captures dependencies without comparing the old lock and deliberately
+produces no qualification receipt. Review the candidate, update the lock, then run
+the normal strict build; capture mode is not a qualification pass.
 
 Successful builds retain a bundle under `artifacts/builds/<buildId>/`, including
 the library, compiler results, dependency captures and build manifest.

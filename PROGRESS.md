@@ -93,6 +93,38 @@ Engineering references:
 
 ### Latest verification batch
 
+2026-09-11 source-reference development workspace:
+
+- [x] `TwinCAT/TcForge.sln` contains the core library, Example, Testing and
+  Simulation in one TwinCAT project. Both source libraries enable referenced
+  library use; consumers resolve the bracketed project identities. No reinstall
+  or version bump is required for development builds.
+- [x] `TcForgeReference` owns the shared reference-machine/bridge files once,
+  avoiding duplicate object IDs across consumers while keeping fixture code
+  outside the reusable core. Source libraries have no runtime instances or
+  boot-project build entries.
+- [x] Combined XAE 3.1.4026.26 build: zero errors/warnings; captured effective
+  references confirm both source libraries for all three consumers. Dedicated
+  bench source-reference TcUnit run: 380/380 individual tests across 31 suites
+  at 10 ms (`artifacts/development-tcunit-10ms/tcunit.xml`). This is development
+  evidence, not an installed-artifact qualification receipt.
+- [x] Isolated Example, Testing and Simulation profiles remain available for
+  single-application deployment. Build/test scripts distinguish source development
+  from installed core-library qualification and restore source-reference files.
+- [x] Reviewed installed-artifact dependencies: only the shared support library
+  and its bindings/edges were added; vendor and core dependency versions did not
+  change. Strict core check and all three consumer builds passed with zero
+  errors/warnings and matching locks. Build receipt:
+  `artifacts/builds/0a005d8c741d408db644a457ed6856c8/`.
+- [x] All 92 tooling tests, repository structure checks and strict documentation
+  build passed. Guards reject installed fallback, missing library membership,
+  task collisions and source-library boot-build configurations.
+- [x] Restored Example on bench port 851. ADS cyclic readiness and authenticated
+  OPC UA passed (device error 0); ForceSafe completed on owner task 1 and duplicate
+  submission returned 35. Both coils are off and outputs inhibited. Evidence:
+  `artifacts/development-final-ready.json`, `development-final-opcua.json` and
+  `development-final-outputs.json`.
+
 2026-09-11 execution-boundary and ownership batch:
 
 - [x] Real ADS STOP/RUN with both reference machines advancing and compatible-edit

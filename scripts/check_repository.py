@@ -13,7 +13,7 @@ def check_reference_versions(document, lock):
     """Check declared direct references against pins; does not resolve transitives."""
     errors = []
     pinned = dict(lock.get('resolvedVendorLibraries', {}))
-    pinned.update(TcForge=lock.get('libraryVersion'), TcUnit=lock.get('tcunitVersion'))
+    pinned.update(TcForge=lock.get('libraryVersion'), TcForgeReference=lock.get('libraryVersion'), TcUnit=lock.get('tcunitVersion'))
     for node in document.iter():
         tag = node.tag.rsplit('}', 1)[-1]
         if tag not in ('PlaceholderReference', 'LibraryReference'):
@@ -29,13 +29,58 @@ def check_reference_versions(document, lock):
         expected = pinned.get(name)
         if not expected:
             errors.append(f'No toolchain pin for direct reference {name}')
-        elif match is None or match.group(1).strip() != name or match.group(2) != expected:
+        elif match is None or match.group(1).strip() not in ({name, '[' + name + ']'} if name in ('TcForge', 'TcForgeReference') else {name}) or match.group(2) != expected:
             errors.append(f'Direct reference {name} does not match toolchain version {expected}: {resolution}')
     return errors
 
 
-def check(root=ROOT, release=False, report=None, build_evidence=None, library=None):
+def check_development_layout(root):
+    """Prevent installed-reference fallback and accidental multi-application test deployment."""
     errors = []
+    profiles = {
+        'TcForge': {'TcForge', 'TcForgeReference', 'TcForgeExample', 'Testing', 'Simulation'},
+        'TcForge.Example': {'TcForge', 'TcForgeReference', 'TcForgeExample'},
+        'TcForge.Tests': {'TcForge', 'TcForgeReference', 'Testing'},
+        'TcForge.Simulation': {'TcForge', 'TcForgeReference', 'Simulation'},
+    }
+    for name, expected in profiles.items():
+        path = root / 'TwinCAT' / (name + '.tsproj')
+        try:
+            doc = ET.parse(path)
+            projects = doc.findall('.//Plc/Project')
+            if len(projects) != len(expected) or {p.get('Name') for p in projects} != expected:
+                errors.append(f'{name}: incorrect PLC project membership')
+            tasks = doc.findall('.//System/Tasks/Task')
+            for field in ('Id', 'Priority', 'AmsPort'):
+                values = [task.get(field) for task in tasks]
+                if len(values) != len(set(values)):
+                    errors.append(f'{name}: duplicate system task {field}')
+            for project in projects:
+                plc = ET.parse(path.parent / project.get('PrjFilePath').replace('\\', '/'))
+                if project.get('Name') in ('TcForge', 'TcForgeReference'):
+                    if project.find('Instance') is not None:
+                        errors.append(f'{name}: source libraries must not have runtime instances')
+                    guid = plc.findtext('.//{*}ProjectGuid', '').upper()
+                    solution = path.with_suffix('.sln').read_text(encoding='utf-8-sig').upper()
+                    for configuration in ('DEBUG', 'RELEASE'):
+                        for platform in ('TWINCAT OS (X64)', 'TWINCAT RT (X64)'):
+                            if f'{guid}.{configuration}|{platform}.ACTIVECFG' not in solution:
+                                errors.append(f'{name}: source library missing explicit solution configuration')
+                    if any(guid in line and '.BUILD.0' in line for line in solution.splitlines()):
+                        errors.append(f'{name}: source libraries must not build boot projects')
+                    if plc.findtext('.//{*}VirtualLibrary') != 'true':
+                        errors.append(f'{name}: {project.get("Name")} must enable referenced-library use')
+                    if project.get('Name') == 'TcForge': continue
+                refs = plc.findall(".//{*}PlaceholderReference[@Include='TcForge']")
+                if len(refs) != 1 or not (refs[0].findtext('{*}DefaultResolution') or '').startswith('[TcForge], '):
+                    errors.append(f'{name}: {project.get("Name")} must reference TcForge source')
+        except (OSError, ET.ParseError, TypeError) as exc:
+            errors.append(f'{name}: invalid development profile: {exc}')
+    return errors
+
+
+def check(root=ROOT, release=False, report=None, build_evidence=None, library=None):
+    errors = check_development_layout(root)
     documents = {}
     for path in (root / 'TwinCAT').rglob('*'):
         if path.suffix.lower() not in {'.tcpou', '.tcdut', '.tcio', '.tcgvl', '.tctto', '.plcproj', '.tsproj'}:
@@ -106,10 +151,11 @@ def check(root=ROOT, release=False, report=None, build_evidence=None, library=No
                                 errors.append(f'{path}: owner dispatch has no fixed operator identity')
         if len(includes) != len(set(includes)):
             errors.append(f'{path}: duplicate compile inputs')
-    # Integration tests must exercise the actual example composition, not a copied model.
+    # Shared application/support code has one source owner, referenced by all consumers.
     reference_sources = [root / 'TwinCAT/TcForgeExample/Reference' / name for name in
                          ('FB_ReferenceMachine.TcPOU', 'E_ReferenceCommand.TcDUT')]
-    for relative in ('TwinCAT/Testing.plcproj', 'TwinCAT/TcForgeExample/TcForgeExample.plcproj', 'TwinCAT/Simulation.plcproj'):
+    reference_sources.append(root / 'TwinCAT/Simulation/FB_SimulationBridge.TcPOU')
+    for relative in ('TwinCAT/Testing.plcproj', 'TwinCAT/TcForgeExample/TcForgeExample.plcproj', 'TwinCAT/Simulation.plcproj', 'TwinCAT/TcForgeReference.plcproj'):
         project_path = root / relative
         project_doc = documents.get(project_path)
         if project_doc is None:
@@ -118,8 +164,13 @@ def check(root=ROOT, release=False, report=None, build_evidence=None, library=No
         compiled = [(project_path.parent / node.get('Include', '').replace('\\', '/')).resolve()
                     for node in project_doc.iter() if node.tag.rsplit('}', 1)[-1] == 'Compile']
         for source in reference_sources:
-            if compiled.count(source.resolve()) != 1:
-                errors.append(f'{relative}: must compile shared reference source {source.name} exactly once')
+            expected = 1 if relative == 'TwinCAT/TcForgeReference.plcproj' else 0
+            if compiled.count(source.resolve()) != expected:
+                errors.append(f'{relative}: shared source {source.name} must be owned only by TcForgeReference')
+        if relative != 'TwinCAT/TcForgeReference.plcproj':
+            refs = project_doc.findall(".//{*}PlaceholderReference[@Include='TcForgeReference']")
+            if len(refs) != 1 or not (refs[0].findtext('{*}DefaultResolution') or '').startswith('[TcForgeReference], '):
+                errors.append(f'{relative}: must reference the shared TcForgeReference source library')
     test_project = root / 'TwinCAT/TcForge.Tests.tsproj'
     doc = documents.get(test_project)
     if doc is None:

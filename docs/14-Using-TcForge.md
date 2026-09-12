@@ -4,17 +4,24 @@ The development library is not production-qualified. Follow the qualification
 tracker before adopting a release. Current toolchain and exact direct dependency
 versions are recorded in `toolchain.json` at the repository root.
 
-## Build and install the development library
+## Work on TcForge itself
+
+Open `TwinCAT/TcForge.sln`. The core library, shared reference support, Example,
+Testing and Simulation are in the same TwinCAT project. Consumers reference
+`[TcForge]` from source, so edits require a build but no library installation or
+version change. See the [development and qualification workflows](10-Qualification.md).
+
+## Build and install into another project
 
 1. Use the configured Windows XAE environment and the built sibling `twincat-mcp`
    helper described in [Qualification](10-Qualification.md).
 2. From the repo root run
    `powershell.exe -NoProfile -File scripts/build_twincat.ps1`.
-   This exports and installs `artifacts/TcForge.library`, then compiles both
+   This exports and installs `artifacts/TcForge.library`, then compiles all three
    consumers. Export alone is not proof of compilation.
 3. In another PLC project's References node, choose Add Library and select the
    installed TcForge version. The current development identity is
-   `TcForge, 2.0.0.0 (Home)` with namespace `TcForge`, as used by the example.
+   `TcForge, 2.0.0.0 (Home)` with namespace `TcForge`.
    Publisher/version cleanup belongs to D2 before a company release.
 4. Pin that exact version and verify resolved dependencies. Replacing a development
    artifact under the same version requires reinstall/rebuild; release artifacts
