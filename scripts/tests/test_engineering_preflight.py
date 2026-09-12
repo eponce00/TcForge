@@ -45,9 +45,10 @@ if ($dte.Calls -ne 1) {throw 'Fallback executed'}
             subprocess.run(['git', 'init', '--quiet', directory], check=True)
             (root / 'artifacts').mkdir()
             (root / '.gitignore').write_text('*.tmc\n')
-            (root / 'app.tsproj').write_text('<Root><Project TmcFilePath="app.tmc"/></Root>')
+            (root / 'app.tsproj').write_text('<Root><Project TmcFilePath="app.tmc"><Instance/></Project><Project TmcFilePath="library.tmc"/></Root>')
             original = b'<TcModuleClass GeneratedBy="TwinCAT XAE Plc"/>'
             (root / 'app.tmc').write_bytes(original)
+            (root / 'library.tmc').write_bytes(original)
             (root / 'app.compileinfo').write_bytes(b'preserve exact compiler baseline')
             self.run_ps("$fixture='" + directory.replace("'", "''") + "'\n" + r"""
 . (Join-Path $helpers 'prepare_generated_tmc.ps1')
@@ -58,6 +59,7 @@ try {Move-TcForgeGeneratedTmc -Repo $fixture -ProjectFile (Join-Path $fixture 'a
 try {Move-TcForgeGeneratedTmc -Repo $fixture -ProjectFile (Join-Path $fixture 'app.tsproj'); throw 'Unexpected escape'} catch {if ($_.Exception.Message -eq 'Unexpected escape') {throw}}
 """)
             self.assertEqual((root / 'app.compileinfo').read_bytes(), b'preserve exact compiler baseline')
+            self.assertEqual((root / 'library.tmc').read_bytes(), original)
             backups = list((root / 'artifacts').iterdir())
             self.assertEqual(len(backups), 1)
             self.assertEqual(backups[0].read_bytes(), original)

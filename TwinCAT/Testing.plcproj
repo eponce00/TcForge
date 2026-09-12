@@ -137,10 +137,7 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="Simulation" />
     <Folder Include="Testing" />
-    <Folder Include="TcForgeExample" />
-    <Folder Include="TcForgeExample\Reference" />
     <Folder Include="Testing\DUTs" />
     <Folder Include="Testing\GVLs" />
     <Folder Include="Testing\VISUs" />

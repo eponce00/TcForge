@@ -23,17 +23,33 @@
     <VirtualLibrary>true</VirtualLibrary>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Modules\Common\Utilities\FB_ExecutionContinuity.TcPOU"><SubType>Code</SubType></Compile>
-    <Compile Include="Modules\Common\Utilities\F_IsFiniteReal.TcPOU"><SubType>Code</SubType></Compile>
-    <Compile Include="Modules\Common\Utilities\F_IsFiniteLReal.TcPOU"><SubType>Code</SubType></Compile>
-
-    <Compile Include="Modules\Common\IO\E_IOHealthReason.TcDUT"><SubType>Code</SubType></Compile>
-    <Compile Include="Modules\Common\IO\FB_IOQualityMonitor.TcPOU"><SubType>Code</SubType></Compile>
-    <Compile Include="Modules\Common\IO\F_EtherCATSlaveDataValid.TcPOU"><SubType>Code</SubType></Compile>
-
-    <Compile Include="Modules\Common\FB_OperatorMailbox.TcPOU"><SubType>Code</SubType></Compile>
-    <Compile Include="Modules\Common\ST_OperatorCommandRecord.TcDUT"><SubType>Code</SubType></Compile>
-    <Compile Include="Modules\Common\E_OperatorCommand.TcDUT"><SubType>Code</SubType></Compile>
+    <Compile Include="Modules\Common\Utilities\FB_ExecutionContinuity.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Utilities\F_IsFiniteReal.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\Utilities\F_IsFiniteLReal.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\E_IOHealthReason.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\FB_IOQualityMonitor.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\IO\F_EtherCATSlaveDataValid.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\FB_OperatorMailbox.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\ST_OperatorCommandRecord.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Modules\Common\E_OperatorCommand.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Modules\Common\E_Requester.TcDUT">
       <SubType>Code</SubType>
     </Compile>
@@ -303,16 +319,11 @@
       <Namespace>Tc3_Module</Namespace>
     </PlaceholderReference>
   </ItemGroup>
-  <ItemGroup>
-    <None Include="TcForge.tmc">
-      <SubType>Content</SubType>
-    </None>
-  </ItemGroup>
   <ProjectExtensions>
     <PlcProjectOptions>
       <XmlArchive>
-  <Data>
-    <o xml:space="preserve" t="OptionKey">
+        <Data>
+          <o xml:space="preserve" t="OptionKey">
       <v n="Name">"&lt;ProjectRoot&gt;"</v>
       <d n="SubKeys" t="Hashtable" ckt="String" cvt="OptionKey">
         <v>{192FAD59-8248-4824-A8DE-9177C94C195A}</v>
@@ -418,15 +429,15 @@
       </d>
       <d n="Values" t="Hashtable" />
     </o>
-  </Data>
-  <TypeList>
-    <Type n="Boolean">System.Boolean</Type>
-    <Type n="Hashtable">System.Collections.Hashtable</Type>
-    <Type n="Int32">System.Int32</Type>
-    <Type n="OptionKey">{54dd0eac-a6d8-46f2-8c27-2f43c7e49861}</Type>
-    <Type n="String">System.String</Type>
-  </TypeList>
-</XmlArchive>
+        </Data>
+        <TypeList>
+          <Type n="Boolean">System.Boolean</Type>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="Int32">System.Int32</Type>
+          <Type n="OptionKey">{54dd0eac-a6d8-46f2-8c27-2f43c7e49861}</Type>
+          <Type n="String">System.String</Type>
+        </TypeList>
+      </XmlArchive>
     </PlcProjectOptions>
   </ProjectExtensions>
 </Project>

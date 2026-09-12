@@ -1,125 +1,124 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0"?>
 <TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.26">
-  <Project ProjectGUID="{30BC0CFA-4EDA-442C-AB84-5F964B0C9962}" Target64Bit="true" ShowHideConfigurations="#x6">
-    <System>
-      <Tasks>
-        <Task Id="1" Priority="1" CycleTime="100000" AmsPort="350" AutoStart="true" AdtTasks="true">
-          <Name>PlcTask</Name>
-        </Task>
-        <Task Id="2" Priority="2" CycleTime="100000" AmsPort="351" AutoStart="false" AdtTasks="true">
-          <Name>Testing</Name>
-        </Task>
-        <Task Id="4" Priority="4" CycleTime="100000" AmsPort="353" AdtTasks="true" AutoStart="false">
-          <Name>OwnershipWitness</Name>
-        </Task>
-        <Task Id="3" Priority="3" CycleTime="100000" AmsPort="352" AdtTasks="true" AutoStart="false">
-          <Name>Simulation</Name>
-        </Task>
-      </Tasks>
-    </System>
-    <Plc>
-      <Project GUID="{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}" Name="TcForge" PrjFilePath="TcForge\TcForge.plcproj" TmcFilePath="TcForge\TcForge.tmc" ReloadTmc="true" AmsPort="852" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true">
-				</Project>
-      <Project GUID="{378F46D6-F794-4F74-BBE4-668B995A3B24}" Name="TcForgeReference" PrjFilePath="TcForgeReference.plcproj" TmcFilePath="TcForgeReference.tmc" ReloadTmc="true" AmsPort="855" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true" />
-      <Project GUID="{2C41D41A-2644-4D36-82D2-076E2F9459E3}" Name="TcForgeExample" PrjFilePath="TcForgeExample\TcForgeExample.plcproj" TmcFilePath="TcForgeExample\TcForgeExample.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true">
-        <Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{C5B4E82B-6D38-04F2-DC64-A09C5AB7ED93}" TmcPath="TcForgeExample\TcForgeExample.tmc">
-          <Name>TcForgeExample Instance</Name>
-          <CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
-          <Vars VarGrpType="2" AreaNo="1">
-            <Name>PlcTask Outputs</Name>
-            <Var>
-              <Name>GVL_HW.clampAdvance</Name>
-              <Type>BOOL</Type>
-            </Var>
-            <Var>
-              <Name>GVL_HW.clampRetract</Name>
-              <Type>BOOL</Type>
-            </Var>
-          </Vars>
-          <Vars VarGrpType="1">
-            <Name>PlcTask Inputs</Name>
-            <Var>
-              <Name>GVL_HW.clampAdvanced</Name>
-              <Type>BOOL</Type>
-            </Var>
-            <Var>
-              <Name>GVL_HW.clampRetracted</Name>
-              <Type>BOOL</Type>
-            </Var>
-            <Var>
-              <Name>GVL_HW.shutdownConfirmed</Name>
-              <Type>BOOL</Type>
-            </Var>
-          </Vars>
-          <Contexts>
-            <Context>
-              <Id>0</Id>
-              <Name>PlcTask</Name>
-              <ManualConfig>
-                <OTCID>#x02010010</OTCID>
-              </ManualConfig>
-              <Priority>1</Priority>
-              <CycleTime>10000000</CycleTime>
-            </Context>
-          </Contexts>
-          <JsonDynPous>null</JsonDynPous>
-          <TaskPouOids>
-            <TaskPouOid Prio="1" OTCID="#x08502001" />
-          </TaskPouOids>
-        </Instance>
-      </Project>
-      <Project GUID="{4C5489A9-B7F5-4985-B678-81475A8FC2DB}" Name="Testing" PrjFilePath="Testing.plcproj" TmcFilePath="Testing.tmc" ReloadTmc="true" AmsPort="853" FileArchiveSettings="#x000e" CopyTmcToTarget="true" CopyTpyToTarget="false" SymbolicMapping="true">
-        <Instance Id="#x08502080" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{05703791-3C27-4292-F5E1-A5C81EE66690}" TmcPath="Testing.tmc">
-          <Name>Testing Instance</Name>
-          <CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
-          <Contexts>
-            <Context>
-              <Id>0</Id>
-              <Name>Testing</Name>
-              <ManualConfig>
-                <OTCID>#x02010020</OTCID>
-              </ManualConfig>
-              <Priority>2</Priority>
-              <CycleTime>10000000</CycleTime>
-            </Context>
-          </Contexts>
-          <JsonDynPous>null</JsonDynPous>
-          <TaskPouOids>
-            <TaskPouOid Prio="2" OTCID="#x08502081" />
-          </TaskPouOids>
-        </Instance>
-      </Project>
-      <Project GUID="{56264B11-CA80-48CE-91FC-8709823DA530}" Name="Simulation" PrjFilePath="Simulation.plcproj" TmcFilePath="Simulation.tmc" ReloadTmc="true" AmsPort="854" FileArchiveSettings="#x000e" CopyTmcToTarget="true" CopyTpyToTarget="false" SymbolicMapping="true">
-        <Instance Id="#x085020c0" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{5553B22A-B037-285E-402E-F6C539BF867A}" TmcPath="Simulation.tmc">
-          <Name>Simulation Instance</Name>
-          <CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
-          <Contexts>
-            <Context>
-              <Id>0</Id>
-              <Name>Simulation</Name>
-              <ManualConfig>
-                <OTCID>#x02010030</OTCID>
-              </ManualConfig>
-              <Priority>3</Priority>
-              <CycleTime>10000000</CycleTime>
-            </Context>
-            <Context>
-              <Id>1</Id>
-              <Name>OwnershipWitness</Name>
-              <ManualConfig>
-                <OTCID>#x02010040</OTCID>
-              </ManualConfig>
-              <Priority>4</Priority>
-              <CycleTime>10000000</CycleTime>
-            </Context>
-          </Contexts>
-          <JsonDynPous>null</JsonDynPous>
-          <TaskPouOids>
-            <TaskPouOid Prio="3" OTCID="#x085020c1" />
-            <TaskPouOid Prio="4" OTCID="#x085020c2" />
-          </TaskPouOids>
-        </Instance>
-      </Project>
-    </Plc>
-  </Project>
+	<Project ProjectGUID="{30BC0CFA-4EDA-442C-AB84-5F964B0C9962}" Target64Bit="true" ShowHideConfigurations="#x6">
+		<System>
+			<Tasks>
+				<Task Id="1" Priority="1" CycleTime="100000" AmsPort="350" AdtTasks="true">
+					<Name>PlcTask</Name>
+				</Task>
+				<Task Id="2" Priority="2" CycleTime="100000" AmsPort="351" AutoStart="false" AdtTasks="true">
+					<Name>Testing</Name>
+				</Task>
+				<Task Id="4" Priority="4" CycleTime="100000" AmsPort="353" AutoStart="false" AdtTasks="true">
+					<Name>OwnershipWitness</Name>
+				</Task>
+				<Task Id="3" Priority="3" CycleTime="100000" AmsPort="352" AutoStart="false" AdtTasks="true">
+					<Name>Simulation</Name>
+				</Task>
+			</Tasks>
+		</System>
+		<Plc>
+			<Project Disabled="true" GUID="{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}" Name="TcForge" PrjFilePath="TcForge\TcForge.plcproj" TmcFilePath="TcForge\TcForge.tmc" ReloadTmc="false" FileArchiveSettings="#x000e" CopyTmcToTarget="false" SymbolicMapping="true"/>
+			<Project Disabled="true" GUID="{378F46D6-F794-4F74-BBE4-668B995A3B24}" Name="TcForgeReference" PrjFilePath="TcForgeReference.plcproj" TmcFilePath="TcForgeReference.tmc" ReloadTmc="false" FileArchiveSettings="#x000e" CopyTmcToTarget="false" SymbolicMapping="true"/>
+			<Project GUID="{2C41D41A-2644-4D36-82D2-076E2F9459E3}" Name="TcForgeExample" PrjFilePath="TcForgeExample\TcForgeExample.plcproj" TmcFilePath="TcForgeExample\TcForgeExample.tmc" ReloadTmc="false" AmsPort="851" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{7C14A8CD-A99B-AE0A-DFCA-A3CA027712CE}" TmcPath="TcForgeExample\TcForgeExample.tmc">
+					<Name>TcForgeExample Instance</Name>
+					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
+					<Vars VarGrpType="2" AreaNo="1">
+						<Name>PlcTask Outputs</Name>
+						<Var>
+							<Name>GVL_HW.clampAdvance</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>GVL_HW.clampRetract</Name>
+							<Type>BOOL</Type>
+						</Var>
+					</Vars>
+					<Vars VarGrpType="1">
+						<Name>PlcTask Inputs</Name>
+						<Var>
+							<Name>GVL_HW.clampAdvanced</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>GVL_HW.clampRetracted</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>GVL_HW.shutdownConfirmed</Name>
+							<Type>BOOL</Type>
+						</Var>
+					</Vars>
+					<Contexts>
+						<Context>
+							<Id>0</Id>
+							<Name>PlcTask</Name>
+							<ManualConfig>
+								<OTCID>#x02010010</OTCID>
+							</ManualConfig>
+							<Priority>1</Priority>
+							<CycleTime>10000000</CycleTime>
+						</Context>
+					</Contexts>
+					<JsonDynPous><![CDATA[null]]></JsonDynPous>
+					<TaskPouOids>
+						<TaskPouOid Prio="1" OTCID="#x08502001"/>
+					</TaskPouOids>
+				</Instance>
+			</Project>
+			<Project GUID="{4C5489A9-B7F5-4985-B678-81475A8FC2DB}" Name="Testing" PrjFilePath="Testing.plcproj" TmcFilePath="Testing.tmc" ReloadTmc="false" AmsPort="853" FileArchiveSettings="#x000e" CopyTmcToTarget="true" CopyTpyToTarget="false" SymbolicMapping="true">
+				<Instance Id="#x08502080" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{240A326A-309F-699B-890F-361ACA568738}" TmcPath="Testing.tmc">
+					<Name>Testing Instance</Name>
+					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
+					<Contexts>
+						<Context>
+							<Id>0</Id>
+							<Name>Testing</Name>
+							<ManualConfig>
+								<OTCID>#x02010020</OTCID>
+							</ManualConfig>
+							<Priority>2</Priority>
+							<CycleTime>10000000</CycleTime>
+						</Context>
+					</Contexts>
+					<JsonDynPous><![CDATA[null]]></JsonDynPous>
+					<TaskPouOids>
+						<TaskPouOid Prio="2" OTCID="#x08502081"/>
+					</TaskPouOids>
+				</Instance>
+			</Project>
+			<Project GUID="{56264B11-CA80-48CE-91FC-8709823DA530}" Name="Simulation" PrjFilePath="Simulation.plcproj" TmcFilePath="Simulation.tmc" ReloadTmc="false" AmsPort="854" FileArchiveSettings="#x000e" CopyTmcToTarget="true" CopyTpyToTarget="false" SymbolicMapping="true">
+				<Instance Id="#x085020c0" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{D8AC7288-E94E-4920-C8CF-B05BEAF47CE0}" TmcPath="Simulation.tmc">
+					<Name>Simulation Instance</Name>
+					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
+					<Contexts>
+						<Context>
+							<Id>0</Id>
+							<Name>Simulation</Name>
+							<ManualConfig>
+								<OTCID>#x02010030</OTCID>
+							</ManualConfig>
+							<Priority>3</Priority>
+							<CycleTime>10000000</CycleTime>
+						</Context>
+						<Context>
+							<Id>1</Id>
+							<Name>OwnershipWitness</Name>
+							<ManualConfig>
+								<OTCID>#x02010040</OTCID>
+							</ManualConfig>
+							<Priority>4</Priority>
+							<CycleTime>10000000</CycleTime>
+						</Context>
+					</Contexts>
+					<JsonDynPous><![CDATA[null]]></JsonDynPous>
+					<TaskPouOids>
+						<TaskPouOid Prio="3" OTCID="#x085020c1"/>
+						<TaskPouOid Prio="4" OTCID="#x085020c2"/>
+					</TaskPouOids>
+				</Instance>
+			</Project>
+		</Plc>
+	</Project>
 </TcSmProject>

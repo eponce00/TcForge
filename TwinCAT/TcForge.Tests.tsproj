@@ -9,10 +9,10 @@
       </Tasks>
     </System>
     <Plc>
-      <Project GUID="{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}" Name="TcForge" PrjFilePath="TcForge\TcForge.plcproj" TmcFilePath="TcForge\TcForge.tmc" ReloadTmc="true" AmsPort="852" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true">
+      <Project GUID="{C50D021A-2A7E-435E-BD9B-20A91E08C1DA}" Name="TcForge" PrjFilePath="TcForge\TcForge.plcproj" TmcFilePath="TcForge\TcForge.tmc" ReloadTmc="false" AmsPort="852" FileArchiveSettings="#x000e" CopyTmcToTarget="false" SymbolicMapping="true">
 				</Project>
-      <Project GUID="{378F46D6-F794-4F74-BBE4-668B995A3B24}" Name="TcForgeReference" PrjFilePath="TcForgeReference.plcproj" TmcFilePath="TcForgeReference.tmc" ReloadTmc="true" AmsPort="855" FileArchiveSettings="#x000e" CopyTmcToTarget="true" SymbolicMapping="true" />
-      <Project GUID="{4C5489A9-B7F5-4985-B678-81475A8FC2DB}" Name="Testing" PrjFilePath="Testing.plcproj" TmcFilePath="Testing.tmc" ReloadTmc="true" AmsPort="853" FileArchiveSettings="#x000e" CopyTmcToTarget="true" CopyTpyToTarget="false" SymbolicMapping="true">
+      <Project GUID="{378F46D6-F794-4F74-BBE4-668B995A3B24}" Name="TcForgeReference" PrjFilePath="TcForgeReference.plcproj" TmcFilePath="TcForgeReference.tmc" ReloadTmc="false" AmsPort="855" FileArchiveSettings="#x000e" CopyTmcToTarget="false" SymbolicMapping="true" />
+      <Project GUID="{4C5489A9-B7F5-4985-B678-81475A8FC2DB}" Name="Testing" PrjFilePath="Testing.plcproj" TmcFilePath="Testing.tmc" ReloadTmc="false" AmsPort="853" FileArchiveSettings="#x000e" CopyTmcToTarget="true" CopyTpyToTarget="false" SymbolicMapping="true">
         <Instance Id="#x08502080" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{05703791-3C27-4292-F5E1-A5C81EE66690}" TmcPath="Testing.tmc">
           <Name>Testing Instance</Name>
           <CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>

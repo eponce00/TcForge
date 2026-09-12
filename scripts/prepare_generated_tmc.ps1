@@ -12,6 +12,9 @@ function Move-TcForgeGeneratedTmc {
         if (-not $path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetExtension($path) -ne '.tmc') {
             throw 'Generated TMC path escapes the repository or has an unexpected extension'
         }
+        # Source-only libraries are excluded from executable builds. Retiring their
+        # metadata here leaves a missing TMC that the consumer build cannot replace.
+        if ($null -eq $node.SelectSingleNode('Instance')) { continue }
         if (-not (Test-Path -LiteralPath $path)) { continue }
         & git -C $Repo check-ignore --quiet -- $path
         if ($LASTEXITCODE -ne 0) { throw "Refusing to retire a non-ignored TMC: $path" }

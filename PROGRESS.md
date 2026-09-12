@@ -1,6 +1,6 @@
 # TcForge progress
 
-Last updated: 2026-09-11
+Last updated: 2026-09-12
 
 ## Goal and current status
 
@@ -92,6 +92,22 @@ Engineering references:
 [Login choices](https://infosys.beckhoff.com/content/1033/tc3_plc_intro/2531393419.html).
 
 ### Latest verification batch
+
+2026-09-12 workspace metadata cleanup:
+
+- [x] Removed empty shared-source folders from Testing and Simulation. The
+  populated folders remain in TcForgeReference, which owns those sources.
+- [x] Preserve source-only library TMC files during engineering preflight; their
+  excluded executable builds cannot regenerate metadata retired by that helper.
+  Reset initial external TMC reload flags and keep library metadata off the target.
+  XAE can rewrite reload flags on save; generated TMC files remain ignored.
+- [x] Combined source-reference build passed with zero errors/warnings:
+  `artifacts/development-build-6a62e9e2213a43af98feccb3a38bffd0/`.
+  Reopening the actual workspace produced no unknown-TMC warnings and all five
+  metadata files existed (`artifacts/verify-tmc-reopen.log`). All 92 tooling tests
+  and repository checks passed. No PLC activation or runtime qualification in
+  this cleanup batch.
+
 
 2026-09-11 source-reference development workspace:
 
