@@ -1,4 +1,5 @@
 """Wall-clock assembly simulation through the PLC-owned exchange, never raw writes."""
+
 import json
 import math
 import queue
@@ -8,20 +9,27 @@ import threading
 import time
 from pathlib import Path
 
-from .models import TwoPositionCylinder
+from .models import AssemblyOutputs, AssemblyPlant
 
 
 class RpcTransport:
     def __init__(self, executable: Path, target: str, port: int):
-        self.process = subprocess.Popen([str(executable), target, str(port)], stdin=subprocess.PIPE,
-                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.process = subprocess.Popen(
+            [str(executable), target, str(port)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
         self.lines: queue.Queue = queue.Queue()
         threading.Thread(target=self._read, daemon=True).start()
         try:
             # Initial identity/signature discovery is read-only and occurs before
             # claiming an IO session. It is not a cyclic feed deadline.
-            if not self._response(timeout=30).get('ready'):
-                raise RuntimeError('Simulation transport did not identify the application')
+            if not self._response(timeout=30).get("ready"):
+                raise RuntimeError(
+                    "Simulation transport did not identify the application"
+                )
         except Exception:
             self.close()
             raise
@@ -36,33 +44,55 @@ class RpcTransport:
             line = self.lines.get(timeout=timeout)
         except queue.Empty:
             self.close()
-            raise TimeoutError('Uncertain RPC outcome; session must be reconciled') from None
+            raise TimeoutError(
+                "Uncertain RPC outcome; session must be reconciled"
+            ) from None
         if line is None:
-            raise RuntimeError('Simulation transport exited: ' + self.process.stderr.read())
+            raise RuntimeError(
+                "Simulation transport exited: " + self.process.stderr.read()
+            )
         result = json.loads(line)
-        if 'error' in result:
-            raise RuntimeError(result['error'])
+        if "error" in result:
+            raise RuntimeError(result["error"])
         return result
 
     def call(self, operation: str, *args):
-        self.process.stdin.write(' '.join([operation, *map(str, args)]) + '\n')
+        self.process.stdin.write(" ".join([operation, *map(str, args)]) + "\n")
         self.process.stdin.flush()
-        return self._response()['value']
+        return self._response()["value"]
 
     def snapshot(self):
         deadline = time.perf_counter() + 1
         while time.perf_counter() < deadline:
-            raw = self.call('snapshot')
-            if raw == '22':
+            raw = self.call("snapshot")
+            if raw == "22":
                 time.sleep(0.001)
                 continue
-            values = list(map(int, raw.split(',')))
-            names = ('result', 'boot', 'cycle', 'applied', 'advance', 'retract', 'state',
-                     'faulted', 'inhibited', 'response', 'session', 'owner', 'healthy')
+            values = list(map(int, raw.split(",")))
+            names = (
+                "result",
+                "boot",
+                "cycle",
+                "applied",
+                "clamp_advance",
+                "clamp_retract",
+                "press_advance",
+                "press_retract",
+                "ejector_advance",
+                "ejector_retract",
+                "state",
+                "faulted",
+                "inhibited",
+                "response",
+                "session",
+                "owner",
+                "healthy",
+                "step",
+            )
             if len(values) != len(names) or values[0] != 0:
-                raise RuntimeError('Invalid snapshot schema')
+                raise RuntimeError("Invalid snapshot schema")
             return dict(zip(names, values))
-        raise TimeoutError('Snapshot remained busy')
+        raise TimeoutError("Snapshot remained busy")
 
     def close(self):
         if self.process.poll() is None:
@@ -79,76 +109,151 @@ class RpcTransport:
 class AssemblySession:
     def __init__(self, rpc: RpcTransport, trace, model=None):
         self.rpc, self.trace = rpc, trace
-        self.plant = model or TwoPositionCylinder(0.2)
+        self.plant = model or AssemblyPlant()
         self.session = secrets.randbits(63) or 1
-        self.boot = rpc.snapshot()['boot']
+        self.boot = rpc.snapshot()["boot"]
         self.sequence = 0
-        self.last_time = time.perf_counter()
         self.failed = False
-        self.shutdown_confirmed = True  # Independent simulated isolation input, controlled by scenarios.
+        self.shutdown_confirmed = (
+            True  # Independent simulated isolation input, controlled by scenarios.
+        )
         self.quality_good = True
-        result = rpc.call('claim', self.session, self.boot)
+        result = rpc.call("claim", self.session, self.boot)
         if result != 0:
-            raise RuntimeError(f'Session claim rejected: {result}')
+            raise RuntimeError(f"Session claim rejected: {result}")
+        # Session setup is outside the cyclic plant feed. Start the scheduling
+        # budget after the PLC confirms ownership so connection/claim latency
+        # cannot become a fabricated IO-gap failure on the first frame.
+        self.last_time = time.perf_counter()
 
     def record(self, event, **fields):
-        self.trace.write(json.dumps({'event': event, 'wall_time': time.time(),
-                                    'boot': self.boot, 'session': self.session, **fields}) + '\n')
+        self.trace.write(
+            json.dumps(
+                {
+                    "event": event,
+                    "wall_time": time.time(),
+                    "boot": self.boot,
+                    "session": self.session,
+                    **fields,
+                }
+            )
+            + "\n"
+        )
         self.trace.flush()
 
     def tick(self, command=0):
         if self.failed:
-            raise RuntimeError('Session failed; do not replay uncertain frames')
+            raise RuntimeError("Session failed; do not replay uncertain frames")
         try:
             before = self.rpc.snapshot()
-            if before['boot'] != self.boot or before['session'] != self.session:
-                raise RuntimeError('PLC session lost or runtime restarted')
+            if before["boot"] != self.boot or before["session"] != self.session:
+                raise RuntimeError("PLC session lost or runtime restarted")
             now = time.perf_counter()
             dt = now - self.last_time
             if dt > 0.2:
-                raise TimeoutError('Simulation scheduling delay exceeds live budget')
-            feedback = self.plant.step(bool(before['advance']), bool(before['retract']), dt)
+                raise TimeoutError("Simulation scheduling delay exceeds live budget")
+            outputs = AssemblyOutputs(
+                clamp_advance=bool(before["clamp_advance"]),
+                clamp_retract=bool(before["clamp_retract"]),
+                press_advance=bool(before["press_advance"]),
+                press_retract=bool(before["press_retract"]),
+                ejector_advance=bool(before["ejector_advance"]),
+                ejector_retract=bool(before["ejector_retract"]),
+            )
+            feedback = self.plant.step(outputs, dt)
             frame = self.sequence + 1
-            self.record('exchange_attempt', dt=dt, frame=frame, command=command,
-                        position=self.plant.position, jammed=self.plant.jammed,
-                        inputs={'advanced': feedback.advanced, 'retracted': feedback.retracted,
-                                'shutdown_confirmed': self.shutdown_confirmed,
-                                'quality_good': self.quality_good}, plc=before)
+            self.record(
+                "exchange_attempt",
+                dt=dt,
+                frame=frame,
+                command=command,
+                positions={
+                    "clamp": self.plant.clamp.position,
+                    "press": self.plant.press.position,
+                    "ejector": self.plant.ejector.position,
+                },
+                inputs={
+                    "clamp_advanced": feedback.clamp.advanced,
+                    "clamp_retracted": feedback.clamp.retracted,
+                    "press_advanced": feedback.press.advanced,
+                    "press_retracted": feedback.press.retracted,
+                    "ejector_advanced": feedback.ejector.advanced,
+                    "ejector_retracted": feedback.ejector.retracted,
+                    "part_present": feedback.part_present,
+                    "discharge_clear": feedback.discharge_clear,
+                    "pressure_raw": feedback.pressure_raw,
+                    "height_raw": feedback.height_raw,
+                    "shutdown_confirmed": self.shutdown_confirmed,
+                    "quality_good": self.quality_good,
+                },
+                plc=before,
+            )
             # Only BUSY is retryable: it guarantees this frame was not admitted.
             deadline = time.perf_counter() + 0.15
             while True:
-                result = self.rpc.call('exchange', self.session, self.boot, frame, before['cycle'],
-                                       int(feedback.advanced), int(feedback.retracted),
-                                       int(self.shutdown_confirmed), int(self.quality_good), command)
+                result = self.rpc.call(
+                    "exchange",
+                    self.session,
+                    self.boot,
+                    frame,
+                    before["cycle"],
+                    int(feedback.clamp.advanced),
+                    int(feedback.clamp.retracted),
+                    int(feedback.press.advanced),
+                    int(feedback.press.retracted),
+                    int(feedback.ejector.advanced),
+                    int(feedback.ejector.retracted),
+                    int(feedback.part_present),
+                    int(feedback.discharge_clear),
+                    feedback.pressure_raw,
+                    feedback.height_raw,
+                    int(self.shutdown_confirmed),
+                    int(self.quality_good),
+                    command,
+                )
                 if result != 22 or time.perf_counter() >= deadline:
                     break
                 time.sleep(0.001)
             if result != 1:
-                raise RuntimeError(f'Input frame rejected: {result}')
-            self.record('exchange_admitted', frame=frame)
+                raise RuntimeError(f"Input frame rejected: {result}")
+            self.record("exchange_admitted", frame=frame)
             while time.perf_counter() < deadline:
                 after = self.rpc.snapshot()
-                if after['boot'] != self.boot or after['session'] != self.session:
-                    raise RuntimeError('Session changed while applying frame')
-                if after['applied'] == frame:
+                if after["boot"] != self.boot or after["session"] != self.session:
+                    raise RuntimeError("Session changed while applying frame")
+                if after["applied"] == frame:
                     self.sequence, self.last_time = frame, now
-                    self.record('exchange_applied', dt=dt, frame=frame, command=command,
-                                position=self.plant.position, jammed=self.plant.jammed, plc=after)
+                    self.record(
+                        "exchange_applied",
+                        dt=dt,
+                        frame=frame,
+                        command=command,
+                        positions={
+                            "clamp": self.plant.clamp.position,
+                            "press": self.plant.press.position,
+                            "ejector": self.plant.ejector.position,
+                        },
+                        plc=after,
+                    )
                     return after
                 time.sleep(0.002)
-            raise TimeoutError('Frame was admitted but consumption is unconfirmed')
+            raise TimeoutError("Frame was admitted but consumption is unconfirmed")
         except Exception as exc:
             self.failed = True
             try:
-                self.record('session_failed', next_frame=self.sequence + 1,
-                            error_type=type(exc).__name__, error=str(exc))
+                self.record(
+                    "session_failed",
+                    next_frame=self.sequence + 1,
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
             except Exception:
                 pass  # Preserve the original failure even when the evidence sink fails.
             raise
 
     def until(self, predicate, timeout=3, command=0):
         if not math.isfinite(timeout) or timeout <= 0:
-            raise ValueError('Scenario timeout must be finite and positive')
+            raise ValueError("Scenario timeout must be finite and positive")
         state = None
         deadline = time.perf_counter() + timeout
         while time.perf_counter() < deadline:
@@ -157,8 +262,8 @@ class AssemblySession:
             if predicate(state):
                 return state
             time.sleep(0.01)
-        raise AssertionError(f'PLC condition timed out; last snapshot: {state}')
+        raise AssertionError(f"PLC condition timed out; last snapshot: {state}")
 
     def close(self):
         # Release only this session. Timeout/crash also has a PLC-side watchdog.
-        return self.rpc.call('release', self.session, self.boot)
+        return self.rpc.call("release", self.session, self.boot)

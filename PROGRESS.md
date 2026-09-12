@@ -26,13 +26,11 @@ and before/after documentation are not required.
 
 ## Next action
 
-Next, implement A8.2: a separate optional Event Logger adapter for device faults,
-following the concrete contract in `docs/13-SPT-Review.md`. The candidate audit
-is complete: use explicit event definitions and checked vendor calls; do not
-import SPT's pointer-based bulk initialization or control-error flag helpers.
-Add transition/failure tests before A8.3 real Event Logger bench verification.
-Keep source-project references for development and the core free of vendor
-logging dependencies. No adapter implementation or runtime pass is claimed yet.
+Current priority: complete the optional Event Logger adapter review (A8.2).
+The example organization, complete assembly plant simulation and real-PLC
+regressions are complete. TcForgeExample owns application blocks directly;
+TcForgeReference is removed. The main example composes three actuators, discrete
+sensors and analog inspection in an area-organized recipe.
 
 The immediate high-priority bench cases now pass: matching-session Online Change,
 healthy-motion preservation, moving declaration recovery, controlled persistent-image
@@ -92,7 +90,49 @@ Engineering references:
 [PLC Automation Interface](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242730891.html),
 [Login choices](https://infosys.beckhoff.com/content/1033/tc3_plc_intro/2531393419.html).
 
+### Example organization and readability (2026-09-12)
+
+- [x] Remove the separate support project; Testing/Simulation reference
+  TcForgeExample definitions directly. Source ownership build passed.
+- [x] Add an area-organized assembly recipe and reusable cylinder assembly:
+  locating clamp, press, ejector, photoelectric sensors, pressure and height.
+  Keep small clamp fixture for existing lifecycle/simulator regressions.
+- [x] Establish inline-comment and formatting conventions in the usage guide;
+  separate recipe methods from reusable actuator and sensor policy.
+- [x] Complete the full PLC regression run and final build after formatting:
+  385/385 tests across 32 suites at 10 ms on the bench, with zero build warnings.
+- [x] Connect the Python simulator to the complete assembly station. The model
+  covers three cylinders, two discrete sensors and two analog channels; all 22
+  offline tests and 11 real-PLC functional scenarios pass.
+
 ### Latest verification batch
+
+2026-09-12 complete assembly example and simulator:
+
+- [x] Replaced the single-cylinder example composition with an area-organized
+  locate/press/inspect/eject station. Reusable cylinder policy owns actuator and
+  output blocks; recipe code owns sequencing and geometry interlocks.
+- [x] Removed TcForgeReference and resolved TcForgeExample directly as a source
+  library from Testing and Simulation. Combined XAE build and all-object check
+  completed with zero errors/warnings.
+- [x] Real bench TcUnit run passed 385/385 tests across 32 suites at 10 ms.
+  The run exposed and verified a same-scan interlock-reset ordering fix. Evidence:
+  `artifacts/assembly-tcunit-v4/`.
+- [x] Exported/installed core artifact build `ff7907b55cf74fb886139509612d5811`
+  passed all-object validation and all three consumer builds with exact dependency
+  locks and zero warnings. Its bench run passed the same 385/385 tests. Evidence:
+  `artifacts/installed-assembly-tcunit-v3/`.
+- [x] Expanded the Python plant and RPC ABI to three cylinders, two discrete
+  sensors and pressure/height analog channels. All 23 offline tests and all 11
+  real-PLC functional scenarios passed. Evidence: `artifacts/full-assembly-e2e-v1/`.
+- [x] Updated every engineering entry point and build-evidence snapshot to bind
+  the current MCP `Release-v2` helper instead of a stale legacy output directory.
+  Tooling guards now cover the full assembly plant; all 93 tests pass.
+- [x] Qualified an MCP-driven compatible Online Change against the running
+  assembly simulation during clamp motion. XAE applied exactly one change,
+  runtime cycles and the simulator session remained continuous, the sequence
+  returned to Ready, and source/application cleanup restored the baseline.
+  Evidence: `artifacts/assembly-online-change-v11/`.
 
 2026-09-12 workspace metadata cleanup:
 

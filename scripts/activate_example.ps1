@@ -9,7 +9,7 @@ if ($PSVersionTable.PSEdition -ne 'Desktop') {
     throw 'Use powershell.exe (Windows PowerShell 5.1) for the .NET Framework COM helper.'
 }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release')).Path
+$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release-v2')).Path
 $artifacts = Join-Path $repo 'artifacts'
 $python = Join-Path $repo 'artifacts/sim-venv/Scripts/python.exe'
 if (-not (Test-Path -LiteralPath $python)) { throw 'Install python[ads] in artifacts/sim-venv first.' }

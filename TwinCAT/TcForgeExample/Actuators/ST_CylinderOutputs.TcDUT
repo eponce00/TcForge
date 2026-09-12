@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="ST_CylinderOutputs" Id="{85b92f11-40e7-4d07-87df-f5e69e108b36}">
+    <Declaration><![CDATA[// Map these signals to the two valve coils at the application boundary.
+TYPE ST_CylinderOutputs :
+STRUCT
+    advance : BOOL;
+    retract : BOOL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

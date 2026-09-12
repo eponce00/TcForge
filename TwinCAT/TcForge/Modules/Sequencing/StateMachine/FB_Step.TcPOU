@@ -31,11 +31,12 @@ Note: 'Exiting' is used instead of 'Exit' because EXIT is an IEC reserved word.
 *)
 FUNCTION_BLOCK FB_Step
 VAR_IN_OUT
-    sm : FB_StateMachine;
+sm : FB_StateMachine;
 END_VAR
 
 VAR_INPUT
-    nRequired : ULINT; // Required completion conditions, declared independently of MapPerm calls.
+    nRequired : ULINT;
+    // Required completion conditions, declared independently of MapPerm calls.
     nStep : DINT;
     nNextStep : DINT;
     nTimeout : DINT;
@@ -55,10 +56,10 @@ VAR
     _permsSatisfied : BOOL;
     _permsEvalReady : BOOL;
     _exitDone : BOOL;
-END_VAR]]></Declaration>
+END_VAR
+]]></Declaration>
     <Implementation>
-      <ST><![CDATA[
-// Evaluate independently declared required completion conditions.
+      <ST><![CDATA[// Evaluate independently declared required completion conditions.
 _perms.cfg.nRequired := nRequired;
 _perms();
 _permsSatisfied := _perms.sts.bOK;
@@ -66,7 +67,9 @@ _permsSatisfied := _perms.sts.bOK;
 // Every called instance contributes to the parent's previous-scan coverage check.
 sm.ObserveStep(nStep := nStep);
 _active := sm.CanExecuteStep(nStep := nStep);
-IF _active THEN _active := sm.ValidateStep(nStep := nStep, nDestination := nNextStep, nTimeout := nTimeout); END_IF;
+IF _active THEN
+    _active := sm.ValidateStep(nStep := nStep, nDestination := nNextStep, nTimeout := nTimeout);
+END_IF;
 
 // Reset lifecycle outputs each scan
 Entry := FALSE;
@@ -82,7 +85,7 @@ END_IF;
 IF _active THEN
     // Publish step name to SM for HMI / diagnostics
     sm.SetStepName(sName);
-  sm.SetStepPermissives(cfg := _perms.cfg, sts := _perms.sts);
+    sm.SetStepPermissives(cfg := _perms.cfg, sts := _perms.sts);
 
     IF NOT _prevActive THEN
         //---------------------------------------------------------------------
@@ -133,18 +136,22 @@ END_IF;
 _prevActive := _active;
 ]]></ST>
     </Implementation>
-    <Folder Name="Public" Id="{f0b10001-0001-0001-0001-000000000001}" />
+    <Folder Name="Public" Id="{f0b10001-0001-0001-0001-000000000001}"/>
     <Method Name="MapPerm" Id="{b2c3d4e5-f6a7-8901-bcde-f12345678901}" FolderPath="Public\">
       <Declaration><![CDATA[METHOD MapPerm
 VAR_INPUT
     nIndex : UDINT;
     sDescription : STRING;
     bValue : BOOL;
-END_VAR]]></Declaration>
+END_VAR
+]]></Declaration>
       <Implementation>
-        <ST><![CDATA[IF nIndex > 63 THEN RETURN; END_IF;
+        <ST><![CDATA[IF nIndex > 63 THEN
+    RETURN;
+END_IF;
 _perms.MapInput(bitIndex := nIndex, inputValue := bValue);
-_perms.cfg.aNames[nIndex] := sDescription;]]></ST>
+_perms.cfg.aNames[nIndex] := sDescription;
+]]></ST>
       </Implementation>
     </Method>
     <Method Name="RaiseFault" Id="{b2c3d4e5-f6a7-8901-bcde-f12345678902}" FolderPath="Public\">
@@ -161,7 +168,8 @@ METHOD RaiseFault
 VAR_INPUT
     code   : DINT;
     reason : STRING(79);
-END_VAR]]></Declaration>
+END_VAR
+]]></Declaration>
       <Implementation>
         <ST><![CDATA[{warning disable C0371}
 IF NOT _active THEN
@@ -169,26 +177,27 @@ IF NOT _active THEN
 END_IF;
 
 sm._RaiseStepFault(
-    stepNum  := nStep,
-    stepName := sName,
-    code     := code,
-    reason   := reason
+stepNum  := nStep,
+stepName := sName,
+code     := code,
+reason   := reason
 );
 Entry := FALSE;
 Execute := FALSE;
 Exiting := FALSE;
 _active := FALSE;
-{warning restore C0371}]]></ST>
+{warning restore C0371}
+]]></ST>
       </Implementation>
     </Method>
     <LineIds Name="FB_Step">
-      <LineId Id="1" Count="0" />
+      <LineId Id="1" Count="0"/>
     </LineIds>
     <LineIds Name="FB_Step.MapPerm">
-      <LineId Id="1" Count="0" />
+      <LineId Id="1" Count="0"/>
     </LineIds>
     <LineIds Name="FB_Step.RaiseFault">
-      <LineId Id="1" Count="0" />
+      <LineId Id="1" Count="0"/>
     </LineIds>
   </POU>
 </TcPlcObject>

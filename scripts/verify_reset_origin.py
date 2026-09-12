@@ -226,7 +226,7 @@ def main():
     for key in ('timeout','reload_timeout'):
         if not math.isfinite(getattr(args,key)) or not 0<getattr(args,key)<=900: parser.error('Timeout must be finite and between 0 and 900 seconds')
     args.solution=args.solution.resolve(strict=True); args.mcp_root=args.mcp_root.resolve(strict=True)
-    args.automation=(args.mcp_root/'TcAutomation/bin/Release/TcAutomation.exe').resolve(strict=True)
+    args.automation=(args.mcp_root/'TcAutomation/bin/Release-v2/TcAutomation.exe').resolve(strict=True)
     args.output=args.output.resolve(); args.output.mkdir(parents=True,exist_ok=True)
     evidence=dict(target=args.target,port=args.port,sources=SOURCES,passed=False,scope='Actual Reset origin, removal before reload, persistent initialization; no power-loss guarantee')
     suite=ET.Element('testsuite',name='TcForge Reset origin',tests='1')

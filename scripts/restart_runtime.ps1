@@ -14,7 +14,7 @@ $Output=[IO.Path]::GetFullPath($Output)
 if (-not [IO.Directory]::Exists([IO.Path]::GetDirectoryName($Output))) { throw 'Output parent directory must exist' }
 if (-not $McpRoot) { $McpRoot = Join-Path $PSScriptRoot '../../twincat-mcp' }
 $Solution = (Resolve-Path -LiteralPath $Solution).Path
-$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release')).Path
+$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release-v2')).Path
 $mutex = [Threading.Mutex]::new($false, 'Local\TcForge.Xae')
 $acquired = $false
 $registered = $false

@@ -186,9 +186,9 @@
     </PlcProjectOptions>
   </ProjectExtensions>
   <ItemGroup>
-    <PlaceholderReference Include="TcForgeReference">
-      <DefaultResolution>[TcForgeReference], 2.0.0.0 (Home)</DefaultResolution>
-      <Namespace>TcForgeReference</Namespace>
+    <PlaceholderReference Include="TcForgeExample">
+      <DefaultResolution>[TcForgeExample], 2.0.0.0 (Home)</DefaultResolution>
+      <Namespace>TcForgeExample</Namespace>
     </PlaceholderReference>
   </ItemGroup>
 </Project>

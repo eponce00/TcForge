@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="ST_CylinderFeedback" Id="{91abd59d-11ba-4c35-a25a-3cd008fa786e}">
+    <Declaration><![CDATA[// Feedback belongs to the plant, not to the commanded direction.
+TYPE ST_CylinderFeedback :
+STRUCT
+    advanced : BOOL;
+    retracted : BOOL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

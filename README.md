@@ -48,13 +48,12 @@ The docs below cover these in detail.
 ## Project layout
 
 - `TwinCAT/TcForge.sln`: main development workspace: library source, Example, Testing and Simulation in one TwinCAT project.
-- `TwinCAT/TcForgeReference.plcproj`: source-only support library holding the shared reference machine and simulation bridge once; all consumers use this same implementation.
 - `TwinCAT/TcForge.Library.sln`: isolated library export.
 - `TwinCAT/TcForge.Example.sln`: isolated example runtime.
 - `TwinCAT/TcForge.Tests.sln`: isolated test application.
 - `TwinCAT/TcForge.Simulation.sln`: isolated simulation runtime.
 - `TwinCAT/TcForge/`: the reusable library.
-- `TwinCAT/TcForgeExample/`: the integrated clamp reference application; see [its operating contract](docs/11-Reference-Machine.md).
+- `TwinCAT/TcForgeExample/`: the assembly-station application, organized by area; see [the example guide](docs/11-Reference-Machine.md).
 - `TwinCAT/Testing.plcproj`: PLC test project, sharing the reference application source.
 - `TwinCAT/Testing/`: PLC test suites and fixtures.
 - `python/`: deterministic plant simulation primitives and test infrastructure; see [simulation guide](python/README.md).
@@ -73,8 +72,9 @@ Open **[TwinCAT/TcForge.sln](TwinCAT/TcForge.sln)** in XAE 3.1.4026.26. Under PL
 expand **TcForge → TcForge Project** to edit the reusable blocks. Example, Testing
 and Simulation reference `[TcForge]` directly. Library edits are available to
 their next build without exporting, installing or changing the version. The
-source-only `TcForgeReference` project shares application/fixture code without
-copying it or adding it to the reusable core library.
+`TcForgeExample` project also enables source-library use: Testing and Simulation
+reference its block definitions directly. Application code has one owner, with no
+separate support library.
 
 ```powershell
 python scripts/check_repository.py

@@ -1,0 +1,595 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_AssemblyStation_Test" Id="{3740eb16-84f7-4f35-88bd-4bebbf21693e}">
+    <Declaration><![CDATA[// Functional tests use deterministic cylinder feedback, not a real IO bus.
+// Each scenario owns a station instance and runs in the existing TcUnit task.
+FUNCTION_BLOCK FB_AssemblyStation_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    machines : ARRAY[0..4] OF FB_AssemblyStation;
+    phase : ARRAY[0..4] OF UINT;
+    done : ARRAY[0..4] OF BOOL;
+    injected : ARRAY[0..4] OF BOOL;
+    sawPress : ARRAY[0..4] OF BOOL;
+    sawEject : ARRAY[0..4] OF BOOL;
+    recoveryPhase : UINT;
+    watchdog : ARRAY[0..4] OF TON;
+END_VAR]]></Declaration>
+    <Implementation><ST><![CDATA[CompleteAssemblyCycle();
+QualityLossStopsAllAxes();
+LostClampPreventsPressMotion();
+BlockedDischargeRejectsEjection();
+BadHeightCannotCompleteInspection();]]></ST></Implementation>
+    <Method Name="CompleteAssemblyCycle" Id="{a1112110-12d3-46b0-b1d5-ab33036f75b7}">
+      <Declaration><![CDATA[METHOD CompleteAssemblyCycle]]></Declaration>
+      <Implementation><ST><![CDATA[IF done[0] THEN
+    RETURN;
+END_IF;
+TEST('CompleteAssemblyCycle');
+
+// Initialize the plant at home with a part ready to assemble.
+IF phase[0] = 0 THEN
+    machines[0].inputs.clamp.retracted := TRUE;
+    machines[0].inputs.press.retracted := TRUE;
+    machines[0].inputs.ejector.retracted := TRUE;
+    machines[0].inputs.partPresent := TRUE;
+    machines[0].inputs.dischargeClear := TRUE;
+    machines[0].inputs.pressureRaw := 19660;
+    machines[0].inputs.heightRaw := 16384;
+    machines[0].inputs.inputQuality := TcForge.E_IO_Quality.GOOD;
+    machines[0].inputs.outputQuality := TcForge.E_IO_Quality.GOOD;
+    machines[0].inputs.shutdownQuality := TcForge.E_IO_Quality.GOOD;
+    machines[0].inputs.shutdownConfirmed := TRUE;
+END_IF;
+
+// Move feedback on the following scan, only in response to actual coil outputs.
+IF machines[0].outputs.clamp.advance THEN
+    machines[0].inputs.clamp.advanced := TRUE;
+    machines[0].inputs.clamp.retracted := FALSE;
+ELSIF machines[0].outputs.clamp.retract THEN
+    machines[0].inputs.clamp.advanced := FALSE;
+    machines[0].inputs.clamp.retracted := TRUE;
+END_IF;
+
+IF machines[0].outputs.press.advance THEN
+    machines[0].inputs.press.advanced := TRUE;
+    machines[0].inputs.press.retracted := FALSE;
+ELSIF machines[0].outputs.press.retract THEN
+    machines[0].inputs.press.advanced := FALSE;
+    machines[0].inputs.press.retracted := TRUE;
+END_IF;
+
+IF machines[0].outputs.ejector.advance THEN
+    machines[0].inputs.ejector.advanced := TRUE;
+    machines[0].inputs.ejector.retracted := FALSE;
+ELSIF machines[0].outputs.ejector.retract THEN
+    machines[0].inputs.ejector.advanced := FALSE;
+    machines[0].inputs.ejector.retracted := TRUE;
+END_IF;
+
+IF machines[0].outputs.ejector.advance THEN
+    machines[0].inputs.partPresent := FALSE;
+    sawEject[0] := TRUE;
+END_IF;
+IF machines[0].outputs.press.advance THEN
+    sawPress[0] := TRUE;
+END_IF;
+
+machines[0].command := E_ReferenceCommand.None;
+CASE phase[0] OF
+0:
+    phase[0] := 1;
+1:
+    machines[0].command := E_ReferenceCommand.Home;
+    phase[0] := 2;
+2:
+    IF machines[0].sequence.State = TcForge.E_SM_State.READY THEN
+        phase[0] := 3;
+    END_IF;
+3:
+    machines[0].command := E_ReferenceCommand.Start;
+    phase[0] := 4;
+END_CASE;
+
+machines[0]();
+
+AssertFalse(
+    Condition := machines[0].outputs.clamp.advance AND machines[0].outputs.clamp.retract,
+    Message := 'clamp: opposing coils must never energize together'
+);
+AssertFalse(
+    Condition := machines[0].outputs.press.advance AND machines[0].outputs.press.retract,
+    Message := 'press: opposing coils must never energize together'
+);
+AssertFalse(
+    Condition := machines[0].outputs.ejector.advance AND machines[0].outputs.ejector.retract,
+    Message := 'ejector: opposing coils must never energize together'
+);
+IF phase[0] = 4 AND sawPress[0] AND sawEject[0]
+    AND machines[0].sequence.State = TcForge.E_SM_State.READY THEN
+    AssertFalse(Condition := machines[0].sequence.Faulted, Message := 'Assembly completes without fault');
+    AssertTrue(Condition := machines[0].inputs.ejector.retracted, Message := 'Ejector returns home');
+    done[0] := TRUE;
+END_IF;
+
+watchdog[0](IN := TRUE, PT := T#18S);
+IF watchdog[0].Q AND NOT done[0] THEN
+    AssertTrue(Condition := FALSE, Message := 'Assembly scenario timed out');
+    done[0] := TRUE;
+END_IF;
+IF done[0] THEN
+    TEST_FINISHED();
+END_IF;
+]]></ST></Implementation>
+    </Method>
+    <Method Name="QualityLossStopsAllAxes" Id="{4ab214ae-b3ac-41e0-ba6c-cd6560cbc7ca}">
+      <Declaration><![CDATA[METHOD QualityLossStopsAllAxes]]></Declaration>
+      <Implementation><ST><![CDATA[IF done[1] THEN
+    RETURN;
+END_IF;
+TEST('QualityLossStopsAllAxes');
+
+// Initialize the plant at home with a part ready to assemble.
+IF phase[1] = 0 THEN
+    machines[1].inputs.clamp.retracted := TRUE;
+    machines[1].inputs.press.retracted := TRUE;
+    machines[1].inputs.ejector.retracted := TRUE;
+    machines[1].inputs.partPresent := TRUE;
+    machines[1].inputs.dischargeClear := TRUE;
+    machines[1].inputs.pressureRaw := 19660;
+    machines[1].inputs.heightRaw := 16384;
+    machines[1].inputs.inputQuality := TcForge.E_IO_Quality.GOOD;
+    machines[1].inputs.outputQuality := TcForge.E_IO_Quality.GOOD;
+    machines[1].inputs.shutdownQuality := TcForge.E_IO_Quality.GOOD;
+    machines[1].inputs.shutdownConfirmed := TRUE;
+END_IF;
+
+// Move feedback on the following scan, only in response to actual coil outputs.
+IF machines[1].outputs.clamp.advance THEN
+    machines[1].inputs.clamp.advanced := TRUE;
+    machines[1].inputs.clamp.retracted := FALSE;
+ELSIF machines[1].outputs.clamp.retract THEN
+    machines[1].inputs.clamp.advanced := FALSE;
+    machines[1].inputs.clamp.retracted := TRUE;
+END_IF;
+
+IF machines[1].outputs.press.advance THEN
+    machines[1].inputs.press.advanced := TRUE;
+    machines[1].inputs.press.retracted := FALSE;
+ELSIF machines[1].outputs.press.retract THEN
+    machines[1].inputs.press.advanced := FALSE;
+    machines[1].inputs.press.retracted := TRUE;
+END_IF;
+
+IF machines[1].outputs.ejector.advance THEN
+    machines[1].inputs.ejector.advanced := TRUE;
+    machines[1].inputs.ejector.retracted := FALSE;
+ELSIF machines[1].outputs.ejector.retract THEN
+    machines[1].inputs.ejector.advanced := FALSE;
+    machines[1].inputs.ejector.retracted := TRUE;
+END_IF;
+
+IF machines[1].outputs.ejector.advance THEN
+    machines[1].inputs.partPresent := FALSE;
+    sawEject[1] := TRUE;
+END_IF;
+IF machines[1].outputs.press.advance THEN
+    sawPress[1] := TRUE;
+END_IF;
+
+machines[1].command := E_ReferenceCommand.None;
+CASE phase[1] OF
+0:
+    phase[1] := 1;
+1:
+    machines[1].command := E_ReferenceCommand.Home;
+    phase[1] := 2;
+2:
+    IF machines[1].sequence.State = TcForge.E_SM_State.READY THEN
+        phase[1] := 3;
+    END_IF;
+3:
+    machines[1].command := E_ReferenceCommand.Start;
+    phase[1] := 4;
+END_CASE;
+
+// Inject this fault only after the relevant machine phase has been reached.
+IF sawPress[1] AND recoveryPhase = 0 THEN
+    injected[1] := TRUE;
+END_IF;
+IF injected[1] AND recoveryPhase = 0 THEN
+    machines[1].inputs.inputQuality := TcForge.E_IO_Quality.BAD;
+END_IF;
+
+IF recoveryPhase = 1 THEN
+    machines[1].inputs.inputQuality := TcForge.E_IO_Quality.GOOD;
+    IF machines[1].sequence.State = TcForge.E_SM_State.STOPPED THEN
+        machines[1].command := E_ReferenceCommand.Reset;
+        recoveryPhase := 2;
+    END_IF;
+ELSIF recoveryPhase = 2 THEN
+    machines[1].command := E_ReferenceCommand.None;
+END_IF;
+
+machines[1]();
+
+AssertFalse(
+    Condition := machines[1].outputs.clamp.advance AND machines[1].outputs.clamp.retract,
+    Message := 'clamp: opposing coils must never energize together'
+);
+AssertFalse(
+    Condition := machines[1].outputs.press.advance AND machines[1].outputs.press.retract,
+    Message := 'press: opposing coils must never energize together'
+);
+AssertFalse(
+    Condition := machines[1].outputs.ejector.advance AND machines[1].outputs.ejector.retract,
+    Message := 'ejector: opposing coils must never energize together'
+);
+IF injected[1] AND recoveryPhase = 0 THEN
+    AssertTrue(Condition := machines[1].outputsInhibited, Message := 'Fault inhibits same scan');
+    AssertFalse(
+        Condition := machines[1].outputs.press.advance OR machines[1].outputs.clamp.advance
+            OR machines[1].outputs.ejector.advance,
+        Message := 'No advance output survives invalid evidence'
+    );
+    recoveryPhase := 1;
+ELSIF recoveryPhase = 2 THEN
+    AssertEquals_DINT(
+        Expected := TcForge.E_RpcMethodResponse.ACCEPTED,
+        Actual := machines[1].lastResponse,
+        Message := 'One stationary Reset clears recovered device and parent faults'
+    );
+    AssertTrue(Condition := machines[1].outputsInhibited, Message := 'Reset does not restart motion');
+    done[1] := TRUE;
+END_IF;
+
+watchdog[1](IN := TRUE, PT := T#18S);
+IF watchdog[1].Q AND NOT done[1] THEN
+    AssertTrue(Condition := FALSE, Message := 'Assembly scenario timed out');
+    done[1] := TRUE;
+END_IF;
+IF done[1] THEN
+    TEST_FINISHED();
+END_IF;
+]]></ST></Implementation>
+    </Method>
+    <Method Name="LostClampPreventsPressMotion" Id="{0a3fa799-a056-463e-b34b-2f31b318ace8}">
+      <Declaration><![CDATA[METHOD LostClampPreventsPressMotion]]></Declaration>
+      <Implementation><ST><![CDATA[IF done[2] THEN
+    RETURN;
+END_IF;
+TEST('LostClampPreventsPressMotion');
+
+// Initialize the plant at home with a part ready to assemble.
+IF phase[2] = 0 THEN
+    machines[2].inputs.clamp.retracted := TRUE;
+    machines[2].inputs.press.retracted := TRUE;
+    machines[2].inputs.ejector.retracted := TRUE;
+    machines[2].inputs.partPresent := TRUE;
+    machines[2].inputs.dischargeClear := TRUE;
+    machines[2].inputs.pressureRaw := 19660;
+    machines[2].inputs.heightRaw := 16384;
+    machines[2].inputs.inputQuality := TcForge.E_IO_Quality.GOOD;
+    machines[2].inputs.outputQuality := TcForge.E_IO_Quality.GOOD;
+    machines[2].inputs.shutdownQuality := TcForge.E_IO_Quality.GOOD;
+    machines[2].inputs.shutdownConfirmed := TRUE;
+END_IF;
+
+// Move feedback on the following scan, only in response to actual coil outputs.
+IF machines[2].outputs.clamp.advance THEN
+    machines[2].inputs.clamp.advanced := TRUE;
+    machines[2].inputs.clamp.retracted := FALSE;
+ELSIF machines[2].outputs.clamp.retract THEN
+    machines[2].inputs.clamp.advanced := FALSE;
+    machines[2].inputs.clamp.retracted := TRUE;
+END_IF;
+
+IF machines[2].outputs.press.advance THEN
+    machines[2].inputs.press.advanced := TRUE;
+    machines[2].inputs.press.retracted := FALSE;
+ELSIF machines[2].outputs.press.retract THEN
+    machines[2].inputs.press.advanced := FALSE;
+    machines[2].inputs.press.retracted := TRUE;
+END_IF;
+
+IF machines[2].outputs.ejector.advance THEN
+    machines[2].inputs.ejector.advanced := TRUE;
+    machines[2].inputs.ejector.retracted := FALSE;
+ELSIF machines[2].outputs.ejector.retract THEN
+    machines[2].inputs.ejector.advanced := FALSE;
+    machines[2].inputs.ejector.retracted := TRUE;
+END_IF;
+
+IF machines[2].outputs.ejector.advance THEN
+    machines[2].inputs.partPresent := FALSE;
+    sawEject[2] := TRUE;
+END_IF;
+IF machines[2].outputs.press.advance THEN
+    sawPress[2] := TRUE;
+END_IF;
+
+machines[2].command := E_ReferenceCommand.None;
+CASE phase[2] OF
+0:
+    phase[2] := 1;
+1:
+    machines[2].command := E_ReferenceCommand.Home;
+    phase[2] := 2;
+2:
+    IF machines[2].sequence.State = TcForge.E_SM_State.READY THEN
+        phase[2] := 3;
+    END_IF;
+3:
+    machines[2].command := E_ReferenceCommand.Start;
+    phase[2] := 4;
+END_CASE;
+
+// Inject this fault only after the relevant machine phase has been reached.
+IF sawPress[2] THEN
+    injected[2] := TRUE;
+END_IF;
+IF injected[2] THEN
+    machines[2].inputs.clamp.advanced := FALSE;
+END_IF;
+
+machines[2]();
+
+AssertFalse(
+    Condition := machines[2].outputs.clamp.advance AND machines[2].outputs.clamp.retract,
+    Message := 'clamp: opposing coils must never energize together'
+);
+AssertFalse(
+    Condition := machines[2].outputs.press.advance AND machines[2].outputs.press.retract,
+    Message := 'press: opposing coils must never energize together'
+);
+AssertFalse(
+    Condition := machines[2].outputs.ejector.advance AND machines[2].outputs.ejector.retract,
+    Message := 'ejector: opposing coils must never energize together'
+);
+IF injected[2] THEN
+    AssertTrue(Condition := machines[2].outputsInhibited, Message := 'Fault inhibits same scan');
+    AssertFalse(
+        Condition := machines[2].outputs.press.advance OR machines[2].outputs.clamp.advance
+            OR machines[2].outputs.ejector.advance,
+        Message := 'No advance output survives invalid evidence'
+    );
+    done[2] := TRUE;
+END_IF;
+
+watchdog[2](IN := TRUE, PT := T#18S);
+IF watchdog[2].Q AND NOT done[2] THEN
+    AssertTrue(Condition := FALSE, Message := 'Assembly scenario timed out');
+    done[2] := TRUE;
+END_IF;
+IF done[2] THEN
+    TEST_FINISHED();
+END_IF;
+]]></ST></Implementation>
+    </Method>
+    <Method Name="BlockedDischargeRejectsEjection" Id="{a3057aea-002a-4668-bb77-e8208402ca46}">
+      <Declaration><![CDATA[METHOD BlockedDischargeRejectsEjection]]></Declaration>
+      <Implementation><ST><![CDATA[IF done[3] THEN
+    RETURN;
+END_IF;
+TEST('BlockedDischargeRejectsEjection');
+
+// Initialize the plant at home with a part ready to assemble.
+IF phase[3] = 0 THEN
+    machines[3].inputs.clamp.retracted := TRUE;
+    machines[3].inputs.press.retracted := TRUE;
+    machines[3].inputs.ejector.retracted := TRUE;
+    machines[3].inputs.partPresent := TRUE;
+    machines[3].inputs.dischargeClear := TRUE;
+    machines[3].inputs.pressureRaw := 19660;
+    machines[3].inputs.heightRaw := 16384;
+    machines[3].inputs.inputQuality := TcForge.E_IO_Quality.GOOD;
+    machines[3].inputs.outputQuality := TcForge.E_IO_Quality.GOOD;
+    machines[3].inputs.shutdownQuality := TcForge.E_IO_Quality.GOOD;
+    machines[3].inputs.shutdownConfirmed := TRUE;
+END_IF;
+
+// Move feedback on the following scan, only in response to actual coil outputs.
+IF machines[3].outputs.clamp.advance THEN
+    machines[3].inputs.clamp.advanced := TRUE;
+    machines[3].inputs.clamp.retracted := FALSE;
+ELSIF machines[3].outputs.clamp.retract THEN
+    machines[3].inputs.clamp.advanced := FALSE;
+    machines[3].inputs.clamp.retracted := TRUE;
+END_IF;
+
+IF machines[3].outputs.press.advance THEN
+    machines[3].inputs.press.advanced := TRUE;
+    machines[3].inputs.press.retracted := FALSE;
+ELSIF machines[3].outputs.press.retract THEN
+    machines[3].inputs.press.advanced := FALSE;
+    machines[3].inputs.press.retracted := TRUE;
+END_IF;
+
+IF machines[3].outputs.ejector.advance THEN
+    machines[3].inputs.ejector.advanced := TRUE;
+    machines[3].inputs.ejector.retracted := FALSE;
+ELSIF machines[3].outputs.ejector.retract THEN
+    machines[3].inputs.ejector.advanced := FALSE;
+    machines[3].inputs.ejector.retracted := TRUE;
+END_IF;
+
+IF machines[3].outputs.ejector.advance THEN
+    machines[3].inputs.partPresent := FALSE;
+    sawEject[3] := TRUE;
+END_IF;
+IF machines[3].outputs.press.advance THEN
+    sawPress[3] := TRUE;
+END_IF;
+
+machines[3].command := E_ReferenceCommand.None;
+CASE phase[3] OF
+0:
+    phase[3] := 1;
+1:
+    machines[3].command := E_ReferenceCommand.Home;
+    phase[3] := 2;
+2:
+    IF machines[3].sequence.State = TcForge.E_SM_State.READY THEN
+        phase[3] := 3;
+    END_IF;
+3:
+    machines[3].command := E_ReferenceCommand.Start;
+    phase[3] := 4;
+END_CASE;
+
+// Inject this fault only after the relevant machine phase has been reached.
+IF machines[3].sequence.Step.Current = 3010 THEN
+    injected[3] := TRUE;
+END_IF;
+IF injected[3] THEN
+    machines[3].inputs.dischargeClear := FALSE;
+END_IF;
+
+machines[3]();
+
+AssertFalse(
+    Condition := machines[3].outputs.clamp.advance AND machines[3].outputs.clamp.retract,
+    Message := 'clamp: opposing coils must never energize together'
+);
+AssertFalse(
+    Condition := machines[3].outputs.press.advance AND machines[3].outputs.press.retract,
+    Message := 'press: opposing coils must never energize together'
+);
+AssertFalse(
+    Condition := machines[3].outputs.ejector.advance AND machines[3].outputs.ejector.retract,
+    Message := 'ejector: opposing coils must never energize together'
+);
+IF injected[3] THEN
+    AssertFalse(Condition := machines[3].outputs.ejector.advance, Message := 'Blocked exit cannot eject');
+    IF machines[3].sequence.State = TcForge.E_SM_State.ABORTING
+        OR machines[3].sequence.State = TcForge.E_SM_State.STOPPED THEN
+        done[3] := TRUE;
+    END_IF;
+END_IF;
+
+watchdog[3](IN := TRUE, PT := T#18S);
+IF watchdog[3].Q AND NOT done[3] THEN
+    AssertTrue(Condition := FALSE, Message := 'Assembly scenario timed out');
+    done[3] := TRUE;
+END_IF;
+IF done[3] THEN
+    TEST_FINISHED();
+END_IF;
+]]></ST></Implementation>
+    </Method>
+    <Method Name="BadHeightCannotCompleteInspection" Id="{84b8af3a-f4b7-4ec1-b0a7-6f605b8ddcbb}">
+      <Declaration><![CDATA[METHOD BadHeightCannotCompleteInspection]]></Declaration>
+      <Implementation><ST><![CDATA[IF done[4] THEN
+    RETURN;
+END_IF;
+TEST('BadHeightCannotCompleteInspection');
+
+// Initialize the plant at home with a part ready to assemble.
+IF phase[4] = 0 THEN
+    machines[4].inputs.clamp.retracted := TRUE;
+    machines[4].inputs.press.retracted := TRUE;
+    machines[4].inputs.ejector.retracted := TRUE;
+    machines[4].inputs.partPresent := TRUE;
+    machines[4].inputs.dischargeClear := TRUE;
+    machines[4].inputs.pressureRaw := 19660;
+    machines[4].inputs.heightRaw := 16384;
+    machines[4].inputs.inputQuality := TcForge.E_IO_Quality.GOOD;
+    machines[4].inputs.outputQuality := TcForge.E_IO_Quality.GOOD;
+    machines[4].inputs.shutdownQuality := TcForge.E_IO_Quality.GOOD;
+    machines[4].inputs.shutdownConfirmed := TRUE;
+END_IF;
+
+// Move feedback on the following scan, only in response to actual coil outputs.
+IF machines[4].outputs.clamp.advance THEN
+    machines[4].inputs.clamp.advanced := TRUE;
+    machines[4].inputs.clamp.retracted := FALSE;
+ELSIF machines[4].outputs.clamp.retract THEN
+    machines[4].inputs.clamp.advanced := FALSE;
+    machines[4].inputs.clamp.retracted := TRUE;
+END_IF;
+
+IF machines[4].outputs.press.advance THEN
+    machines[4].inputs.press.advanced := TRUE;
+    machines[4].inputs.press.retracted := FALSE;
+ELSIF machines[4].outputs.press.retract THEN
+    machines[4].inputs.press.advanced := FALSE;
+    machines[4].inputs.press.retracted := TRUE;
+END_IF;
+
+IF machines[4].outputs.ejector.advance THEN
+    machines[4].inputs.ejector.advanced := TRUE;
+    machines[4].inputs.ejector.retracted := FALSE;
+ELSIF machines[4].outputs.ejector.retract THEN
+    machines[4].inputs.ejector.advanced := FALSE;
+    machines[4].inputs.ejector.retracted := TRUE;
+END_IF;
+
+IF machines[4].outputs.ejector.advance THEN
+    machines[4].inputs.partPresent := FALSE;
+    sawEject[4] := TRUE;
+END_IF;
+IF machines[4].outputs.press.advance THEN
+    sawPress[4] := TRUE;
+END_IF;
+
+machines[4].command := E_ReferenceCommand.None;
+CASE phase[4] OF
+0:
+    phase[4] := 1;
+1:
+    machines[4].command := E_ReferenceCommand.Home;
+    phase[4] := 2;
+2:
+    IF machines[4].sequence.State = TcForge.E_SM_State.READY THEN
+        phase[4] := 3;
+    END_IF;
+3:
+    machines[4].command := E_ReferenceCommand.Start;
+    phase[4] := 4;
+END_CASE;
+
+// Inject this fault only after the relevant machine phase has been reached.
+IF machines[4].sequence.Step.Current = 3004 THEN
+    injected[4] := TRUE;
+END_IF;
+IF injected[4] THEN
+    machines[4].inputs.heightRaw := 1000;
+END_IF;
+
+machines[4]();
+
+AssertFalse(
+    Condition := machines[4].outputs.clamp.advance AND machines[4].outputs.clamp.retract,
+    Message := 'clamp: opposing coils must never energize together'
+);
+AssertFalse(
+    Condition := machines[4].outputs.press.advance AND machines[4].outputs.press.retract,
+    Message := 'press: opposing coils must never energize together'
+);
+AssertFalse(
+    Condition := machines[4].outputs.ejector.advance AND machines[4].outputs.ejector.retract,
+    Message := 'ejector: opposing coils must never energize together'
+);
+IF injected[4] THEN
+    AssertFalse(Condition := sawEject[4], Message := 'Failed inspection cannot eject');
+    IF machines[4].sequence.Faulted THEN
+        AssertEquals_DINT(
+            Expected := 3006,
+            Actual := machines[4].sequence.FailedStep,
+            Message := 'Bad height faults the inspection phase'
+        );
+        done[4] := TRUE;
+    END_IF;
+END_IF;
+
+watchdog[4](IN := TRUE, PT := T#18S);
+IF watchdog[4].Q AND NOT done[4] THEN
+    AssertTrue(Condition := FALSE, Message := 'Assembly scenario timed out');
+    done[4] := TRUE;
+END_IF;
+IF done[4] THEN
+    TEST_FINISHED();
+END_IF;
+]]></ST></Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="ST_AssemblyOutputs" Id="{2770e69a-bac2-45a1-a1a6-90d9d2701a71}">
+    <Declaration><![CDATA[TYPE ST_AssemblyOutputs :
+STRUCT
+    clamp : ST_CylinderOutputs;
+    press : ST_CylinderOutputs;
+    ejector : ST_CylinderOutputs;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

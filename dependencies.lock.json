@@ -183,10 +183,10 @@
           "library": "TcForge, 2.0.0.0 (Home)"
         },
         {
-          "binding": "TcForgeReference",
-          "namespace": "TcForgeReference",
+          "binding": "TcForgeExample",
+          "namespace": "TcForgeExample",
           "systemLibrary": false,
-          "library": "[TcForgeReference], 2.0.0.0 (Home)"
+          "library": "[TcForgeExample], 2.0.0.0 (Home)"
         },
         {
           "binding": "TcUnit",
@@ -287,6 +287,12 @@
           "distributor": "Beckhoff Automation GmbH"
         },
         {
+          "id": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
+          "name": "Tc3_JsonXml",
+          "version": "3.4.9.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
           "id": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
           "name": "Tc3_Module",
           "version": "3.4.7.0",
@@ -305,8 +311,8 @@
           "distributor": "www.tcunit.org"
         },
         {
-          "id": "[TcForgeReference], 2.0.0.0 (Home)",
-          "name": "[TcForgeReference]",
+          "id": "[TcForgeExample], 2.0.0.0 (Home)",
+          "name": "[TcForgeExample]",
           "version": "2.0.0.0",
           "distributor": "Home"
         }
@@ -327,10 +333,11 @@
         "Tc3_GlobalTypes_MC, 1.0.0.0 (Beckhoff Automation GmbH)",
         "Tc3_GlobalTypes_Safety, 1.0.0.0 (Beckhoff Automation GmbH)",
         "Tc3_GlobalTypes_TcLine, 1.0.0.0 (Beckhoff Automation GmbH)",
+        "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
         "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
         "TcForge, 2.0.0.0 (Home)",
         "TcUnit, 1.3.0.0 (www.tcunit.org)",
-        "[TcForgeReference], 2.0.0.0 (Home)"
+        "[TcForgeExample], 2.0.0.0 (Home)"
       ],
       "dependencies": [
         {
@@ -424,27 +431,32 @@
           "placeholder": "Tc2_Utilities"
         },
         {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
           "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
           "placeholder": "Tc2_Standard"
         },
         {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
           "dependency": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
           "placeholder": "Tc2_System"
         },
         {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
           "dependency": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
           "placeholder": "Tc3_GlobalTypes"
         },
         {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
+          "dependency": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc3_JsonXml"
+        },
+        {
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
           "dependency": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
           "placeholder": "Tc3_Module"
         },
         {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
           "dependency": "TcForge, 2.0.0.0 (Home)",
           "placeholder": "TcForge"
         }
@@ -487,12 +499,223 @@
           "namespace": "TcForge",
           "systemLibrary": false,
           "library": "TcForge, 2.0.0.0 (Home)"
+        }
+      ],
+      "libraries": [
+        {
+          "id": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
+          "name": "Tc2_Standard",
+          "version": "3.4.7.0",
+          "distributor": "Beckhoff Automation GmbH"
         },
         {
-          "binding": "TcForgeReference",
-          "namespace": "TcForgeReference",
+          "id": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
+          "name": "Tc2_System",
+          "version": "3.10.2.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "Tc2_Utilities, 3.10.8.0 (Beckhoff Automation GmbH)",
+          "name": "Tc2_Utilities",
+          "version": "3.10.8.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "name": "Tc3_GlobalTypes",
+          "version": "1.0.0.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "Tc3_GlobalTypes_AX5000, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "name": "Tc3_GlobalTypes_AX5000",
+          "version": "1.0.0.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "Tc3_GlobalTypes_Global, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "name": "Tc3_GlobalTypes_Global",
+          "version": "1.0.0.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "Tc3_GlobalTypes_IO, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "name": "Tc3_GlobalTypes_IO",
+          "version": "1.0.0.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "Tc3_GlobalTypes_MC, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "name": "Tc3_GlobalTypes_MC",
+          "version": "1.0.0.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "Tc3_GlobalTypes_Safety, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "name": "Tc3_GlobalTypes_Safety",
+          "version": "1.0.0.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "Tc3_GlobalTypes_TcLine, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "name": "Tc3_GlobalTypes_TcLine",
+          "version": "1.0.0.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
+          "name": "Tc3_JsonXml",
+          "version": "3.4.9.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
+          "name": "Tc3_Module",
+          "version": "3.4.7.0",
+          "distributor": "Beckhoff Automation GmbH"
+        },
+        {
+          "id": "TcForge, 2.0.0.0 (Home)",
+          "name": "TcForge",
+          "version": "2.0.0.0",
+          "distributor": "Home"
+        }
+      ],
+      "signatureLibraries": [
+        "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
+        "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
+        "Tc2_Utilities, 3.10.8.0 (Beckhoff Automation GmbH)",
+        "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
+        "Tc3_GlobalTypes_AX5000, 1.0.0.0 (Beckhoff Automation GmbH)",
+        "Tc3_GlobalTypes_Global, 1.0.0.0 (Beckhoff Automation GmbH)",
+        "Tc3_GlobalTypes_IO, 1.0.0.0 (Beckhoff Automation GmbH)",
+        "Tc3_GlobalTypes_MC, 1.0.0.0 (Beckhoff Automation GmbH)",
+        "Tc3_GlobalTypes_Safety, 1.0.0.0 (Beckhoff Automation GmbH)",
+        "Tc3_GlobalTypes_TcLine, 1.0.0.0 (Beckhoff Automation GmbH)",
+        "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
+        "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
+        "TcForge, 2.0.0.0 (Home)"
+      ],
+      "dependencies": [
+        {
+          "library": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc2_Standard"
+        },
+        {
+          "library": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc3_Module"
+        },
+        {
+          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc3_GlobalTypes_AX5000, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "placeholder": ""
+        },
+        {
+          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc3_GlobalTypes_Global, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "placeholder": ""
+        },
+        {
+          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc3_GlobalTypes_IO, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "placeholder": ""
+        },
+        {
+          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc3_GlobalTypes_MC, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "placeholder": ""
+        },
+        {
+          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc3_GlobalTypes_Safety, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "placeholder": ""
+        },
+        {
+          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc3_GlobalTypes_TcLine, 1.0.0.0 (Beckhoff Automation GmbH)",
+          "placeholder": ""
+        },
+        {
+          "library": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc2_Standard"
+        },
+        {
+          "library": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc2_System"
+        },
+        {
+          "library": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc2_Utilities, 3.10.8.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc2_Utilities"
+        },
+        {
+          "library": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc3_Module"
+        },
+        {
+          "library": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
+          "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc2_Standard"
+        },
+        {
+          "library": "TcForge, 2.0.0.0 (Home)",
+          "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc2_Standard"
+        },
+        {
+          "library": "TcForge, 2.0.0.0 (Home)",
+          "dependency": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc2_System"
+        },
+        {
+          "library": "TcForge, 2.0.0.0 (Home)",
+          "dependency": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc3_Module"
+        }
+      ]
+    },
+    "TcForge.Simulation": {
+      "references": [
+        {
+          "binding": "Tc2_Standard",
+          "namespace": "Tc2_Standard",
           "systemLibrary": false,
-          "library": "[TcForgeReference], 2.0.0.0 (Home)"
+          "library": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)"
+        },
+        {
+          "binding": "Tc2_System",
+          "namespace": "Tc2_System",
+          "systemLibrary": false,
+          "library": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)"
+        },
+        {
+          "binding": "Tc3_GlobalTypes",
+          "namespace": "Tc3_GlobalTypes",
+          "systemLibrary": true,
+          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)"
+        },
+        {
+          "binding": "Tc3_Module",
+          "namespace": "Tc3_Module",
+          "systemLibrary": true,
+          "library": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)"
+        },
+        {
+          "binding": "TcForge",
+          "namespace": "TcForge",
+          "systemLibrary": false,
+          "library": "TcForge, 2.0.0.0 (Home)"
+        },
+        {
+          "binding": "TcForgeExample",
+          "namespace": "TcForgeExample",
+          "systemLibrary": false,
+          "library": "[TcForgeExample], 2.0.0.0 (Home)"
         }
       ],
       "libraries": [
@@ -575,8 +798,8 @@
           "distributor": "Home"
         },
         {
-          "id": "[TcForgeReference], 2.0.0.0 (Home)",
-          "name": "[TcForgeReference]",
+          "id": "[TcForgeExample], 2.0.0.0 (Home)",
+          "name": "[TcForgeExample]",
           "version": "2.0.0.0",
           "distributor": "Home"
         }
@@ -595,242 +818,7 @@
         "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
         "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
         "TcForge, 2.0.0.0 (Home)",
-        "[TcForgeReference], 2.0.0.0 (Home)"
-      ],
-      "dependencies": [
-        {
-          "library": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc2_Standard"
-        },
-        {
-          "library": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc3_Module"
-        },
-        {
-          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc3_GlobalTypes_AX5000, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "placeholder": ""
-        },
-        {
-          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc3_GlobalTypes_Global, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "placeholder": ""
-        },
-        {
-          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc3_GlobalTypes_IO, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "placeholder": ""
-        },
-        {
-          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc3_GlobalTypes_MC, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "placeholder": ""
-        },
-        {
-          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc3_GlobalTypes_Safety, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "placeholder": ""
-        },
-        {
-          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc3_GlobalTypes_TcLine, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "placeholder": ""
-        },
-        {
-          "library": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc2_Standard"
-        },
-        {
-          "library": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc2_System"
-        },
-        {
-          "library": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc2_Utilities, 3.10.8.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc2_Utilities"
-        },
-        {
-          "library": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc3_Module"
-        },
-        {
-          "library": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc2_Standard"
-        },
-        {
-          "library": "TcForge, 2.0.0.0 (Home)",
-          "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc2_Standard"
-        },
-        {
-          "library": "TcForge, 2.0.0.0 (Home)",
-          "dependency": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc2_System"
-        },
-        {
-          "library": "TcForge, 2.0.0.0 (Home)",
-          "dependency": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc3_Module"
-        },
-        {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
-          "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc2_Standard"
-        },
-        {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
-          "dependency": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc2_System"
-        },
-        {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
-          "dependency": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc3_GlobalTypes"
-        },
-        {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
-          "dependency": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "placeholder": "Tc3_Module"
-        },
-        {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
-          "dependency": "TcForge, 2.0.0.0 (Home)",
-          "placeholder": "TcForge"
-        }
-      ]
-    },
-    "TcForge.Simulation": {
-      "references": [
-        {
-          "binding": "Tc2_Standard",
-          "namespace": "Tc2_Standard",
-          "systemLibrary": false,
-          "library": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)"
-        },
-        {
-          "binding": "Tc2_System",
-          "namespace": "Tc2_System",
-          "systemLibrary": false,
-          "library": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)"
-        },
-        {
-          "binding": "Tc3_GlobalTypes",
-          "namespace": "Tc3_GlobalTypes",
-          "systemLibrary": true,
-          "library": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)"
-        },
-        {
-          "binding": "Tc3_Module",
-          "namespace": "Tc3_Module",
-          "systemLibrary": true,
-          "library": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)"
-        },
-        {
-          "binding": "TcForge",
-          "namespace": "TcForge",
-          "systemLibrary": false,
-          "library": "TcForge, 2.0.0.0 (Home)"
-        },
-        {
-          "binding": "TcForgeReference",
-          "namespace": "TcForgeReference",
-          "systemLibrary": false,
-          "library": "[TcForgeReference], 2.0.0.0 (Home)"
-        }
-      ],
-      "libraries": [
-        {
-          "id": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "name": "Tc2_Standard",
-          "version": "3.4.7.0",
-          "distributor": "Beckhoff Automation GmbH"
-        },
-        {
-          "id": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
-          "name": "Tc2_System",
-          "version": "3.10.2.0",
-          "distributor": "Beckhoff Automation GmbH"
-        },
-        {
-          "id": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "name": "Tc3_GlobalTypes",
-          "version": "1.0.0.0",
-          "distributor": "Beckhoff Automation GmbH"
-        },
-        {
-          "id": "Tc3_GlobalTypes_AX5000, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "name": "Tc3_GlobalTypes_AX5000",
-          "version": "1.0.0.0",
-          "distributor": "Beckhoff Automation GmbH"
-        },
-        {
-          "id": "Tc3_GlobalTypes_Global, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "name": "Tc3_GlobalTypes_Global",
-          "version": "1.0.0.0",
-          "distributor": "Beckhoff Automation GmbH"
-        },
-        {
-          "id": "Tc3_GlobalTypes_IO, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "name": "Tc3_GlobalTypes_IO",
-          "version": "1.0.0.0",
-          "distributor": "Beckhoff Automation GmbH"
-        },
-        {
-          "id": "Tc3_GlobalTypes_MC, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "name": "Tc3_GlobalTypes_MC",
-          "version": "1.0.0.0",
-          "distributor": "Beckhoff Automation GmbH"
-        },
-        {
-          "id": "Tc3_GlobalTypes_Safety, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "name": "Tc3_GlobalTypes_Safety",
-          "version": "1.0.0.0",
-          "distributor": "Beckhoff Automation GmbH"
-        },
-        {
-          "id": "Tc3_GlobalTypes_TcLine, 1.0.0.0 (Beckhoff Automation GmbH)",
-          "name": "Tc3_GlobalTypes_TcLine",
-          "version": "1.0.0.0",
-          "distributor": "Beckhoff Automation GmbH"
-        },
-        {
-          "id": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
-          "name": "Tc3_Module",
-          "version": "3.4.7.0",
-          "distributor": "Beckhoff Automation GmbH"
-        },
-        {
-          "id": "TcForge, 2.0.0.0 (Home)",
-          "name": "TcForge",
-          "version": "2.0.0.0",
-          "distributor": "Home"
-        },
-        {
-          "id": "[TcForgeReference], 2.0.0.0 (Home)",
-          "name": "[TcForgeReference]",
-          "version": "2.0.0.0",
-          "distributor": "Home"
-        }
-      ],
-      "signatureLibraries": [
-        "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
-        "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
-        "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
-        "Tc3_GlobalTypes_AX5000, 1.0.0.0 (Beckhoff Automation GmbH)",
-        "Tc3_GlobalTypes_Global, 1.0.0.0 (Beckhoff Automation GmbH)",
-        "Tc3_GlobalTypes_IO, 1.0.0.0 (Beckhoff Automation GmbH)",
-        "Tc3_GlobalTypes_MC, 1.0.0.0 (Beckhoff Automation GmbH)",
-        "Tc3_GlobalTypes_Safety, 1.0.0.0 (Beckhoff Automation GmbH)",
-        "Tc3_GlobalTypes_TcLine, 1.0.0.0 (Beckhoff Automation GmbH)",
-        "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
-        "TcForge, 2.0.0.0 (Home)",
-        "[TcForgeReference], 2.0.0.0 (Home)"
+        "[TcForgeExample], 2.0.0.0 (Home)"
       ],
       "dependencies": [
         {
@@ -894,27 +882,32 @@
           "placeholder": "Tc3_Module"
         },
         {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
           "dependency": "Tc2_Standard, 3.4.7.0 (Beckhoff Automation GmbH)",
           "placeholder": "Tc2_Standard"
         },
         {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
           "dependency": "Tc2_System, 3.10.2.0 (Beckhoff Automation GmbH)",
           "placeholder": "Tc2_System"
         },
         {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
           "dependency": "Tc3_GlobalTypes, 1.0.0.0 (Beckhoff Automation GmbH)",
           "placeholder": "Tc3_GlobalTypes"
         },
         {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
+          "dependency": "Tc3_JsonXml, 3.4.9.0 (Beckhoff Automation GmbH)",
+          "placeholder": "Tc3_JsonXml"
+        },
+        {
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
           "dependency": "Tc3_Module, 3.4.7.0 (Beckhoff Automation GmbH)",
           "placeholder": "Tc3_Module"
         },
         {
-          "library": "[TcForgeReference], 2.0.0.0 (Home)",
+          "library": "[TcForgeExample], 2.0.0.0 (Home)",
           "dependency": "TcForge, 2.0.0.0 (Home)",
           "placeholder": "TcForge"
         }

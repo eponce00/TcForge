@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_CylinderAssembly" Id="{55d71206-48d4-4d01-84ba-70206c147fb7}" SpecialFunc="None">
+    <Declaration><![CDATA[// Reused by the locating clamp, press and ejector.
+// Composes actuator supervision and both output policies in one owning task.
+// Request inputs are one-scan pulses supplied by the station sequence.
+FUNCTION_BLOCK FB_CylinderAssembly
+VAR_INPUT
+    feedback : ST_CylinderFeedback;
+    quality : TcForge.E_IO_Quality := TcForge.E_IO_Quality.UNKNOWN;
+    outputQuality : TcForge.E_IO_Quality := TcForge.E_IO_Quality.UNKNOWN;
+    permitMotion : BOOL;
+    allowAdvance : BOOL := TRUE;
+    allowRetract : BOOL := TRUE;
+    requestAdvance : BOOL;
+    requestRetract : BOOL;
+    requestReset : BOOL;
+END_VAR
+
+VAR_OUTPUT
+    outputs : ST_CylinderOutputs;
+    status : TcForge.ST_TwoPosActuator_Sts;
+    faulted : BOOL;
+    commandRejected : BOOL;
+    lastResponse : TcForge.E_RpcMethodResponse;
+END_VAR
+
+VAR
+    cylinder : TcForge.FB_TwoPosActuator;
+    advanceCoil : TcForge.FB_DigitalOutput;
+    retractCoil : TcForge.FB_DigitalOutput;
+    feedbackGood : BOOL;
+    motionAllowed : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// 1. Evaluate this scan's feedback before admitting motion.
+feedbackGood := quality = TcForge.E_IO_Quality.GOOD
+    AND outputQuality = TcForge.E_IO_Quality.GOOD
+    AND NOT (feedback.advanced AND feedback.retracted);
+
+// Keep geometry/quality permissives evaluated while idle. The station motion
+// gate is checked separately below, so a Home entry does not borrow a stale
+// FALSE permission from the preceding STOPPED scan.
+cylinder.cfgAdvancePermissives.nRequired := 1;
+cylinder.cfgRetractPermissives.nRequired := 1;
+cylinder.MapAdvanceCondition(bitIndex := 0, bGood := feedbackGood AND allowAdvance);
+cylinder.MapRetractCondition(bitIndex := 0, bGood := feedbackGood AND allowRetract);
+
+// Reset is a separate stationary operation; it cannot admit a simultaneous move.
+commandRejected := FALSE;
+IF requestReset AND feedbackGood THEN
+    cylinder.Reset();
+    advanceCoil.Reset();
+    retractCoil.Reset();
+END_IF;
+
+motionAllowed := feedbackGood AND permitMotion AND NOT requestReset;
+IF NOT motionAllowed THEN
+    cylinder.Abort();
+END_IF;
+
+// 2. Issue at most one direction command. Rejections are visible to the step.
+IF requestAdvance OR requestRetract THEN
+    IF NOT motionAllowed OR (requestAdvance AND requestRetract) THEN
+        lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED;
+    ELSIF requestAdvance THEN
+        lastResponse := cylinder.Advance();
+    ELSE
+        lastResponse := cylinder.Retract();
+    END_IF;
+
+    commandRejected := lastResponse <> TcForge.E_RpcMethodResponse.ACCEPTED
+        AND lastResponse <> TcForge.E_RpcMethodResponse.REJECTED_ALREADY_AT_TARGET;
+END_IF;
+
+cylinder(
+    inAdvanced := feedback.advanced,
+    inRetracted := feedback.retracted
+);
+
+// 3. Apply final output policy after the actuator has detected current faults.
+motionAllowed := motionAllowed AND NOT cylinder.IsFaulted()
+    AND NOT advanceCoil.IsFaulted() AND NOT retractCoil.IsFaulted();
+
+IF motionAllowed THEN
+    IF cylinder.outAdvance THEN
+        advanceCoil.SetOn();
+    ELSE
+        advanceCoil.SetOff();
+    END_IF;
+
+    IF cylinder.outRetract THEN
+        retractCoil.SetOn();
+    ELSE
+        retractCoil.SetOff();
+    END_IF;
+ELSE
+    advanceCoil.ForceSafe();
+    retractCoil.ForceSafe();
+END_IF;
+
+advanceCoil(inpQuality := outputQuality);
+retractCoil(inpQuality := outputQuality);
+
+outputs.advance := advanceCoil.outSignal;
+outputs.retract := retractCoil.outSignal;
+status := cylinder.sts;
+faulted := cylinder.IsFaulted() OR advanceCoil.IsFaulted()
+    OR retractCoil.IsFaulted();
+]]></ST>
+    </Implementation>
+    <Method Name="ResetFaults" Id="{2ae2e001-3ff7-45f2-a8db-0b65d8d43aad}">
+      <Declaration><![CDATA[// The station admits this operation only when stopped, with trusted shutdown.
+METHOD PUBLIC ResetFaults
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[cylinder.Reset();
+advanceCoil.Reset();
+retractCoil.Reset();
+
+// Publish the cleared submodule status before the station evaluates Reset.
+faulted := cylinder.IsFaulted() OR advanceCoil.IsFaulted()
+    OR retractCoil.IsFaulted();
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

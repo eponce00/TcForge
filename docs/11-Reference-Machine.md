@@ -1,10 +1,66 @@
-# 11 Reference machine
+# 11 Assembly example and focused clamp fixture
 
-`TwinCAT/TcForgeExample/Reference/FB_ReferenceMachine.TcPOU` composes a two-position
-clamp using the public TcForge interfaces. The example MAIN assigns its final
-outputs to application-owned `GVL_HW` channels. All channels are unlinked and all
-qualities default UNKNOWN. No simulation or assumed bus-health signal is hidden
-inside the application block.
+## Main example: discrete assembly station
+
+Open `TcForgeExample` in `TwinCAT/TcForge.sln`. Its source folders combine block
+and type definitions by purpose:
+
+- `Assembly`: `MAIN`, application IO structures, `GVL_HW` and `FB_AssemblyStation`.
+- `Actuators`: reusable `FB_CylinderAssembly` plus feedback/output structures.
+  Three instances operate the locating clamp, press and ejector.
+- `Inspection`: photoelectric part/discharge sensors and analog pressure/height
+  conditioning. The example scales INT terminal values to 0..10 bar and 0..20 mm.
+- `ClampCycle`: the small `FB_ReferenceMachine` used for focused lifecycle tests.
+- `Simulation`: the ADS bridge that runs the complete assembly station against
+  the Python plant model.
+
+Testing and Simulation use a source reference to TcForgeExample. The example
+owns these definitions once; no TcForgeReference project is needed. The main
+example uses the assembly station, not the small clamp-cycle fixture.
+
+### Assembly recipe
+
+| Step | Action | Completion evidence |
+|---|---|---|
+| 1000 | Home press and ejector | Both retracted |
+| 1002 | Open locating clamp | Clamp retracted |
+| 3000 | Wait for a part | Part sensor |
+| 3002 | Locate part | Clamp advanced |
+| 3004 | Press assembly | Press advanced |
+| 3006 | Inspect assembly | Height between 9.5 and 10.5 mm |
+| 3008 | Withdraw press | Press retracted |
+| 3010 | Release part | Clamp retracted |
+| 3012 | Eject finished part | Ejector advanced and part sensor clear |
+| 3014 | Park ejector | Ejector retracted; return to READY |
+
+Pressure must remain between 5 and 8 bar and IO quality must be GOOD. Each
+recipe phase has a ten-second timeout. This is an example recipe, not a
+commissioned press process: it does not implement force control, a reject lane
+or safety-rated control. Failed inspection faults the sequence instead of
+silently passing or ejecting the part.
+
+The press advance permissive requires a located part. Clamp motion requires
+the press retracted. Ejection requires a retracted press/clamp and clear
+discharge. Retracting the press/ejector remains possible during homing even
+when the locating clamp is not home. Directional permissives are checked in
+the reusable actuator assembly, including while movement is in progress.
+
+`MAIN` maps `GVL_HW.inputs` into the station and copies its final outputs back.
+The structures are unlinked software channels until an application IO adapter
+maps physical terminals or a simulator. All quality values default UNKNOWN;
+no GOOD values or simulated feedback are hidden in the station. The Python ADS
+bridge supplies one coherent frame for all three cylinders, both photoeyes, and
+the pressure and height channels; the PLC executes this same station block.
+
+Stop and Abort remove coil requests and wait for independent shutdown feedback.
+Reset is stationary and requires trusted shutdown and healthy inputs; it does
+not restart motion. Return a command to `None` before repeating it.
+
+## Focused clamp-cycle fixture
+
+`ClampCycle/FB_ReferenceMachine` remains a small test composition for lifecycle,
+online-change and simulation regressions. The following contract describes that
+fixture, not the larger assembly recipe above.
 
 ## Ownership and scan order
 

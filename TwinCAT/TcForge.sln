@@ -48,10 +48,6 @@ Global
 		{56264B11-CA80-48CE-91FC-8709823DA530}.Release|TwinCAT OS (x64).Build.0 = Release|TwinCAT OS (x64)
 		{56264B11-CA80-48CE-91FC-8709823DA530}.Release|TwinCAT RT (x64).ActiveCfg = Release|TwinCAT RT (x64)
 		{56264B11-CA80-48CE-91FC-8709823DA530}.Release|TwinCAT RT (x64).Build.0 = Release|TwinCAT RT (x64)
-		{378F46D6-F794-4F74-BBE4-668B995A3B24}.Debug|TwinCAT OS (x64).ActiveCfg = Debug|TwinCAT OS (x64)
-		{378F46D6-F794-4F74-BBE4-668B995A3B24}.Debug|TwinCAT RT (x64).ActiveCfg = Debug|TwinCAT RT (x64)
-		{378F46D6-F794-4F74-BBE4-668B995A3B24}.Release|TwinCAT OS (x64).ActiveCfg = Release|TwinCAT OS (x64)
-		{378F46D6-F794-4F74-BBE4-668B995A3B24}.Release|TwinCAT RT (x64).ActiveCfg = Release|TwinCAT RT (x64)
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

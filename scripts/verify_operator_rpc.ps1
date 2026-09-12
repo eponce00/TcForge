@@ -5,7 +5,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if (-not $McpRoot) { $McpRoot = Join-Path $PSScriptRoot '../../twincat-mcp' }
-$rpcBin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release')).Path
+$rpcBin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release-v2')).Path
 $output = Join-Path $PSScriptRoot '../artifacts/operator-rpc'
 New-Item -ItemType Directory -Force $output | Out-Null
 $refs = @(Get-ChildItem -LiteralPath $rpcBin -Filter '*.dll' | ForEach-Object {

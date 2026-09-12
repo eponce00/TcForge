@@ -112,7 +112,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', required=True)
     parser.add_argument('--port', type=int, default=853)
-    parser.add_argument('--helper', type=Path, default=ROOT.parent / 'twincat-mcp/TcAutomation/bin/Release/TcAutomation.exe')
+    parser.add_argument('--helper', type=Path, default=ROOT.parent / 'twincat-mcp/TcAutomation/bin/Release-v2/TcAutomation.exe')
     parser.add_argument('--output', type=Path, default=ROOT / 'artifacts/tcunit.xml')
     parser.add_argument('--expected-cycle-ms', type=int, choices=[1, 10])
     parser.add_argument('--provenance-token', type=Path)

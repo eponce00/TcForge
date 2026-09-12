@@ -1,7 +1,17 @@
 import math
 import unittest
-from tcforge_sim.models import FirstOrderAnalog, TwoPositionCylinder
-from tcforge_sim.runner import CoilFrame, CylinderRunner, MemoryCylinderIO, StaleFrameError
+from tcforge_sim.models import (
+    AssemblyOutputs,
+    AssemblyPlant,
+    FirstOrderAnalog,
+    TwoPositionCylinder,
+)
+from tcforge_sim.runner import (
+    CoilFrame,
+    CylinderRunner,
+    MemoryCylinderIO,
+    StaleFrameError,
+)
 
 
 class PlantTests(unittest.TestCase):
@@ -58,6 +68,40 @@ class PlantTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             TwoPositionCylinder(position=2)
 
+    def test_assembly_cell_moves_each_axis_independently(self):
+        plant = AssemblyPlant(travel_s=1)
+        feedback = plant.step(AssemblyOutputs(clamp_advance=True), 0.5)
+        self.assertEqual(feedback.clamp.position, 0.5)
+        self.assertTrue(feedback.press.retracted)
+        self.assertTrue(feedback.ejector.retracted)
+        self.assertTrue(feedback.part_present)
+
+    def test_part_leaves_only_at_ejector_forward_limit(self):
+        plant = AssemblyPlant(travel_s=1)
+        plant.step(AssemblyOutputs(ejector_advance=True), 0.5)
+        self.assertTrue(plant.part_present)
+        feedback = plant.step(AssemblyOutputs(ejector_advance=True), 0.5)
+        self.assertTrue(feedback.ejector.advanced)
+        self.assertFalse(feedback.part_present)
+
+    def test_load_part_requires_parked_ejector(self):
+        plant = AssemblyPlant(travel_s=1)
+        plant.part_present = False
+        plant.step(AssemblyOutputs(ejector_advance=True), 0.1)
+        with self.assertRaisesRegex(RuntimeError, "ejector"):
+            plant.load_part()
+        plant.step(AssemblyOutputs(ejector_retract=True), 0.1)
+        plant.load_part()
+        self.assertTrue(plant.part_present)
+
+    def test_assembly_analog_channels_are_bounded(self):
+        plant = AssemblyPlant()
+        plant.pressure_target = 100000
+        plant.height_target = -100000
+        feedback = plant.step(AssemblyOutputs(), 10)
+        self.assertEqual(feedback.pressure_raw, 32767)
+        self.assertEqual(feedback.height_raw, 0)
+
 
 class RunnerTests(unittest.TestCase):
     def test_read_model_write_frame_correlation(self):
@@ -66,7 +110,7 @@ class RunnerTests(unittest.TestCase):
         result = CylinderRunner(io, TwoPositionCylinder(1), 0.5).tick()
         self.assertEqual(io.feedback_sequence, 42)
         self.assertEqual(io.feedback.position, 0.5)
-        self.assertEqual(result['time_s'], 0.5)
+        self.assertEqual(result["time_s"], 0.5)
 
     def test_stale_or_restart_frame_stops_without_advancing(self):
         for sequence in (42, 0):
@@ -83,7 +127,8 @@ class RunnerTests(unittest.TestCase):
     def test_write_failure_does_not_retry_advanced_plant(self):
         class Broken(MemoryCylinderIO):
             def write_inputs(self, sequence, feedback):
-                raise OSError('disconnected')
+                raise OSError("disconnected")
+
         io = Broken()
         io.output = CoilFrame(0, True, False)
         plant = TwoPositionCylinder(1)
@@ -95,5 +140,5 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(plant.position, 0.1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -12,15 +12,11 @@ pneumatics, alarms, and shared device contracts for Beckhoff PLC applications.
     library, and review the [progress tracker](https://github.com/eponce00/TcForge/blob/main/PROGRESS.md)
     for remaining work.
 
-    These guides describe the current development workspace. The accompanying PLC
-    and simulation update has not yet been published to `main`, so some described
-    files and APIs are not available in the public source checkout yet.
-
 ## Build on shared contracts
 
 TcForge provides method-based commands, requester validation, consistent device
-status and faults, and application-owned hardware mapping. The integrated clamp
-reference application shows how these pieces work together in an owning cyclic task.
+status and faults, and application-owned hardware mapping. The integrated discrete
+assembly station shows how these pieces work together in an owning cyclic task.
 
 | Area | What you will find |
 | --- | --- |
@@ -41,8 +37,8 @@ reference application shows how these pieces work together in an owning cyclic t
 ## Develop and contribute
 
 Use the [programming standards](1-Programming-Standards.md) when adding modules.
-The [simulation guide](12-Simulation.md) describes current coverage and planned
-live exchange work. See [contributing](https://github.com/eponce00/TcForge/blob/main/CONTRIBUTING.md)
+The [simulation guide](12-Simulation.md) describes the offline models and live
+PLC exchange. See [contributing](https://github.com/eponce00/TcForge/blob/main/CONTRIBUTING.md)
 for reporting issues and documenting validation.
 
 TcForge is [MIT licensed](https://github.com/eponce00/TcForge/blob/main/LICENSE).

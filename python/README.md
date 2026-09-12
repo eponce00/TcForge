@@ -4,10 +4,12 @@ This package models physical counterparts to TcForge devices. The PLC remains
 the controller. Pure plant models, IO transports and scenario orchestration are
 separate so the same models can be used offline and later against TwinCAT.
 
-Implemented: two-position cylinder travel, jam and sensor overrides; bounded
-first-order analog response; ordered read/model/write runner; JSONL traces; a
-read-only ADS target probe; live PLC exchange and assembly functional scenarios. No Redwood source or SPT code is copied into this
-package. The Redwood prototype informed the separation of physics and IO adapters.
+Implemented: three-cylinder assembly-cell travel, jams and sensor overrides;
+part-presence and discharge photoeyes; bounded pressure and height analog
+responses; ordered read/model/write exchange; JSONL traces; a read-only ADS
+target probe; and live PLC functional scenarios. No Redwood source or SPT code
+is copied into this package. The Redwood prototype informed the separation of
+physics and IO adapters.
 
 ## Run locally
 
@@ -56,7 +58,9 @@ also includes the bridge at port 853.
 artifacts/sim-venv/Scripts/python.exe -m tcforge_sim.functional --target 192.168.1.108.1.1 --port 854 --transport artifacts/simulation-rpc/SimulationRpc.exe --output artifacts/assembly-e2e
 ```
 
-The suite runs actual PLC Home/cycle/Stop/Abort and fault/recovery scenarios against
-simulated clamp mechanics. It writes `assembly-trace.jsonl` and `assembly-junit.xml`
-and exits nonzero when a scenario fails. PLC restart and physical IO acceptance
-remain tracked in [PROGRESS.md](../PROGRESS.md).
+The suite runs the actual PLC locate, press, inspect and eject recipe plus
+Stop/Abort, jam, sensor contradiction, bad quality, blocked discharge, shutdown
+confirmation, watchdog and reconnect recovery scenarios. It writes
+`assembly-trace.jsonl` and `assembly-junit.xml` and exits nonzero when a scenario
+fails. PLC restart and physical IO acceptance remain tracked in
+[PROGRESS.md](../PROGRESS.md).

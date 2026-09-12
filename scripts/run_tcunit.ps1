@@ -10,7 +10,7 @@ if ($PSVersionTable.PSEdition -ne 'Desktop') {
     throw 'Use powershell.exe (Windows PowerShell 5.1) for the .NET Framework COM helper.'
 }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release')).Path
+$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release-v2')).Path
 $artifacts = Join-Path $repo 'artifacts'
 New-Item -ItemType Directory -Force $artifacts | Out-Null
 if (-not $BuildEvidence) { $BuildEvidence = Join-Path $artifacts 'build-evidence.json' }
@@ -80,7 +80,7 @@ $originalSystemTask = [regex]::Match($originalSystemProject, '<Task\b[^>]*AmsPor
 $utf8 = [Text.UTF8Encoding]::new($false)
 $completed = $false
 $referenceProfiles = @{}
-foreach ($relative in @('Testing.plcproj','Simulation.plcproj','TcForgeExample/TcForgeExample.plcproj','TcForgeReference.plcproj')) {
+foreach ($relative in @('Testing.plcproj','Simulation.plcproj','TcForgeExample/TcForgeExample.plcproj')) {
     $path = Join-Path $repo ('TwinCAT/' + $relative)
     $referenceProfiles[$path] = [IO.File]::ReadAllBytes($path)
 }

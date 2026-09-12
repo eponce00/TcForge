@@ -1,4 +1,5 @@
 """Run a deterministic offline motion/fault scenario and produce JSONL evidence."""
+
 import argparse
 import json
 from pathlib import Path
@@ -23,7 +24,9 @@ def main():
             trace.write(json.dumps(row, allow_nan=False) + "\n")
     if io.feedback is None or not io.feedback.retracted:
         raise RuntimeError("Offline scenario did not retract")
-    print(f"200 deterministic plant ticks passed; trace: {args.trace}. PLC execution is separate.")
+    print(
+        f"200 deterministic plant ticks passed; trace: {args.trace}. PLC execution is separate."
+    )
 
 
 if __name__ == "__main__":

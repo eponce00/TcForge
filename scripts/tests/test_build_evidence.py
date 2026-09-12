@@ -28,7 +28,7 @@ class BuildEvidenceTests(unittest.TestCase):
         self.put('TwinCAT/Testing/Tests/FB_Test.TcPOU', "<TcPlcObject><POU Name='FB_Test'><Implementation><ST>TEST('one');</ST></Implementation></POU></TcPlcObject>")
         self.put('scripts/compiler.ps1', '# compiler wrapper')
         self.put('helper/TcAutomation/Program.cs', '// helper source')
-        self.put('helper/TcAutomation/bin/Release/TcAutomation.exe', 'helper binary')
+        self.put('helper/TcAutomation/bin/Release-v2/TcAutomation.exe', 'helper binary')
         # Dependency graph semantics have their own checker tests; retain byte checks here.
         def dependencies(record, captures):
             evidence.verify_file(record)
@@ -118,7 +118,7 @@ class BuildEvidenceTests(unittest.TestCase):
             self.run_report(1, lambda props: props.pop('runId'))
 
     def test_rejects_helper_binary_changes(self):
-        self.put('helper/TcAutomation/bin/Release/TcAutomation.exe', 'new helper binary')
+        self.put('helper/TcAutomation/bin/Release-v2/TcAutomation.exe', 'new helper binary')
         with self.assertRaisesRegex(ValueError, 'Build helper source/binaries changed'):
             evidence.verify_build(self.root, self.manifest, self.library)
 
@@ -168,7 +168,7 @@ class BuildEvidenceTests(unittest.TestCase):
     def test_export_context_rejects_wrong_helper_and_endpoint(self):
         token = self.root / 'artifacts/context-run.json'
         evidence.begin_test(self.root, self.manifest, self.library, 1, '1.2.3.4.1.1', token, self.installed)
-        helper = self.root / 'helper/TcAutomation/bin/Release/TcAutomation.exe'
+        helper = self.root / 'helper/TcAutomation/bin/Release-v2/TcAutomation.exe'
         self.assertEqual(evidence.report_context(token, helper, '1.2.3.4.1.1', 853, 1)['buildId'],
                          evidence.read(self.manifest)['buildId'])
         with self.assertRaisesRegex(ValueError, 'target/port/period'):

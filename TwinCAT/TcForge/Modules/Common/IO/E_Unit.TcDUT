@@ -6,7 +6,7 @@
 // caller. Extend by appending new enumerators at the end; existing codes
 // are stable so historian / OPC tags do not shift.
 //
-// Last used enumerator: 32
+// Last used enumerator: 33
 {attribute 'qualified_only'}
 {attribute 'strict'}
 {attribute 'to_string'}
@@ -43,6 +43,7 @@ TYPE E_Unit :
     KILOGRAM                      := 11,    // kg
 
     // Pressure
+    BAR                           := 33,    // bar
     KILOPASCAL                    := 12,    // kPa
     INCH_WATER_COLUMN             := 13,    // inWC
     PSIG                          := 14,    // psig - gauge pressure

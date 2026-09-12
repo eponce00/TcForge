@@ -2,7 +2,7 @@
 # after XAE closes, or operate on a disposable consumer copy.
 function Set-TcForgeInstalledReferences {
     param([Parameter(Mandatory=$true)][string]$TwinCATRoot)
-    foreach ($relative in @('Testing.plcproj','Simulation.plcproj','TcForgeExample/TcForgeExample.plcproj','TcForgeReference.plcproj')) {
+    foreach ($relative in @('Testing.plcproj','Simulation.plcproj','TcForgeExample/TcForgeExample.plcproj')) {
         $path = Join-Path $TwinCATRoot $relative
         $text = [IO.File]::ReadAllText($path)
         $pattern = '(?s)(<PlaceholderReference Include="TcForge">\s*<DefaultResolution>)\[TcForge\](, [^<]+</DefaultResolution>)'

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <GVL Name="GVL_HW" Id="{e0000001-0000-0000-0000-000000000001}">
+    <Declaration><![CDATA[// Application process image. Map physical terminals or a simulation adapter
+// here, and derive quality from that adapter's actual communication health.
+{attribute 'qualified_only'}
+VAR_GLOBAL
+    inputs : ST_AssemblyInputs;
+    outputs : ST_AssemblyOutputs;
+END_VAR
+]]></Declaration>
+  </GVL>
+</TcPlcObject>

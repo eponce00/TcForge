@@ -95,7 +95,11 @@ def helper_snapshot(helper_root):
             continue
         if 'bin' not in parts and path.suffix.lower() in {'.cs', '.csproj', '.sln', '.props', '.targets', '.config'}:
             source[relative.as_posix()] = digest(path)
-        elif 'bin' in parts and 'Release' in parts and path.suffix.lower() in {'.exe', '.dll', '.config'}:
+        elif (
+            'bin' in parts
+            and any(part.startswith('Release') for part in parts)
+            and path.suffix.lower() in {'.exe', '.dll', '.config'}
+        ):
             binary[relative.as_posix()] = digest(path)
     require(source and binary, 'Helper source and Release binaries are both required')
     files = dict(source=source, binary=binary)

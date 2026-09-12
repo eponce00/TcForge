@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="MAIN" Id="{05cb368c-66e5-4aa0-9491-7b02e519ec00}" SpecialFunc="None">
+    <Declaration><![CDATA[// Hardware mapping is kept here; the machine FB has no absolute IO addresses.
+PROGRAM MAIN
+VAR
+    machine : FB_AssemblyStation;
+    command : E_ReferenceCommand;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[machine(inputs := GVL_HW.inputs, command := command);
+GVL_HW.outputs := machine.outputs;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

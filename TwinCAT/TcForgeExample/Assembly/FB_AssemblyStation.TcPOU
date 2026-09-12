@@ -1,0 +1,504 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_AssemblyStation" Id="{5fb896cf-1344-4727-b3a7-2eb3d55edc99}" SpecialFunc="None">
+    <Declaration><![CDATA[// Machine recipe: locate -> press -> inspect -> release -> eject.
+// Call once per scan. Devices never call the machine sequence themselves.
+FUNCTION_BLOCK FB_AssemblyStation
+VAR_INPUT
+    inputs : ST_AssemblyInputs;
+    command : E_ReferenceCommand; // Return to None before repeating a command.
+    recoverOnOnlineChange : BOOL := TRUE; // Production-safe default; compatible edits may opt out.
+END_VAR
+
+VAR_OUTPUT
+    outputs : ST_AssemblyOutputs;
+    sequence : TcForge.ST_SM_Status;
+    lastResponse : TcForge.E_RpcMethodResponse;
+    outputsInhibited : BOOL;
+    pressureBar : REAL;
+    heightMm : REAL;
+END_VAR
+
+VAR
+    // Physical areas: conditioning, locating nest, press and discharge.
+    sensors : FB_AssemblySensors;
+    clamp : FB_CylinderAssembly;
+    press : FB_CylinderAssembly;
+    ejector : FB_CylinderAssembly;
+
+    // Machine lifecycle and execution ownership.
+    sm : TcForge.FB_StateMachine;
+    continuity : TcForge.FB_ExecutionContinuity;
+    taskIndex : DINT;
+    previousCommand : E_ReferenceCommand;
+    freshCommand : BOOL;
+    resetPending : BOOL;
+    recoveryRequired : BOOL;
+    healthy : BOOL;
+    shutdownTrusted : BOOL;
+    motionAllowed : BOOL;
+
+    // One-scan direction requests. The actuator assembly handles coil policy.
+    clampAdvance : BOOL;
+    clampRetract : BOOL;
+    pressAdvance : BOOL;
+    pressRetract : BOOL;
+    ejectAdvance : BOOL;
+    ejectRetract : BOOL;
+
+    // Each recipe phase owns a separate lifecycle instance.
+    homePark : TcForge.FB_Step;
+    homeUnclamp : TcForge.FB_Step;
+    waitPart : TcForge.FB_Step;
+    locatePart : TcForge.FB_Step;
+    pressPart : TcForge.FB_Step;
+    inspectPart : TcForge.FB_Step;
+    withdrawPress : TcForge.FB_Step;
+    releasePart : TcForge.FB_Step;
+    ejectPart : TcForge.FB_Step;
+    parkEjector : TcForge.FB_Step;
+    stopStep : TcForge.FB_Step;
+    abortStep : TcForge.FB_Step;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// 1. Detect interrupted execution before accepting any new command.
+taskIndex := Tc2_System.GETCURTASKINDEXEX();
+IF taskIndex > 0 THEN
+    continuity(
+        taskIndex := taskIndex,
+        cycleCounter := TwinCAT_SystemInfoVarList._TaskInfo[taskIndex].CycleCount,
+        onlineChangeCounter := TwinCAT_SystemInfoVarList._AppInfo.OnlineChangeCnt,
+        recoverOnOnlineChange := recoverOnOnlineChange
+    );
+ELSE
+    continuity(taskIndex := taskIndex);
+END_IF;
+
+IF continuity.interrupted THEN
+    recoveryRequired := TRUE;
+    sm.Abort();
+END_IF;
+
+// 2. Current input quality and air pressure gate every automatic movement.
+sensors(inputs := inputs);
+healthy := sensors.qualityGood AND sensors.pressureGood
+    AND inputs.outputQuality = TcForge.E_IO_Quality.GOOD
+    AND NOT (inputs.clamp.advanced AND inputs.clamp.retracted)
+    AND NOT (inputs.press.advanced AND inputs.press.retracted)
+    AND NOT (inputs.ejector.advanced AND inputs.ejector.retracted);
+shutdownTrusted := inputs.shutdownConfirmed
+    AND inputs.shutdownQuality = TcForge.E_IO_Quality.GOOD;
+
+sm.cfgHome.nRequired := 1;
+sm.cfgStart.nRequired := 1;
+sm.cfgAuto.nRequired := 1;
+sm.cfgRunning.nRequired := 1;
+sm.MapHomeCondition(bitIndex := 0, bGood := healthy);
+sm.MapStartCondition(bitIndex := 0, bGood := healthy);
+sm.MapAutoCondition(bitIndex := 0, bGood := healthy);
+sm.MapRunningIntlk(bitIndex := 0, bGood := healthy);
+
+// 3. Commands are consumed once, including rejected commands.
+resetPending := FALSE;
+freshCommand := command <> E_ReferenceCommand.None AND command <> previousCommand;
+previousCommand := command;
+IF freshCommand THEN
+    IF continuity.interrupted THEN
+        lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED;
+    ELSE
+        HandleCommand();
+    END_IF;
+END_IF;
+
+// Clear device faults and the recovered running-interlock latch before the
+// state machine samples them. FB_Interlock publishes sts.bOK from its body, so
+// resetting the latch after sm() would make this Reset fail for one scan.
+IF resetPending THEN
+    clamp.ResetFaults();
+    press.ResetFaults();
+    ejector.ResetFaults();
+    sm.ResetRunningIntlk();
+END_IF;
+
+sm(
+    inpSubmoduleFaulted := clamp.faulted OR press.faulted OR ejector.faulted,
+    inpShutdownConfirmed := shutdownTrusted
+);
+
+// 4. Recipe methods only request moves; every device still executes below.
+clampAdvance := FALSE;
+clampRetract := FALSE;
+pressAdvance := FALSE;
+pressRetract := FALSE;
+ejectAdvance := FALSE;
+ejectRetract := FALSE;
+RunHome();
+RunCycle();
+RunShutdown();
+
+motionAllowed := healthy AND NOT recoveryRequired AND NOT sm.IsFaulted()
+    AND NOT sm.Status.ShutdownFailed
+    AND (sm.Status.State = TcForge.E_SM_State.HOMING
+        OR sm.Status.State = TcForge.E_SM_State.RUNNING);
+
+// 5. Geometry interlocks are checked at the actuator boundary every scan.
+// The press cannot descend without the locating clamp; the ejector cannot
+// enter the nest until the press and clamp are both retracted.
+clamp(
+    feedback := inputs.clamp,
+    quality := inputs.inputQuality,
+    outputQuality := inputs.outputQuality,
+    permitMotion := motionAllowed,
+    allowAdvance := inputs.press.retracted,
+    allowRetract := inputs.press.retracted,
+    requestAdvance := clampAdvance,
+    requestRetract := clampRetract,
+    requestReset := resetPending
+);
+press(
+    feedback := inputs.press,
+    quality := inputs.inputQuality,
+    outputQuality := inputs.outputQuality,
+    permitMotion := motionAllowed,
+    allowAdvance := inputs.clamp.advanced AND sensors.partPresent,
+    allowRetract := TRUE,
+    requestAdvance := pressAdvance,
+    requestRetract := pressRetract,
+    requestReset := resetPending
+);
+ejector(
+    feedback := inputs.ejector,
+    quality := inputs.inputQuality,
+    outputQuality := inputs.outputQuality,
+    permitMotion := motionAllowed,
+    allowAdvance := inputs.press.retracted AND inputs.clamp.retracted
+        AND sensors.dischargeClear,
+    allowRetract := TRUE,
+    requestAdvance := ejectAdvance,
+    requestRetract := ejectRetract,
+    requestReset := resetPending
+);
+
+IF clamp.commandRejected OR press.commandRejected OR ejector.commandRejected THEN
+    sm.Abort();
+    recoveryRequired := TRUE;
+END_IF;
+
+IF resetPending THEN
+    lastResponse := sm.Reset();
+    IF lastResponse = TcForge.E_RpcMethodResponse.ACCEPTED THEN
+        recoveryRequired := FALSE;
+    END_IF;
+END_IF;
+
+// 6. Final process-image gate catches faults detected during this scan.
+outputsInhibited := NOT motionAllowed OR clamp.faulted OR press.faulted
+    OR ejector.faulted OR sm.IsFaulted() OR recoveryRequired;
+outputs.clamp := clamp.outputs;
+outputs.press := press.outputs;
+outputs.ejector := ejector.outputs;
+IF outputsInhibited THEN
+    outputs.clamp.advance := FALSE;
+    outputs.clamp.retract := FALSE;
+    outputs.press.advance := FALSE;
+    outputs.press.retract := FALSE;
+    outputs.ejector.advance := FALSE;
+    outputs.ejector.retract := FALSE;
+END_IF;
+
+sequence := sm.Status;
+pressureBar := sensors.pressureBar;
+heightMm := sensors.heightMm;
+]]></ST>
+    </Implementation>
+    <Method Name="HandleCommand" Id="{a4d4b933-72f8-40b1-92ba-25b35d5bc7f5}">
+      <Declaration><![CDATA[METHOD PRIVATE HandleCommand
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE command OF
+E_ReferenceCommand.Home:
+    IF healthy AND NOT recoveryRequired THEN
+        lastResponse := sm.Home();
+    ELSE
+        lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED;
+    END_IF;
+
+E_ReferenceCommand.Start:
+    IF healthy AND NOT recoveryRequired THEN
+        lastResponse := sm.Start();
+    ELSE
+        lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED;
+    END_IF;
+
+E_ReferenceCommand.Stop:
+    lastResponse := sm.Stop();
+
+E_ReferenceCommand.Abort:
+    lastResponse := sm.Abort();
+
+E_ReferenceCommand.Reset:
+    IF sm.Status.State <> TcForge.E_SM_State.STOPPED THEN
+        lastResponse := TcForge.E_RpcMethodResponse.REJECTED_WRONG_STATE;
+    ELSIF NOT healthy OR NOT shutdownTrusted THEN
+        lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INTERLOCKED;
+    ELSE
+        resetPending := TRUE;
+    END_IF;
+
+ELSE
+    lastResponse := TcForge.E_RpcMethodResponse.REJECTED_INVALID_PARAMETER;
+END_CASE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RunHome" Id="{3f4710ce-36bc-400c-8486-2ee0315a1072}">
+      <Declaration><![CDATA[METHOD PRIVATE RunHome
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// 1000: Park press and ejector.
+homePark(
+    sm := sm,
+    nStep := 1000,
+    nNextStep := 1002,
+    nRequired := 1,
+    nTimeout := 10,
+    sName := 'Park press and ejector'
+);
+IF homePark.Entry THEN
+    pressRetract := TRUE;
+    ejectRetract := TRUE;
+END_IF;
+IF homePark.Execute THEN
+    homePark.MapPerm(
+        nIndex := 0,
+        sDescription := 'Park press and ejector',
+        bValue := inputs.press.retracted AND inputs.ejector.retracted
+    );
+END_IF;
+
+// 1002: Open locating clamp.
+homeUnclamp(
+    sm := sm,
+    nStep := 1002,
+    nNextStep := 0,
+    nRequired := 1,
+    nTimeout := 10,
+    sName := 'Open locating clamp'
+);
+IF homeUnclamp.Entry THEN
+    clampRetract := TRUE;
+END_IF;
+IF homeUnclamp.Execute THEN
+    homeUnclamp.MapPerm(
+        nIndex := 0,
+        sDescription := 'Open locating clamp',
+        bValue := inputs.clamp.retracted
+    );
+END_IF;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RunCycle" Id="{d00febe1-97d9-4bed-97e0-f58bd5df13b1}">
+      <Declaration><![CDATA[METHOD PRIVATE RunCycle
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// 3000: Wait for part in nest.
+waitPart(
+    sm := sm,
+    nStep := 3000,
+    nNextStep := 3002,
+    nRequired := 1,
+    nTimeout := 10,
+    sName := 'Wait for part in nest'
+);
+IF waitPart.Execute THEN
+    waitPart.MapPerm(
+        nIndex := 0,
+        sDescription := 'Wait for part in nest',
+        bValue := sensors.partPresent
+    );
+END_IF;
+
+// 3002: Locate part with clamp.
+locatePart(
+    sm := sm,
+    nStep := 3002,
+    nNextStep := 3004,
+    nRequired := 1,
+    nTimeout := 10,
+    sName := 'Locate part with clamp'
+);
+IF locatePart.Entry THEN
+    clampAdvance := TRUE;
+END_IF;
+IF locatePart.Execute THEN
+    locatePart.MapPerm(
+        nIndex := 0,
+        sDescription := 'Locate part with clamp',
+        bValue := inputs.clamp.advanced
+    );
+END_IF;
+
+// 3004: Press assembly.
+pressPart(
+    sm := sm,
+    nStep := 3004,
+    nNextStep := 3006,
+    nRequired := 1,
+    nTimeout := 10,
+    sName := 'Press assembly'
+);
+IF pressPart.Entry THEN
+    pressAdvance := TRUE;
+END_IF;
+IF pressPart.Execute THEN
+    pressPart.MapPerm(
+        nIndex := 0,
+        sDescription := 'Press assembly',
+        bValue := inputs.press.advanced
+    );
+END_IF;
+
+// 3006: Verify assembly height.
+inspectPart(
+    sm := sm,
+    nStep := 3006,
+    nNextStep := 3008,
+    nRequired := 1,
+    nTimeout := 10,
+    sName := 'Verify assembly height'
+);
+IF inspectPart.Execute THEN
+    inspectPart.MapPerm(
+        nIndex := 0,
+        sDescription := 'Verify assembly height',
+        bValue := sensors.heightAccepted
+    );
+END_IF;
+
+// 3008: Withdraw press.
+withdrawPress(
+    sm := sm,
+    nStep := 3008,
+    nNextStep := 3010,
+    nRequired := 1,
+    nTimeout := 10,
+    sName := 'Withdraw press'
+);
+IF withdrawPress.Entry THEN
+    pressRetract := TRUE;
+END_IF;
+IF withdrawPress.Execute THEN
+    withdrawPress.MapPerm(
+        nIndex := 0,
+        sDescription := 'Withdraw press',
+        bValue := inputs.press.retracted
+    );
+END_IF;
+
+// 3010: Release locating clamp.
+releasePart(
+    sm := sm,
+    nStep := 3010,
+    nNextStep := 3012,
+    nRequired := 1,
+    nTimeout := 10,
+    sName := 'Release locating clamp'
+);
+IF releasePart.Entry THEN
+    clampRetract := TRUE;
+END_IF;
+IF releasePart.Execute THEN
+    releasePart.MapPerm(
+        nIndex := 0,
+        sDescription := 'Release locating clamp',
+        bValue := inputs.clamp.retracted
+    );
+END_IF;
+
+// 3012: Eject finished part.
+ejectPart(
+    sm := sm,
+    nStep := 3012,
+    nNextStep := 3014,
+    nRequired := 1,
+    nTimeout := 10,
+    sName := 'Eject finished part'
+);
+IF ejectPart.Entry THEN
+    ejectAdvance := TRUE;
+END_IF;
+IF ejectPart.Execute THEN
+    ejectPart.MapPerm(
+        nIndex := 0,
+        sDescription := 'Eject finished part',
+        bValue := inputs.ejector.advanced AND NOT sensors.partPresent
+    );
+END_IF;
+
+// 3014: Park ejector.
+parkEjector(
+    sm := sm,
+    nStep := 3014,
+    nNextStep := 0,
+    nRequired := 1,
+    nTimeout := 10,
+    sName := 'Park ejector'
+);
+IF parkEjector.Entry THEN
+    ejectRetract := TRUE;
+END_IF;
+IF parkEjector.Execute THEN
+    parkEjector.MapPerm(
+        nIndex := 0,
+        sDescription := 'Park ejector',
+        bValue := inputs.ejector.retracted
+    );
+END_IF;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RunShutdown" Id="{d724833a-aa3e-40b9-8bf9-454abf8d8af4}">
+      <Declaration><![CDATA[METHOD PRIVATE RunShutdown
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Stop and Abort remove all coil requests. Physical shutdown still requires
+// independent feedback. Neither path guesses that an unpowered cylinder is home.
+stopStep(
+    sm := sm,
+    nStep := 2000,
+    nNextStep := 0,
+    nRequired := 1,
+    nTimeout := 5,
+    sName := 'Confirm stopped station'
+);
+IF stopStep.Execute THEN
+    stopStep.MapPerm(
+        nIndex := 0,
+        sDescription := 'Independent shutdown confirmed',
+        bValue := shutdownTrusted
+    );
+END_IF;
+
+abortStep(
+    sm := sm,
+    nStep := 5000,
+    nNextStep := 0,
+    nRequired := 1,
+    nTimeout := 5,
+    sName := 'Confirm aborted station'
+);
+IF abortStep.Execute THEN
+    abortStep.MapPerm(
+        nIndex := 0,
+        sDescription := 'Independent shutdown confirmed',
+        bValue := shutdownTrusted
+    );
+END_IF;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

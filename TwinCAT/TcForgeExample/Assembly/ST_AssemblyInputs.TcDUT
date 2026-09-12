@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="ST_AssemblyInputs" Id="{2bf50060-b068-48df-a22b-94644988d832}">
+    <Declaration><![CDATA[// Discrete assembly station: three cylinders and four measurement channels.
+// The IO adapter supplies quality; default UNKNOWN deliberately inhibits motion.
+TYPE ST_AssemblyInputs :
+STRUCT
+    clamp : ST_CylinderFeedback;
+    press : ST_CylinderFeedback;
+    ejector : ST_CylinderFeedback;
+
+    partPresent : BOOL;       // Photoelectric sensor at the locating nest.
+    dischargeClear : BOOL;    // Downstream sensor: permission to eject a part.
+    pressureRaw : INT;        // 0..32767 maps to 0..10 bar.
+    heightRaw : INT;          // 0..32767 maps to 0..20 mm.
+
+    inputQuality : TcForge.E_IO_Quality := TcForge.E_IO_Quality.UNKNOWN;
+    outputQuality : TcForge.E_IO_Quality := TcForge.E_IO_Quality.UNKNOWN;
+    shutdownConfirmed : BOOL; // Independent plant feedback, never coil-derived.
+    shutdownQuality : TcForge.E_IO_Quality := TcForge.E_IO_Quality.UNKNOWN;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSEdition -ne 'Desktop') { throw 'Use Windows PowerShell 5.1.' }
 if (-not $McpRoot) { $McpRoot = Join-Path $PSScriptRoot '../../twincat-mcp' }
 $repo = if ($WorkspaceRoot) { (Resolve-Path $WorkspaceRoot).Path } else { (Resolve-Path (Join-Path $PSScriptRoot '..')).Path }
-$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release')).Path
+$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release-v2')).Path
 $output = Join-Path $repo ('artifacts/development-build-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $output | Out-Null
 $baseline = Get-Content (Join-Path $repo 'toolchain.json') -Raw | ConvertFrom-Json
@@ -66,7 +66,8 @@ try {
         $xml = $sm.LookupTreeItem("TIPC^$plc^$plc Project").ProduceXml($false)
         [IO.File]::WriteAllText((Join-Path $output ($plc + '-references.xml')), $xml)
         [xml]$doc = $xml
-        foreach ($library in @('TcForge','TcForgeReference')) {
+        $libraries = if ($plc -eq 'TcForgeExample') { @('TcForge') } else { @('TcForge','TcForgeExample') }
+        foreach ($library in $libraries) {
             $reference = @($doc.SelectNodes("//IECProjectDef/References/PlaceholderReference[PlaceholderName='$library']"))
             if ($reference.Count -ne 1) { throw "$plc must resolve exactly one $library reference." }
             # Bracketed names are TwinCAT's project-library identity, not an installed artifact.

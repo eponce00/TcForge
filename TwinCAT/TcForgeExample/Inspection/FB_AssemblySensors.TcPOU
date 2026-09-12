@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_AssemblySensors" Id="{6192f9b0-5c85-48d9-a736-11832bdf33ca}" SpecialFunc="None">
+    <Declaration><![CDATA[// Condition photoelectric and analog signals once per scan.
+// The station consumes engineering units and quality, not raw terminal values.
+FUNCTION_BLOCK FB_AssemblySensors
+VAR_INPUT
+    inputs : ST_AssemblyInputs;
+END_VAR
+
+VAR_OUTPUT
+    partPresent : BOOL;
+    dischargeClear : BOOL;
+    pressureBar : REAL;
+    heightMm : REAL;
+    qualityGood : BOOL;
+    pressureGood : BOOL;
+    heightAccepted : BOOL;
+END_VAR
+
+VAR
+    partSensor : TcForge.FB_DigitalInput;
+    dischargeSensor : TcForge.FB_DigitalInput;
+    pressureSensor : TcForge.FB_AnalogInput;
+    heightSensor : TcForge.FB_AnalogInput;
+    pressureValue : TcForge.U_IoRaw_In;
+    heightValue : TcForge.U_IoRaw_In;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Fixed example commissioning values. Production settings belong in a recipe
+// or validated configuration; these values demonstrate engineering-unit scaling.
+pressureSensor.cfg.euMax := 10.0;
+pressureSensor.cfg.unit := TcForge.E_Unit.BAR;
+heightSensor.cfg.euMax := 20.0;
+heightSensor.cfg.unit := TcForge.E_Unit.MILLIMETER;
+pressureValue.nInt := inputs.pressureRaw;
+heightValue.nInt := inputs.heightRaw;
+
+partSensor(inSignal := inputs.partPresent, inpQuality := inputs.inputQuality);
+dischargeSensor(inSignal := inputs.dischargeClear, inpQuality := inputs.inputQuality);
+pressureSensor(inRaw := pressureValue, inpQuality := inputs.inputQuality);
+heightSensor(inRaw := heightValue, inpQuality := inputs.inputQuality);
+
+partPresent := partSensor.sts.value;
+dischargeClear := dischargeSensor.sts.value;
+pressureBar := pressureSensor.sts.value;
+heightMm := heightSensor.sts.value;
+
+qualityGood := partSensor.sts.quality = TcForge.E_IO_Quality.GOOD
+    AND dischargeSensor.sts.quality = TcForge.E_IO_Quality.GOOD
+    AND pressureSensor.sts.quality = TcForge.E_IO_Quality.GOOD
+    AND heightSensor.sts.quality = TcForge.E_IO_Quality.GOOD;
+
+// Do not interpret a held measurement as fresh evidence after quality loss.
+pressureGood := qualityGood AND pressureBar >= 5.0 AND pressureBar <= 8.0;
+heightAccepted := qualityGood AND heightMm >= 9.5 AND heightMm <= 10.5;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

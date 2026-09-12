@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'installed_reference_profile.ps1')
 if ($PSVersionTable.PSEdition -ne 'Desktop') { throw 'Use Windows PowerShell 5.1.' }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release')).Path
+$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release-v2')).Path
 [Reflection.Assembly]::LoadFrom((Join-Path $bin 'TcAutomation.exe')) | Out-Null
 Add-Type -ReferencedAssemblies (Join-Path $bin 'Interop.TCatSysManagerLib.dll') -TypeDefinition @'
 public static class TcForgeDependencyCapture {

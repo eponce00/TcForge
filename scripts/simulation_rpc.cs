@@ -24,11 +24,11 @@ class SimulationRpc
                 client.Connect(args[0], int.Parse(args[1]));
                 client.Timeout = 2000;
                 object identity = client.InvokeRpcMethod("MAIN.simulation", "Identity", new object[0]);
-                if (Convert.ToString(identity) != "TcForge.DiscreteSimulation/1")
+                if (Convert.ToString(identity) != "TcForge.DiscreteAssembly/2")
                     throw new Exception("Unexpected simulation identity");
                 // Resolve once per transport lifetime. InvokeRpcMethod resolves and
                 // releases a method handle on every call, adding two ADS round trips.
-                // This fixed ABI belongs to DiscreteSimulation/1; incompatible PLC
+                // This fixed ABI belongs to DiscreteAssembly/2; incompatible PLC
                 // method signatures must change that identity before deployment.
                 using (var methods = new SimulationMethods(client))
                 {
@@ -50,7 +50,10 @@ class SimulationRpc
                             case "exchange":
                                 value = methods.Call("Exchange", new object[] {
                                     ulong.Parse(fields[1]), ulong.Parse(fields[2]), ulong.Parse(fields[3]), ulong.Parse(fields[4]),
-                                    fields[5] == "1", fields[6] == "1", fields[7] == "1", fields[8] == "1", ushort.Parse(fields[9]) }); break;
+                                    fields[5] == "1", fields[6] == "1", fields[7] == "1", fields[8] == "1",
+                                    fields[9] == "1", fields[10] == "1", fields[11] == "1", fields[12] == "1",
+                                    short.Parse(fields[13]), short.Parse(fields[14]), fields[15] == "1", fields[16] == "1",
+                                    ushort.Parse(fields[17]) }); break;
                             default: throw new Exception("Unknown simulation operation");
                         }
                         Console.WriteLine(json.Serialize(new { value = value }));
@@ -86,8 +89,11 @@ sealed class SimulationMethods : IDisposable
             foreach (string method in new[] { "Claim", "Release" })
                 CheckSignature(rpc, method, "DINT", 4, new[] { "client", "expectedBoot" }, new[] { "ULINT", "ULINT" });
             CheckSignature(rpc, "Exchange", "DINT", 4,
-                new[] { "client", "expectedBoot", "frame", "outputFrame", "inAdvanced", "inRetracted", "shutdownConfirmed", "qualityGood", "requestedCommand" },
-                new[] { "ULINT", "ULINT", "ULINT", "ULINT", "BOOL", "BOOL", "BOOL", "BOOL", "UINT" });
+                new[] { "client", "expectedBoot", "frame", "outputFrame", "clampAdvanced", "clampRetracted",
+                    "pressAdvanced", "pressRetracted", "ejectorAdvanced", "ejectorRetracted", "partPresent",
+                    "dischargeClear", "pressureRaw", "heightRaw", "shutdownConfirmed", "qualityGood", "requestedCommand" },
+                new[] { "ULINT", "ULINT", "ULINT", "ULINT", "BOOL", "BOOL", "BOOL", "BOOL", "BOOL", "BOOL",
+                    "BOOL", "BOOL", "INT", "INT", "BOOL", "BOOL", "UINT" });
             foreach (string name in new[] { "Snapshot", "Claim", "Release", "Exchange" })
                 handles.Add(name, client.CreateVariableHandle("MAIN.simulation#" + name));
         }
@@ -132,6 +138,7 @@ sealed class SimulationMethods : IDisposable
                 {
                     if (value is ulong) writer.Write((ulong)value);
                     else if (value is ushort) writer.Write((ushort)value);
+                    else if (value is short) writer.Write((short)value);
                     else if (value is bool) writer.Write((bool)value);
                     else throw new InvalidDataException("Unsupported simulation RPC argument type");
                 }

@@ -1,10 +1,11 @@
 # Simulation and functional testing
 
-Python models discrete assembly equipment; TwinCAT runs the actual library and
-reference machine. The initial counterpart is a two-position clamp cylinder with
-travel time, jam and independent sensor faults. Plant physics, transport and test
-orchestration are separate. The process-plant prototype informed that separation;
-no project-specific or SPT implementation was copied.
+Python models a discrete assembly cell; TwinCAT runs the actual library and
+assembly-station controller. The plant contains locating-clamp, press and ejector
+cylinders, part/discharge photoeyes, and pressure/height analog channels. Plant
+physics, transport and test orchestration are separate. The process-plant
+prototype informed that separation; no project-specific or SPT implementation
+was copied.
 
 ## IO boundary
 
@@ -21,7 +22,7 @@ turn Python into an EtherCAT/Profinet device or reproduce bus diagnostics/timing
 ## Live exchange contract
 
 The fixed RPC endpoint is `MAIN.simulation`, identity
-`TcForge.DiscreteSimulation/1`. A small C# ADS transport validates that identity
+`TcForge.DiscreteAssembly/2`. A small C# ADS transport validates that identity
 and exposes only the simulation protocol to Python. The bridge is test application
 code, outside the reusable library and production example.
 
@@ -47,8 +48,9 @@ code, outside the reusable library and production example.
   In-motion restart and online-change acceptance remain open qualification items.
 
 `Snapshot` is a mutex-protected CSV record: result, boot, cycle, applied frame,
-advance coil, retract coil, machine state, faulted, inhibited, command response,
-session, owning task and healthy. A BUSY snapshot contains only `22`.
+six cylinder coil commands, machine state, faulted, inhibited, command response,
+session, owning task, healthy and current recipe step. A BUSY snapshot contains
+only `22`.
 
 ## Running the assembly scenarios
 
@@ -75,7 +77,7 @@ For bounded in-motion system restart acceptance, first deploy the standalone
 simulation, then run the verifier against that dedicated runtime:
 
 ```powershell
-artifacts/sim-venv/Scripts/python.exe scripts/verify_simulation_restart.py --target 192.168.1.108.1.1 --port 854 --solution TwinCAT/TcForge.Simulation.sln --automation ../twincat-mcp/TcAutomation/bin/Release/TcAutomation.exe --transport artifacts/simulation-rpc/SimulationRpc.exe --output artifacts/in-motion-restart
+artifacts/sim-venv/Scripts/python.exe scripts/verify_simulation_restart.py --target 192.168.1.108.1.1 --port 854 --solution TwinCAT/TcForge.Simulation.sln --automation ../twincat-mcp/TcAutomation/bin/Release-v2/TcAutomation.exe --transport artifacts/simulation-rpc/SimulationRpc.exe --output artifacts/in-motion-restart
 ```
 
 This operation restarts the selected TwinCAT system. It preloads XAE under the
@@ -119,9 +121,11 @@ application events. Session failures retain their cause; an uncertain reply neve
 appears as an applied frame. Sensor values, quality and independent shutdown
 confirmation are included for diagnosis. Failure to write the initial trace stops
 the session before submitting that frame. It covers exclusive
-sessions/rejected frames, Home/assembly cycle, controlled Stop, Abort, jam timeout,
-contradictory sensors, lost quality, simulator loss, explicit reconnect and recovery, and independent shutdown confirmation with
-timeout and rejected Reset until trusted feedback is present.
+sessions/rejected frames, the complete locate/press/inspect/eject cycle,
+controlled Stop, Abort, press-jam timeout, contradictory clamp sensors, lost
+quality, blocked discharge, simulator loss, explicit reconnect and recovery,
+and independent shutdown confirmation with timeout and rejected Reset until
+trusted feedback is present.
 The same bridge can also run alongside TcUnit on test PLC port 853.
 
 ## Time and physical assumptions
@@ -131,7 +135,7 @@ from Python's high-resolution monotonic clock; the PLC keeps its normal task tim
 Python and network scheduling are not real-time guarantees. A gap above 200 ms
 fails the live client before continuing the plant model; PLC protection is independent.
 
-The initial double-solenoid model holds position with both coils off. Spring-return
+Each double-solenoid cylinder model holds position with both coils off. Spring-return
 valves, pressure loss, inertia and real de-energized behavior need their own models.
 Shutdown confirmation is an independent simulated input, never inferred from coils.
 

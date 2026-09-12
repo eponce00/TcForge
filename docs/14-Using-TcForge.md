@@ -6,8 +6,7 @@ versions are recorded in `toolchain.json` at the repository root.
 
 ## Work on TcForge itself
 
-Open `TwinCAT/TcForge.sln`. The core library, shared reference support, Example,
-Testing and Simulation are in the same TwinCAT project. Consumers reference
+Open `TwinCAT/TcForge.sln`. The core library, Example, Testing and Simulation are in the same TwinCAT project. Consumers reference
 `[TcForge]` from source, so edits require a build but no library installation or
 version change. See the [development and qualification workflows](10-Qualification.md).
 
@@ -44,3 +43,20 @@ location, as demonstrated by [SPT's setup guide](https://beckhoff-usa-community.
 That repository is a planned release output, not a folder currently provided by
 TcForge. A browsable Material for MkDocs site now builds from these Markdown files;
 see [Maintaining this site](documentation-site.md) for preview and publishing instructions.
+
+## Source organization and readability
+
+Group files by machine area or purpose. Put a block, its configuration/status
+UDTs and the code using them together when they describe the same area. Do not
+create a separate project merely to separate definitions from instances.
+Generic device contracts belong in TcForge; application-specific compositions
+belong in TcForgeExample and can be shared through its project reference.
+
+Use one statement per line and blank lines between declaration groups and scan
+phases. Expand IF/ELSE bodies, and put long named argument lists on separate
+lines. Align related declarations where useful. For a long cyclic body, use
+named methods for meaningful phases, preserving a visible call order in the
+body. Inline comments should explain intent, units, required call order and
+non-obvious failure behavior; avoid comments that just repeat the assignment.
+Number recipe steps and give each a physical description. Keep device policy
+out of the recipe so a reader can follow the machine's actual operation.

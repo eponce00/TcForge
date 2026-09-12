@@ -9,8 +9,9 @@ before release. Installation and qualification progress is tracked in
 
 Daily development uses `TwinCAT/TcForge.sln`, with the core library and all three
 consumers in one TwinCAT project. `[TcForge]` resolves directly to source; the
-source-only `TcForgeReference` project owns the reference machine and simulation
-bridge shared by those consumers. Beckhoff documents this workflow under
+`TcForgeExample` project owns the application blocks and simulation bridge.
+Testing and Simulation reference that source project. In isolated test/simulation
+profiles the example has no runtime instance or boot build. Beckhoff documents this workflow under
 [referenced PLC libraries](https://infosys.beckhoff.com/content/1033/tc3_plc_intro/12051858443.html).
 Run `scripts/build_development.ps1` for a source build and `run_tcunit.ps1
 -Development` for source-based bench tests. Neither requires a TcForge library

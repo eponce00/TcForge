@@ -16,7 +16,7 @@ $artifactHash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash
 $destination = [IO.Path]::GetFullPath($Output)
 if (Test-Path -LiteralPath $destination) { throw 'Output must be a new directory; previous evidence is never overwritten.' }
 if ($destination.StartsWith((Join-Path $repo 'TwinCAT') + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Output must be outside the TwinCAT source tree.' }
-$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release')).Path
+$bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release-v2')).Path
 $baseline = Get-Content (Join-Path $repo 'toolchain.json') -Raw | ConvertFrom-Json
 [Reflection.Assembly]::LoadFrom((Join-Path $bin 'TcAutomation.exe')) | Out-Null
 Add-Type -ReferencedAssemblies @((Join-Path $bin 'Interop.EnvDTE.dll'), (Join-Path $bin 'Interop.EnvDTE80.dll'), (Join-Path $bin 'Interop.TCatSysManagerLib.dll')) -TypeDefinition @'

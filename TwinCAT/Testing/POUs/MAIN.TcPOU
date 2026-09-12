@@ -18,6 +18,7 @@ VAR
     enableRpcPump : BOOL := TRUE;
     commandValidation : FB_CommandValidation_Test;
     rpcContext : FB_RpcContext_Probe;
+    assemblyStation : FB_AssemblyStation_Test;
     referenceMachine : FB_ReferenceMachine_Test;
     sequenceIntegrity : FB_SequenceIntegrity_Test;
     foundation : FB_Foundation_Test;

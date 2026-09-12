@@ -20,7 +20,7 @@
   "librarySolution": "TwinCAT/TcForge.Library.sln",
   "buildScript": "scripts/build_twincat.ps1",
   "testProject": "TwinCAT/Testing.plcproj",
-  "referenceMachine": "TwinCAT/TcForgeExample/Reference/FB_ReferenceMachine.TcPOU",
+  "referenceMachine": "TwinCAT/TcForgeExample/ClampCycle/FB_ReferenceMachine.TcPOU",
   "operatorRpcVerifier": "scripts/verify_operator_rpc.ps1",
   "testRunScript": "scripts/run_tcunit.ps1",
   "benchRuntimeVersion": "3.1.4026.17",
