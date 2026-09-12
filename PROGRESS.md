@@ -26,12 +26,13 @@ and before/after documentation are not required.
 
 ## Next action
 
-Next, perform the medium-priority SPT candidate implementation audit: compare
-its Components/Utilities and Event Logger blocks with our existing discrete-assembly
-contracts, select a concrete missing capability, and adapt it with tests and
-provenance. Start by assessing an optional Event Logger adapter for existing
-faults; keep vendor logging dependencies outside the core control path. Do not
-add a PackML hierarchy without a machine-coordination use case.
+Next, implement A8.2: a separate optional Event Logger adapter for device faults,
+following the concrete contract in `docs/13-SPT-Review.md`. The candidate audit
+is complete: use explicit event definitions and checked vendor calls; do not
+import SPT's pointer-based bulk initialization or control-error flag helpers.
+Add transition/failure tests before A8.3 real Event Logger bench verification.
+Keep source-project references for development and the core free of vendor
+logging dependencies. No adapter implementation or runtime pass is claimed yet.
 
 The immediate high-priority bench cases now pass: matching-session Online Change,
 healthy-motion preservation, moving declaration recovery, controlled persistent-image
@@ -488,9 +489,17 @@ The user's 2026-09-09 ideas are tracked here; completed foundations remain below
 - [ ] **A7 — Parent/child machine coordination (later).** Evaluate SPT/PackML
   composition against an actual multi-module use case before adding framework
   hierarchy or changing the current sequencing contract.
-- [ ] **A8 — Optional event/utility integrations (later).** Review SPT Event Logger
-  and utility implementations individually. Keep event sinks outside mandatory
-  control dependencies; audit numeric bounds and failure paths before adoption.
+- [ ] **A8 — Optional event/utility integrations.**
+  - [x] **A8.1 — Candidate audit and selection.** Inspected Event Logger and
+    Utilities 3.9.0 archive ST text at pinned upstream commit. Recorded artifact
+    hashes, limitations, reuse decisions and an explicit adapter contract in
+    `docs/13-SPT-Review.md`. No upstream implementation copied or dependency added.
+  - [ ] **A8.2 — Implement optional device-fault adapter.** Separate source library;
+    explicit identity/event mapping, checked results, bounded retry work and
+    failure-injection tests. Logger cannot change device state or permissions.
+  - [ ] **A8.3 — Bench integration.** Verify actual Event Logger transitions,
+    unavailable/recovered reporting and unchanged control behavior; measure timing.
+    This is distinct from the already-passed core TcUnit suite.
 - [x] **D1 — Documentation website.** Build a navigable site from current Markdown,
   validate internal links and keep a single source of truth. Material for MkDocs
   configuration, home page, search, light/dark themes, grouped navigation and
