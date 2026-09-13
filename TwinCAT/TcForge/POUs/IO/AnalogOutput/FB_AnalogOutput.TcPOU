@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_AnalogOutput" Id="{a0100004-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Generic analog output driver.
+//
+// Pipeline:
+//   SetValue -> explicit command -> clamp to MinCv/MaxCv -> EU-to-raw
+//   linear scaling -> UNION write (type chosen by cfg.outputType)
+//
+// Saved intent is restored only with cfg.restoreCommandOnRestart.
+// Quality loss disarms output; recovery requires a fresh accepted command.
+// ForceSafe and Reset inhibit output independent of the previous command.
+//
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_AnalogOutput EXTENDS FB_DeviceBase
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg        : ST_AnalogOutput_Cfg;
+    {attribute 'OPC.UA.DA' := '0'}
+    inpQuality : E_IO_Quality := E_IO_Quality.GOOD;
+END_VAR
+
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    outRaw : U_IoRaw_Out;
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_AnalogOutput_Sts;
+END_VAR
+
+VAR PERSISTENT
+    // Saved intent (EU) and validity; durability depends on target persistent saving.
+    {attribute 'OPC.UA.DA' := '0'}
+    _savedCommand : REAL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _savedCommandValid : BOOL;
+END_VAR
+
+VAR
+    _configurationKnown : BOOL;
+    _lastConfiguration : ST_AnalogOutput_Cfg;
+    _requestSync : REAL; // Operating intent is never restored implicitly.
+    _armed : BOOL;
+    _commandReceived : BOOL;
+    _startup : BOOL := TRUE;
+    _forceSafe : BOOL;
+    _safeRequested : BOOL;
+    _qualityGood : BOOL;
+
+    {attribute 'OPC.UA.DA' := '0'}
+    _configBad     : BOOL;
+
+    // Quality watchdog.
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonBadQuality : TON;
+
+    // Scratch values.
+    {attribute 'OPC.UA.DA' := '0'}
+    _clampedEu     : REAL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _rawReal       : REAL;
+    _rawWide       : LREAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[_SyncConfiguration();
+_ProcessOperatorCommands();
+_qualityGood := inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED;
+IF _startup THEN
+    _startup := FALSE;
+    // A valid marker in a missing/backup image cannot authorize old operating intent.
+    // A command accepted in this execution is fresh and does not depend on that image.
+    IF NOT _commandReceived AND NOT THIS^._HasTrustedPersistentImage() THEN
+        _savedCommandValid := FALSE;
+    END_IF;
+    IF NOT _commandReceived AND cfg.restoreCommandOnRestart AND _savedCommandValid THEN
+        // Persistent data must be classified before it reaches floating operations.
+        IF F_IsFiniteReal(_savedCommand) THEN
+            _requestSync := _savedCommand;
+            _armed := TRUE;
+        ELSE
+            _savedCommand := 0.0;
+            _savedCommandValid := FALSE;
+            _requestSync := 0.0;
+            _armed := FALSE;
+            _forceSafe := TRUE;
+        END_IF;
+    END_IF;
+END_IF;
+IF NOT _qualityGood THEN _armed := FALSE; END_IF;
+// Validate every scan; live configuration changes cannot bypass validation.
+// NaN/infinity classification uses bits; floating comparisons can trap on the PLC.
+_configBad := NOT (F_IsFiniteReal(cfg.safeRaw) AND F_IsFiniteReal(cfg.euMin) AND F_IsFiniteReal(cfg.euMax) AND F_IsFiniteReal(cfg.rawMin) AND F_IsFiniteReal(cfg.rawMax) AND F_IsFiniteReal(cfg.minCv) AND F_IsFiniteReal(cfg.maxCv));
+IF NOT _configBad THEN
+    _configBad := (NOT cfg.useRawValue AND (cfg.euMin >= cfg.euMax OR cfg.rawMin >= cfg.rawMax OR cfg.minCv > cfg.maxCv))
+                  OR NOT ((cfg.euMin >= -1.0E30 AND cfg.euMin <= 1.0E30) AND (cfg.euMax >= -1.0E30 AND cfg.euMax <= 1.0E30) AND (cfg.rawMin >= -1.0E30 AND cfg.rawMin <= 1.0E30) AND (cfg.rawMax >= -1.0E30 AND cfg.rawMax <= 1.0E30) AND (cfg.minCv >= -1.0E30 AND cfg.minCv <= 1.0E30) AND (cfg.maxCv >= -1.0E30 AND cfg.maxCv <= 1.0E30));
+END_IF;
+_configBad := _configBad OR NOT (cfg.outputType = __SYSTEM.TYPE_CLASS.TYPE_INT OR cfg.outputType = __SYSTEM.TYPE_CLASS.TYPE_UINT OR cfg.outputType = __SYSTEM.TYPE_CLASS.TYPE_WORD OR cfg.outputType = __SYSTEM.TYPE_CLASS.TYPE_DINT OR cfg.outputType = __SYSTEM.TYPE_CLASS.TYPE_UDINT OR cfg.outputType = __SYSTEM.TYPE_CLASS.TYPE_DWORD OR cfg.outputType = __SYSTEM.TYPE_CLASS.TYPE_REAL);
+
+sts.unit       := cfg.unit;
+sts.quality    := inpQuality;
+sts.commanded  := _requestSync;
+
+// 2. Clamp the command in EU space.
+sts.clampedLow  := FALSE;
+sts.clampedHigh := FALSE;
+_clampedEu         := _requestSync;
+
+IF NOT _configBad AND NOT cfg.useRawValue THEN
+    IF _clampedEu < cfg.minCv THEN
+        _clampedEu        := cfg.minCv;
+        sts.clampedLow := TRUE;
+    ELSIF _clampedEu > cfg.maxCv THEN
+        _clampedEu         := cfg.maxCv;
+        sts.clampedHigh := TRUE;
+    END_IF;
+END_IF;
+sts.clampActive := sts.clampedLow OR sts.clampedHigh;
+// sts.value is updated only when the command is actually applied.
+
+// Scale with wide intermediates, then bound before narrowing to REAL.
+IF _configBad THEN
+    _rawWide := 0.0;
+ELSIF cfg.useRawValue THEN
+    _rawWide := REAL_TO_LREAL(_clampedEu);
+ELSE
+    _rawWide := REAL_TO_LREAL(cfg.rawMin)
+              + (REAL_TO_LREAL(cfg.rawMax) - REAL_TO_LREAL(cfg.rawMin))
+                * ((REAL_TO_LREAL(_clampedEu) - REAL_TO_LREAL(cfg.euMin))
+                / (REAL_TO_LREAL(cfg.euMax) - REAL_TO_LREAL(cfg.euMin)));
+END_IF;
+_rawReal := LREAL_TO_REAL(LIMIT(LREAL#-3.402823E38, _rawWide, LREAL#3.402823E38));
+// Raw status is published after output policy.
+
+// Fault decisions precede output application.
+_tonBadQuality(IN := NOT _qualityGood AND cfg.qualityFaultAfter > T#0MS, PT := cfg.qualityFaultAfter);
+_RaiseActiveFault();
+IF IsFaulted() THEN _armed := FALSE; END_IF;
+IF _forceSafe OR IsFaulted() OR (_qualityGood AND NOT _armed) OR (NOT _qualityGood AND NOT cfg.holdOnBadQuality) THEN
+    IF F_IsFiniteReal(cfg.safeRaw) THEN _rawReal := cfg.safeRaw;
+    ELSE _rawReal := 0.0; END_IF;
+    sts.value := 0.0; // EU value is unavailable when applying a raw fallback; see outputInhibited.
+ELSIF NOT _qualityGood THEN
+    _rawReal := sts.rawReal;
+ELSE
+    sts.value := _clampedEu;
+END_IF;
+sts.outputInhibited := NOT _armed OR _forceSafe OR IsFaulted();
+// Classify before any LIMIT comparison or conversion, including held terminal state.
+IF NOT F_IsFiniteReal(_rawReal) THEN _rawReal := 0.0; END_IF;
+// Conversion is bounded to the representable terminal range before any cast.
+CASE cfg.outputType OF
+    __SYSTEM.TYPE_CLASS.TYPE_INT:   _rawReal := LIMIT(-32768.0, _rawReal, 32767.0);
+    __SYSTEM.TYPE_CLASS.TYPE_UINT, __SYSTEM.TYPE_CLASS.TYPE_WORD: _rawReal := LIMIT(0.0, _rawReal, 65535.0);
+    __SYSTEM.TYPE_CLASS.TYPE_DINT: _rawReal := LIMIT(-2147483648.0, _rawReal, 2147483520.0);
+    __SYSTEM.TYPE_CLASS.TYPE_UDINT, __SYSTEM.TYPE_CLASS.TYPE_DWORD: _rawReal := LIMIT(0.0, _rawReal, 4294967040.0);
+END_CASE;
+outRaw.dw := 0; // Clear upper bytes when writing a 16-bit member.
+CASE cfg.outputType OF
+    __SYSTEM.TYPE_CLASS.TYPE_INT: outRaw.nInt := REAL_TO_INT(_rawReal);
+    __SYSTEM.TYPE_CLASS.TYPE_UINT: outRaw.ui := REAL_TO_UINT(_rawReal);
+    __SYSTEM.TYPE_CLASS.TYPE_WORD: outRaw.w := REAL_TO_WORD(_rawReal);
+    __SYSTEM.TYPE_CLASS.TYPE_DINT: outRaw.di := REAL_TO_DINT(_rawReal);
+    __SYSTEM.TYPE_CLASS.TYPE_UDINT: outRaw.udi := REAL_TO_UDINT(_rawReal);
+    __SYSTEM.TYPE_CLASS.TYPE_DWORD: outRaw.dw := REAL_TO_DWORD(_rawReal);
+    __SYSTEM.TYPE_CLASS.TYPE_REAL: outRaw.fReal := _rawReal;
+ELSE
+    outRaw.dw := 0;
+END_CASE;
+sts.rawReal := _rawReal;
+
+_safeRequested := FALSE; // consumed after applying outputs
+
+// 7. Refresh shared header.
+_UpdateHeader(header := sts.header, stateString := '', busy := FALSE);]]></ST>
+    </Implementation>
+
+    <Folder Name="Operator RPC" Id="{20a1edeb-9e4e-50af-b4d9-33e7e321fe83}" />
+    <Folder Name="Program Commands" Id="{a0100004-0000-0000-f000-000000000001}" />
+    <Folder Name="Protected" Id="{a0100004-0000-0000-f000-000000000002}" />
+    <Folder Name="Private" Id="{0aeb1a7a-ad75-51b4-8dd5-88446136258b}" />
+<Method Name="SetValue" Id="{a0100004-0000-0000-1000-000000000001}" FolderPath="Program Commands\">
+      <Declaration><![CDATA[METHOD PUBLIC SetValue : E_RpcMethodResponse
+VAR_INPUT
+    rValue     : REAL;
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+SetValue := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF SetValue <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+IF _safeRequested THEN
+    SetValue := E_RpcMethodResponse.REJECTED_INTERLOCKED;
+    RETURN;
+END_IF;
+IF NOT F_IsFiniteReal(rValue) THEN
+    SetValue := E_RpcMethodResponse.REJECTED_INVALID_PARAMETER;
+    RETURN;
+END_IF;
+SetValue := F_ValidateRequester(
+    eRequester    := eRequester,
+    bSourceLocked := bSourceLockedToProg,
+    bFaulted      := IsFaulted()
+);
+
+IF SetValue <> E_RpcMethodResponse.ACCEPTED THEN
+    RETURN;
+END_IF;
+
+_requestSync := rValue;
+_savedCommand := _requestSync;
+_savedCommandValid := TRUE;
+_armed := TRUE;
+_commandReceived := TRUE;
+_forceSafe := FALSE;
+_AcceptCommand(eRequester := eRequester);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_RaiseActiveFault" Id="{a0100004-0000-0000-1000-000000000002}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Priority chain for AnalogOutput faults:
+//   BadConfig > BadQuality > ClampHigh > ClampLow
+METHOD PROTECTED _RaiseActiveFault
+VAR
+    code   : DINT;
+    source : STRING(31);
+    reason : STRING(79);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[code := 0;
+
+IF _configBad THEN
+    code   := E_AnalogOutput_Fault.BadConfig;
+    source := 'CONFIG';
+    reason := 'euMin >= euMax or rawMin > rawMax';
+ELSIF _tonBadQuality.Q THEN
+    code   := E_AnalogOutput_Fault.BadQuality;
+    source := 'QUALITY';
+    reason := 'inpQuality stayed BAD past qualityFaultAfter';
+ELSIF _armed AND cfg.clampAsFault AND sts.clampedHigh THEN
+    code   := E_AnalogOutput_Fault.ClampHigh;
+    source := 'CLAMP_H';
+    reason := CONCAT('Command clamped at MaxCv=', REAL_TO_STRING(cfg.maxCv));
+ELSIF _armed AND cfg.clampAsFault AND sts.clampedLow THEN
+    code   := E_AnalogOutput_Fault.ClampLow;
+    source := 'CLAMP_L';
+    reason := CONCAT('Command clamped at MinCv=', REAL_TO_STRING(cfg.minCv));
+END_IF;
+
+IF code = 0 THEN
+    // Output faults latch until Reset; configuration/quality recovery cannot restart them.
+ELSE
+    _Raise(
+        code   := code,
+        source := source,
+        reason := reason
+    );
+END_IF;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResolveFaultString" Id="{a0100004-0000-0000-1000-000000000003}" FolderPath="Protected\">
+      <Declaration><![CDATA[METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE code OF
+    0:
+        ResolveFaultString := '';
+    E_AnalogOutput_Fault.BadQuality:
+        ResolveFaultString := 'Output quality BAD past configured timeout';
+    E_AnalogOutput_Fault.ClampLow:
+        ResolveFaultString := 'Command clamped at MinCv';
+    E_AnalogOutput_Fault.ClampHigh:
+        ResolveFaultString := 'Command clamped at MaxCv';
+    E_AnalogOutput_Fault.BadConfig:
+        ResolveFaultString := 'Invalid scaling range configured';
+ELSE
+    ResolveFaultString := CONCAT('AnalogOutput fault ', DINT_TO_STRING(code));
+END_CASE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OperatorSetValue" Id="{cfde462a-f954-4141-bb22-b7e61c05e1bb}" FolderPath="Operator RPC\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorSetValue : E_RpcMethodResponse
+VAR_INPUT
+    requestId : ULINT;
+    rValue : REAL;
+END_VAR
+]]></Declaration>
+      <Implementation><ST><![CDATA[OperatorSetValue := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.SetValue, value := rValue);]]></ST></Implementation>
+    </Method>
+    <Method Name="ForceSafe" Id="{b6e37d3d-5916-4261-9c71-c8216443bb55}" FolderPath="Program Commands\">
+<Declaration><![CDATA[METHOD PUBLIC ForceSafe : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+<Implementation><ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+ForceSafe := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF ForceSafe <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+_operatorMailbox.CancelNormal();
+_safeRequested := TRUE;
+_armed := FALSE;
+_forceSafe := TRUE;
+_requestSync := 0.0;
+_savedCommand := _requestSync;
+_savedCommandValid := FALSE;
+_AcceptCommand(eRequester := eRequester);
+ForceSafe := E_RpcMethodResponse.ACCEPTED;]]></ST></Implementation>
+</Method>
+    <Method Name="OperatorForceSafe" Id="{9426f47e-872a-494f-9f72-3934b0a43b2f}" FolderPath="Operator RPC\">
+<Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorForceSafe : E_RpcMethodResponse
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+<Implementation><ST><![CDATA[OperatorForceSafe := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.ForceSafe, value := 0.0);]]></ST></Implementation>
+</Method>
+    <Method Name="Reset" Id="{90502d81-c152-4927-a781-3d14c048b835}" FolderPath="Program Commands\">
+<Declaration><![CDATA[METHOD PUBLIC Reset : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+<Implementation><ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+Reset := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF Reset <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+_operatorMailbox.CancelNormal();
+ForceSafe(eRequester := eRequester);
+Reset := SUPER^.Reset(eRequester := eRequester);]]></ST></Implementation>
+</Method>
+    <Method Name="_DispatchOperatorCommand" Id="{be7a121b-17da-4dbc-a50d-a7fa16eaf51e}" FolderPath="Protected\"><Declaration><![CDATA[METHOD PROTECTED _DispatchOperatorCommand : E_RpcMethodResponse
+VAR_INPUT command : E_OperatorCommand; value : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[CASE command OF
+E_OperatorCommand.SetValue: _DispatchOperatorCommand := THIS^.SetValue(rValue := value, eRequester := E_Requester.OPERATOR);
+E_OperatorCommand.ForceSafe: _DispatchOperatorCommand := THIS^.ForceSafe(eRequester := E_Requester.OPERATOR);
+ELSE _DispatchOperatorCommand := SUPER^._DispatchOperatorCommand(command := command, value := value);
+END_CASE;]]></ST></Implementation></Method>
+<Method Name="_SyncConfiguration" Id="{42aa8f8e-8613-478a-bbe0-284ce43c36a7}" FolderPath="Private\"><Declaration><![CDATA[METHOD PRIVATE _SyncConfiguration
+VAR changed : BOOL; END_VAR]]></Declaration><Implementation><ST><![CDATA[// Configuration is owned by the same cyclic task as this device.
+// The first observation establishes a baseline and preserves first-scan commands.
+IF NOT _configurationKnown THEN
+    _lastConfiguration := cfg;
+    _configurationKnown := TRUE;
+    RETURN;
+END_IF;
+// Classify both snapshots: invalid-to-valid recovery still has invalid previous bits.
+changed := NOT (F_IsFiniteReal(cfg.safeRaw) AND
+    F_IsFiniteReal(cfg.euMin) AND
+    F_IsFiniteReal(cfg.euMax) AND
+    F_IsFiniteReal(cfg.rawMin) AND
+    F_IsFiniteReal(cfg.rawMax) AND
+    F_IsFiniteReal(cfg.minCv) AND
+    F_IsFiniteReal(cfg.maxCv) AND
+    F_IsFiniteReal(_lastConfiguration.safeRaw) AND
+    F_IsFiniteReal(_lastConfiguration.euMin) AND
+    F_IsFiniteReal(_lastConfiguration.euMax) AND
+    F_IsFiniteReal(_lastConfiguration.rawMin) AND
+    F_IsFiniteReal(_lastConfiguration.rawMax) AND
+    F_IsFiniteReal(_lastConfiguration.minCv) AND
+    F_IsFiniteReal(_lastConfiguration.maxCv));
+IF NOT changed THEN
+    changed := cfg.restoreCommandOnRestart <> _lastConfiguration.restoreCommandOnRestart OR
+   cfg.holdOnBadQuality <> _lastConfiguration.holdOnBadQuality OR
+   cfg.safeRaw <> _lastConfiguration.safeRaw OR
+   cfg.outputType <> _lastConfiguration.outputType OR
+   cfg.useRawValue <> _lastConfiguration.useRawValue OR
+   cfg.minCv <> _lastConfiguration.minCv OR
+   cfg.maxCv <> _lastConfiguration.maxCv OR
+   cfg.euMin <> _lastConfiguration.euMin OR
+   cfg.euMax <> _lastConfiguration.euMax OR
+   cfg.rawMin <> _lastConfiguration.rawMin OR
+   cfg.rawMax <> _lastConfiguration.rawMax OR
+   cfg.clampAsFault <> _lastConfiguration.clampAsFault OR
+   cfg.qualityFaultAfter <> _lastConfiguration.qualityFaultAfter;
+END_IF;
+IF changed THEN
+    // Discard old operating intent before interpreting it under a new configuration.
+    _operatorMailbox.CancelNormal();
+    _armed := FALSE;
+    _forceSafe := TRUE;
+    _requestSync := 0.0;
+    _savedCommand := 0.0;
+    _savedCommandValid := FALSE;
+    _commandReceived := TRUE;
+    _tonBadQuality(IN := FALSE);
+END_IF;
+_lastConfiguration := cfg;]]></ST></Implementation></Method>
+<Method Name="_HasTrustedPersistentImage" Id="{3687124a-bb57-471b-b398-3f19e4878756}" FolderPath="Protected\"><Declaration><![CDATA[// Runtime provenance gate, overridable by policy-test probes without system writes.
+// A successful load does not establish that the latest command was durably saved.
+METHOD PROTECTED _HasTrustedPersistentImage : BOOL]]></Declaration><Implementation><ST><![CDATA[_HasTrustedPersistentImage := TwinCAT_SystemInfoVarList._AppInfo.BootDataLoaded
+    AND NOT TwinCAT_SystemInfoVarList._AppInfo.OldBootData;]]></ST></Implementation></Method>
+<LineIds Name="FB_AnalogOutput">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AnalogOutput.SetValue">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AnalogOutput._RaiseActiveFault">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_AnalogOutput.ResolveFaultString">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

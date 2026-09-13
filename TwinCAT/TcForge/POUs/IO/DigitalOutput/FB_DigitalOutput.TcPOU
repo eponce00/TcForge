@@ -1,0 +1,422 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DigitalOutput" Id="{a0100002-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Generic digital output driver.
+//
+// Pipeline:
+//   SetOn / SetOff -> explicit request -> quality gate -> asymmetric
+//   debounce -> mode (Regular | SinglePulse | ContinuousPulse) -> invert
+//   (Regular only) -> terminal bit (outSignal)
+//
+// Saved intent is restored only with cfg.restoreCommandOnRestart.
+// Quality loss disarms output; recovery requires a fresh accepted command.
+// ForceSafe and Reset inhibit output independent of the previous command.
+//
+// Inversion deliberately only applies in Regular mode — inverting a pulse
+// train just phase-shifts it, which is rarely what the author means. Pulse
+// behaviour should be shaped through cfg.pulseOn / cfg.pulseOff.
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_DigitalOutput EXTENDS FB_DeviceBase
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg        : ST_DigitalOutput_Cfg;
+    {attribute 'OPC.UA.DA' := '0'}
+    inpQuality : E_IO_Quality := E_IO_Quality.GOOD;
+END_VAR
+
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    outSignal : BOOL;
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_DigitalOutput_Sts;
+END_VAR
+
+VAR PERSISTENT
+    // Saved intent and validity; durability depends on target persistent saving.
+    {attribute 'OPC.UA.DA' := '0'}
+    _savedCommand : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _savedCommandValid : BOOL;
+END_VAR
+
+VAR
+    _configurationKnown : BOOL;
+    _lastConfiguration : ST_DigitalOutput_Cfg;
+    _requestSync : BOOL; // Operating intent is never restored implicitly.
+    _armed : BOOL;
+    _commandReceived : BOOL;
+    _startup : BOOL := TRUE;
+    _forceSafe : BOOL;
+    _safeRequested : BOOL;
+    _qualityGood : BOOL;
+
+    // Debounce of commanded value.
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonOn          : TON;
+    {attribute 'OPC.UA.DA' := '0'}
+    _tofOff         : TOF;
+
+    // Pulse-mode timers.
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonPulseOn     : TON;
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonPulseOff    : TON;
+
+    // Quality watchdog.
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonBadQuality  : TON;
+
+    // Scratch state.
+    {attribute 'OPC.UA.DA' := '0'}
+    _debouncedCmd   : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _prevDebounced  : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _pulseActive    : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _finalOutput    : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _prevPhysical   : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[_SyncConfiguration();
+_ProcessOperatorCommands();
+_qualityGood := inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED;
+IF _startup THEN
+    _startup := FALSE;
+    // A valid marker in a missing/backup image cannot authorize old operating intent.
+    // A command accepted in this execution is fresh and does not depend on that image.
+    IF NOT _commandReceived AND NOT THIS^._HasTrustedPersistentImage() THEN
+        _savedCommandValid := FALSE;
+    END_IF;
+    IF NOT _commandReceived AND cfg.restoreCommandOnRestart AND _savedCommandValid THEN
+        _requestSync := _savedCommand;
+        _armed := TRUE;
+    END_IF;
+END_IF;
+IF NOT _qualityGood THEN _armed := FALSE; END_IF;
+// 1. Publish quality + commanded value before any gating.
+sts.quality   := inpQuality;
+sts.commanded := _requestSync;
+
+// 2. Asymmetric debounce on commanded value. Keeps pulse timers in sync
+//    with the debounced edge, not the raw request.
+_tonOn (IN := _requestSync, PT := cfg.debounceOn);
+_tofOff(IN := _requestSync, PT := cfg.debounceOff);
+
+IF _requestSync AND _tonOn.Q THEN
+    _debouncedCmd := TRUE;
+ELSIF NOT _requestSync AND NOT _tofOff.Q THEN
+    _debouncedCmd := FALSE;
+END_IF;
+
+// 3. Mode shaping.
+CASE cfg.mode OF
+    E_DigitalOutput_Mode.Regular:
+        _tonPulseOn (IN := FALSE);
+        _tonPulseOff(IN := FALSE);
+        _pulseActive := FALSE;
+        IF cfg.invert THEN
+            _finalOutput := NOT _debouncedCmd;
+        ELSE
+            _finalOutput := _debouncedCmd;
+        END_IF;
+
+    E_DigitalOutput_Mode.SinglePulse:
+        // Rising edge of debounced command arms the one-shot.
+        IF _debouncedCmd AND NOT _prevDebounced THEN
+            _pulseActive := TRUE;
+            _tonPulseOn(IN := FALSE);
+        END_IF;
+
+        IF _pulseActive THEN
+            _tonPulseOn(IN := TRUE, PT := cfg.pulseOn);
+            IF _tonPulseOn.Q THEN
+                _pulseActive := FALSE;
+            END_IF;
+        END_IF;
+
+        // Commanded-LOW disarms the pulse early so operators can cancel.
+        IF NOT _debouncedCmd THEN
+            _pulseActive := FALSE;
+            _tonPulseOn(IN := FALSE);
+        END_IF;
+
+        _tonPulseOff(IN := FALSE);
+        _finalOutput := _pulseActive AND NOT _tonPulseOn.Q;
+
+    E_DigitalOutput_Mode.ContinuousPulse:
+        // While the command is TRUE, alternate ON / OFF using the two
+        // pulse timers as a simple state machine.
+        IF _debouncedCmd THEN
+            IF _pulseActive THEN
+                _tonPulseOn (IN := TRUE, PT := cfg.pulseOn);
+                _tonPulseOff(IN := FALSE);
+                IF _tonPulseOn.Q THEN
+                    _pulseActive := FALSE;
+                    _tonPulseOn(IN := FALSE);
+                END_IF;
+            ELSE
+                _tonPulseOff(IN := TRUE, PT := cfg.pulseOff);
+                _tonPulseOn (IN := FALSE);
+                IF _tonPulseOff.Q THEN
+                    _pulseActive := TRUE;
+                    _tonPulseOff(IN := FALSE);
+                END_IF;
+            END_IF;
+            _finalOutput := _pulseActive;
+        ELSE
+            _pulseActive := FALSE;
+            _tonPulseOn (IN := FALSE);
+            _tonPulseOff(IN := FALSE);
+            _finalOutput := FALSE;
+        END_IF;
+ELSE
+    _finalOutput := cfg.safeOutput;
+    _armed := FALSE;
+END_CASE;
+
+// 6. Quality watchdog.
+_tonBadQuality(
+    IN := NOT _qualityGood AND cfg.qualityFaultAfter > T#0MS,
+    PT := cfg.qualityFaultAfter
+);
+
+IF _tonBadQuality.Q THEN
+    _Raise(
+        code   := E_DigitalOutput_Fault.BadQuality,
+        source := 'QUALITY',
+        reason := 'inpQuality stayed BAD past qualityFaultAfter'
+    );
+END_IF;
+
+
+IF NOT (cfg.mode = E_DigitalOutput_Mode.Regular OR cfg.mode = E_DigitalOutput_Mode.SinglePulse OR cfg.mode = E_DigitalOutput_Mode.ContinuousPulse) OR
+   (cfg.mode <> E_DigitalOutput_Mode.Regular AND cfg.pulseOn = T#0MS) OR
+   (cfg.mode = E_DigitalOutput_Mode.ContinuousPulse AND cfg.pulseOff = T#0MS) THEN
+    _Raise(code := E_DigitalOutput_Fault.BadConfig, source := 'CONFIG', reason := 'Invalid output mode or pulse duration');
+END_IF;
+IF IsFaulted() THEN _armed := FALSE; END_IF;
+// Final output policy. Bad quality disarms; returning quality cannot restart output.
+IF _forceSafe OR IsFaulted() OR (_qualityGood AND NOT _armed) THEN
+    outSignal := cfg.safeOutput;
+ELSIF NOT _qualityGood THEN
+    IF NOT cfg.holdOnBadQuality THEN outSignal := cfg.safeOutput; END_IF;
+ELSE
+    outSignal := _finalOutput;
+END_IF;
+IF NOT _armed OR _forceSafe THEN
+    _tonOn(IN := FALSE); _tofOff(IN := FALSE);
+    _tonPulseOn(IN := FALSE); _tonPulseOff(IN := FALSE);
+    _debouncedCmd := FALSE; _pulseActive := FALSE;
+END_IF;
+
+// 5. Edge pulses reflect the *physical* output, not the command.
+sts.risingEdge  :=      outSignal AND NOT _prevPhysical;
+sts.fallingEdge := NOT outSignal AND     _prevPhysical;
+_prevPhysical := outSignal;
+_prevDebounced := _debouncedCmd;
+
+sts.value := outSignal;
+sts.outputInhibited := NOT _armed OR _forceSafe OR IsFaulted();
+
+_safeRequested := FALSE; // consumed after applying outputs
+
+// 7. Refresh shared header.
+_UpdateHeader(header := sts.header, stateString := '', busy := FALSE);]]></ST>
+    </Implementation>
+
+    <Folder Name="Operator RPC" Id="{13c311c9-9944-574b-aded-a9f9c2e9659e}" />
+    <Folder Name="Program Commands" Id="{a0100002-0000-0000-f000-000000000001}" />
+    <Folder Name="Protected" Id="{a0100002-0000-0000-f000-000000000002}" />
+    <Folder Name="Private" Id="{e6e7dbdf-77a9-5900-a2de-66e2db4d2e36}" />
+<Method Name="SetOn" Id="{a0100002-0000-0000-1000-000000000001}" FolderPath="Program Commands\">
+      <Declaration><![CDATA[METHOD PUBLIC SetOn : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+SetOn := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF SetOn <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+IF _safeRequested THEN
+    SetOn := E_RpcMethodResponse.REJECTED_INTERLOCKED;
+    RETURN;
+END_IF;
+SetOn := F_ValidateRequester(
+    eRequester    := eRequester,
+    bSourceLocked := bSourceLockedToProg,
+    bFaulted      := IsFaulted()
+);
+
+IF SetOn <> E_RpcMethodResponse.ACCEPTED THEN
+    RETURN;
+END_IF;
+
+_requestSync := TRUE;
+_savedCommand := _requestSync;
+_savedCommandValid := TRUE;
+_armed := TRUE;
+_commandReceived := TRUE;
+_forceSafe := FALSE;
+_AcceptCommand(eRequester := eRequester);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetOff" Id="{a0100002-0000-0000-1000-000000000002}" FolderPath="Program Commands\">
+      <Declaration><![CDATA[METHOD PUBLIC SetOff : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+SetOff := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF SetOff <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+IF _safeRequested THEN
+    SetOff := E_RpcMethodResponse.REJECTED_INTERLOCKED;
+    RETURN;
+END_IF;
+_operatorMailbox.CancelNormal();
+_requestSync := FALSE;
+_savedCommand := FALSE;
+_savedCommandValid := TRUE;
+_armed := TRUE;
+_commandReceived := TRUE;
+_forceSafe := FALSE;
+_AcceptCommand(eRequester := eRequester);
+SetOff := E_RpcMethodResponse.ACCEPTED;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResolveFaultString" Id="{a0100002-0000-0000-1000-000000000003}" FolderPath="Protected\">
+      <Declaration><![CDATA[METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE code OF
+    E_DigitalOutput_Fault.BadConfig: ResolveFaultString := 'Digital output configuration invalid';
+    0:
+        ResolveFaultString := '';
+    E_DigitalOutput_Fault.BadQuality:
+        ResolveFaultString := 'Output quality BAD past configured timeout';
+ELSE
+    ResolveFaultString := CONCAT('DigitalOutput fault ', DINT_TO_STRING(code));
+END_CASE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OperatorSetOn" Id="{3b0971ee-ddc1-44a1-a887-54c2fc211910}" FolderPath="Operator RPC\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorSetOn : E_RpcMethodResponse
+
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+      <Implementation><ST><![CDATA[OperatorSetOn := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.SetOn, value := 0.0);]]></ST></Implementation>
+    </Method>
+    <Method Name="OperatorSetOff" Id="{5b1e2785-93c1-4c1c-95a8-a947201aee2e}" FolderPath="Operator RPC\">
+      <Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorSetOff : E_RpcMethodResponse
+
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+      <Implementation><ST><![CDATA[OperatorSetOff := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.SetOff, value := 0.0);]]></ST></Implementation>
+    </Method>
+    <Method Name="ForceSafe" Id="{ac86064d-0d69-4ef7-bf20-35d1137db115}" FolderPath="Program Commands\">
+<Declaration><![CDATA[METHOD PUBLIC ForceSafe : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+<Implementation><ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+ForceSafe := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF ForceSafe <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+_operatorMailbox.CancelNormal();
+_safeRequested := TRUE;
+_armed := FALSE;
+_forceSafe := TRUE;
+_requestSync := FALSE;
+_savedCommand := _requestSync;
+_savedCommandValid := FALSE;
+_AcceptCommand(eRequester := eRequester);
+ForceSafe := E_RpcMethodResponse.ACCEPTED;]]></ST></Implementation>
+</Method>
+    <Method Name="OperatorForceSafe" Id="{2bcc5940-9ef9-40d8-ac30-69b888b91849}" FolderPath="Operator RPC\">
+<Declaration><![CDATA[{attribute 'TcRpcEnable' := '1'}
+METHOD PUBLIC OperatorForceSafe : E_RpcMethodResponse
+VAR_INPUT requestId : ULINT; END_VAR]]></Declaration>
+<Implementation><ST><![CDATA[OperatorForceSafe := _operatorMailbox.Submit(requestId := requestId, command := E_OperatorCommand.ForceSafe, value := 0.0);]]></ST></Implementation>
+</Method>
+    <Method Name="Reset" Id="{bf514641-bd99-4f94-a569-7e37c4f68d1e}" FolderPath="Program Commands\">
+<Declaration><![CDATA[METHOD PUBLIC Reset : E_RpcMethodResponse
+VAR_INPUT
+    eRequester : E_Requester := E_Requester.PROG;
+END_VAR]]></Declaration>
+<Implementation><ST><![CDATA[// Reject invalid identity before any command-specific mutation.
+Reset := F_ValidateRequester(eRequester := eRequester, bSourceLocked := FALSE, bFaulted := FALSE);
+IF Reset <> E_RpcMethodResponse.ACCEPTED THEN RETURN; END_IF;
+_SyncConfiguration();
+_operatorMailbox.CancelNormal();
+ForceSafe(eRequester := eRequester);
+Reset := SUPER^.Reset(eRequester := eRequester);]]></ST></Implementation>
+</Method>
+    <Method Name="_DispatchOperatorCommand" Id="{ba4e11b6-1742-4b63-a52c-20b1d4702d2a}" FolderPath="Protected\"><Declaration><![CDATA[METHOD PROTECTED _DispatchOperatorCommand : E_RpcMethodResponse
+VAR_INPUT command : E_OperatorCommand; value : REAL; END_VAR]]></Declaration><Implementation><ST><![CDATA[CASE command OF
+E_OperatorCommand.SetOn: _DispatchOperatorCommand := THIS^.SetOn(eRequester := E_Requester.OPERATOR);
+E_OperatorCommand.SetOff: _DispatchOperatorCommand := THIS^.SetOff(eRequester := E_Requester.OPERATOR);
+E_OperatorCommand.ForceSafe: _DispatchOperatorCommand := THIS^.ForceSafe(eRequester := E_Requester.OPERATOR);
+ELSE _DispatchOperatorCommand := SUPER^._DispatchOperatorCommand(command := command, value := value);
+END_CASE;]]></ST></Implementation></Method>
+<Method Name="_SyncConfiguration" Id="{8257f655-6c26-41ee-b732-cb43fa9b1dd6}" FolderPath="Private\"><Declaration><![CDATA[METHOD PRIVATE _SyncConfiguration]]></Declaration><Implementation><ST><![CDATA[// Configuration is owned by the same cyclic task as this device.
+// The first observation establishes a baseline and preserves first-scan commands.
+IF NOT _configurationKnown THEN
+    _lastConfiguration := cfg;
+    _configurationKnown := TRUE;
+    RETURN;
+END_IF;
+IF cfg.restoreCommandOnRestart <> _lastConfiguration.restoreCommandOnRestart OR
+   cfg.holdOnBadQuality <> _lastConfiguration.holdOnBadQuality OR
+   cfg.safeOutput <> _lastConfiguration.safeOutput OR
+   cfg.invert <> _lastConfiguration.invert OR
+   cfg.debounceOn <> _lastConfiguration.debounceOn OR
+   cfg.debounceOff <> _lastConfiguration.debounceOff OR
+   cfg.mode <> _lastConfiguration.mode OR
+   cfg.pulseOn <> _lastConfiguration.pulseOn OR
+   cfg.pulseOff <> _lastConfiguration.pulseOff OR
+   cfg.qualityFaultAfter <> _lastConfiguration.qualityFaultAfter THEN
+    // Discard old operating intent before interpreting it under a new configuration.
+    _operatorMailbox.CancelNormal(includeSetOff := TRUE);
+    _armed := FALSE;
+    _forceSafe := TRUE;
+    _requestSync := FALSE;
+    _savedCommand := FALSE;
+    _savedCommandValid := FALSE;
+    _commandReceived := TRUE;
+    _tonOn(IN := FALSE);
+    _tofOff(IN := FALSE, PT := T#0MS);
+    _tonPulseOn(IN := FALSE);
+    _tonPulseOff(IN := FALSE);
+    _tonBadQuality(IN := FALSE);
+    _debouncedCmd := FALSE;
+    _prevDebounced := FALSE;
+    _pulseActive := FALSE;
+END_IF;
+_lastConfiguration := cfg;]]></ST></Implementation></Method>
+<Method Name="_HasTrustedPersistentImage" Id="{97a3c8b8-7d6f-4524-ac34-02b2a38d9840}" FolderPath="Protected\"><Declaration><![CDATA[// Runtime provenance gate, overridable by policy-test probes without system writes.
+// A successful load does not establish that the latest command was durably saved.
+METHOD PROTECTED _HasTrustedPersistentImage : BOOL]]></Declaration><Implementation><ST><![CDATA[_HasTrustedPersistentImage := TwinCAT_SystemInfoVarList._AppInfo.BootDataLoaded
+    AND NOT TwinCAT_SystemInfoVarList._AppInfo.OldBootData;]]></ST></Implementation></Method>
+<LineIds Name="FB_DigitalOutput">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DigitalOutput.SetOn">
+      <LineId Id="1" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_DigitalOutput.SetOff">
+      <LineId Id="1" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_DigitalOutput.ResolveFaultString">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

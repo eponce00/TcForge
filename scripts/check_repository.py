@@ -185,6 +185,34 @@ def check(root=ROOT, release=False, report=None, build_evidence=None, library=No
                     errors.append(f"{path}: duplicate methods")
                 if node.findall("Folder/Method"):
                     errors.append(f"{path}: methods nested inside folders")
+                if root / "TwinCAT" / "TcForge" / "POUs" in path.parents:
+                    folders = [folder.get("Name", "") for folder in node.findall("Folder")]
+                    if len(folders) != len(set(folders)):
+                        errors.append(f"{path}: duplicate method folders")
+                    children = list(node)
+                    folder_positions = [
+                        index for index, child in enumerate(children) if child.tag == "Folder"
+                    ]
+                    method_positions = [
+                        index for index, child in enumerate(children) if child.tag == "Method"
+                    ]
+                    if (
+                        folder_positions
+                        and method_positions
+                        and max(folder_positions) > min(method_positions)
+                    ):
+                        errors.append(f"{path}: method folders must precede methods")
+                    for method in node.findall("Method"):
+                        folder = method.get("FolderPath", "")
+                        if not folder.endswith("\\") or folder[:-1] not in folders:
+                            errors.append(
+                                f"{path}: {method.get('Name')} has an invalid method folder"
+                            )
+                        is_rpc = "TcRpcEnable" in method.findtext("Declaration", "")
+                        if (folder == "Operator RPC\\") != is_rpc:
+                            errors.append(
+                                f"{path}: {method.get('Name')} must separate OPC RPC methods"
+                            )
             if tag == "DUT":
                 declaration = node.findtext("Declaration", "")
                 declaration = re.sub(
@@ -193,7 +221,7 @@ def check(root=ROOT, release=False, report=None, build_evidence=None, library=No
                 if re.search(r"\bEND_STRUCT\s+(?!END_TYPE\b)\S", declaration, re.I):
                     errors.append(f"{path}: declaration outside STRUCT")
             if tag == "POU":
-                if "TcForge/Modules" in path.as_posix():
+                if root / "TwinCAT" / "TcForge" / "POUs" in path.parents:
                     declaration = node.findtext("Declaration", "")
                     declaration = re.sub(
                         r"//[^\n]*|\(\*.*?\*\)", "", declaration, flags=re.S
@@ -264,6 +292,20 @@ def check(root=ROOT, release=False, report=None, build_evidence=None, library=No
                                 )
         if len(includes) != len(set(includes)):
             errors.append(f"{path}: duplicate compile inputs")
+        if path == root / "TwinCAT" / "TcForge" / "TcForge.plcproj":
+            pou_root = path.parent / "POUs"
+            source_files = {
+                str(source.relative_to(path.parent)).lower()
+                for source in pou_root.rglob("*")
+                if source.suffix.lower() in {".tcpou", ".tcdut", ".tcio"}
+            }
+            compiled_files = {
+                include for include in includes if include.startswith("pous\\")
+            }
+            if source_files != compiled_files:
+                errors.append(
+                    f"{path}: POU source files and project compile inputs differ"
+                )
     # Shared application/support code has one source owner, referenced by all consumers.
     reference_sources = [
         root / "TwinCAT/TcForgeExample/ClampCycle" / name

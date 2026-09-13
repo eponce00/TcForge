@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_DigitalInput" Id="{a0100001-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[// Generic digital input conditioner.
+//
+// Pipeline:
+//   terminal bit (inSignal) -> quality gate -> invert -> asymmetric
+//   debounce -> edge detection -> sts.value / risingEdge / fallingEdge
+//
+// Quality handling: while inpQuality is BAD the raw reading is ignored and
+// the previous rawValue is held. If the input stays BAD longer than
+// cfg.qualityFaultAfter the FB raises E_DigitalInput_Fault.BadQuality
+// through the fault book-keeping inherited from FB_DeviceBase.
+//
+// Debounce is asymmetric on purpose: many sensors need a short ON-delay to
+// reject noise but should drop out instantly when they go dark (or vice
+// versa). Setting both times to T#0MS disables the filter.
+{attribute 'OPC.UA.DA' := '1'}
+FUNCTION_BLOCK FB_DigitalInput EXTENDS FB_DeviceBase
+VAR_INPUT
+    {attribute 'OPC.UA.DA' := '0'}
+    inSignal : BOOL;
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    cfg        : ST_DigitalInput_Cfg;
+    {attribute 'OPC.UA.DA' := '0'}
+    inpQuality : E_IO_Quality := E_IO_Quality.GOOD;
+END_VAR
+
+VAR_OUTPUT
+    {attribute 'OPC.UA.DA' := '1'}
+    {attribute 'OPC.UA.DA.Access' := '1'}
+    sts : ST_DigitalInput_Sts;
+END_VAR
+
+VAR
+
+    // Debounce timers (asymmetric ON / OFF delays).
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonOn          : TON;
+    {attribute 'OPC.UA.DA' := '0'}
+    _tofOff         : TON;
+    _conditioningKnown : BOOL;
+    _previousCfg : ST_DigitalInput_Cfg;
+    _conditioningChanged : BOOL;
+
+    // Quality watchdog — ticks for every unusable quality value.
+    {attribute 'OPC.UA.DA' := '0'}
+    _tonBadQuality  : TON;
+
+    // Scratch values.
+    {attribute 'OPC.UA.DA' := '0'}
+    _rawBool        : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _invertedBool   : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _debouncedBool  : BOOL;
+    {attribute 'OPC.UA.DA' := '0'}
+    _prevDebounced  : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[_ProcessOperatorCommands();
+// Configuration changes cannot borrow elapsed evidence from the previous interpretation.
+_conditioningChanged := _conditioningKnown AND (cfg.invert <> _previousCfg.invert OR
+    cfg.debounceOn <> _previousCfg.debounceOn OR cfg.debounceOff <> _previousCfg.debounceOff);
+_previousCfg := cfg; _conditioningKnown := TRUE;
+IF _conditioningChanged THEN _tonOn(IN := FALSE); _tofOff(IN := FALSE); END_IF;
+sts.quality := inpQuality;
+sts.risingEdge := FALSE; sts.fallingEdge := FALSE;
+IF inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED THEN
+    _rawBool := inSignal;
+    _invertedBool := _rawBool XOR cfg.invert;
+    // Time each transition from fresh evidence, holding the established state meanwhile.
+    IF _invertedBool THEN
+        _tofOff(IN := FALSE);
+        IF NOT _debouncedBool THEN
+            _tonOn(IN := TRUE, PT := cfg.debounceOn);
+            IF _tonOn.Q THEN _debouncedBool := TRUE; END_IF;
+        ELSE _tonOn(IN := FALSE); END_IF;
+    ELSE
+        _tonOn(IN := FALSE);
+        IF _debouncedBool THEN
+            _tofOff(IN := TRUE, PT := cfg.debounceOff);
+            IF _tofOff.Q THEN _debouncedBool := FALSE; END_IF;
+        ELSE _tofOff(IN := FALSE); END_IF;
+    END_IF;
+    sts.risingEdge := _debouncedBool AND NOT _prevDebounced;
+    sts.fallingEdge := NOT _debouncedBool AND _prevDebounced;
+    _prevDebounced := _debouncedBool;
+    sts.value := _debouncedBool;
+    sts.rawValue := _rawBool;
+ELSE
+    // Invalid elapsed time is not debounce evidence. Keep published value/raw unchanged.
+    _tonOn(IN := FALSE); _tofOff(IN := FALSE);
+END_IF;
+
+// 6. Quality watchdog. Enabled only when qualityFaultAfter > 0.
+_tonBadQuality(
+    IN := NOT (inpQuality = E_IO_Quality.GOOD OR inpQuality = E_IO_Quality.CLAMPED) AND cfg.qualityFaultAfter > T#0MS,
+    PT := cfg.qualityFaultAfter
+);
+
+IF _tonBadQuality.Q THEN
+    _Raise(
+        code   := E_DigitalInput_Fault.BadQuality,
+        source := 'QUALITY',
+        reason := 'inpQuality stayed unusable past qualityFaultAfter'
+    );
+END_IF;
+
+// 7. Refresh shared header (fault surface, ready flags, timestamps).
+_UpdateHeader(header := sts.header, stateString := '', busy := FALSE);]]></ST>
+    </Implementation>
+
+    <Folder Name="Configuration" Id="{45997181-01af-5a73-abc0-97bbd4bf5ad6}" />
+    <Folder Name="Protected" Id="{a0100001-0000-0000-f000-000000000001}" />
+<Method Name="ResolveFaultString" Id="{a0100001-0000-0000-1000-000000000001}" FolderPath="Protected\">
+      <Declaration><![CDATA[// Maps E_DigitalInput_Fault codes to human-readable strings for the HMI.
+METHOD PROTECTED ResolveFaultString : STRING(79)
+VAR_INPUT
+    code : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE code OF
+    0:
+        ResolveFaultString := '';
+    E_DigitalInput_Fault.BadQuality:
+        ResolveFaultString := 'Signal quality BAD past configured timeout';
+    E_DigitalInput_Fault.StuckHigh:
+        ResolveFaultString := 'Debounced signal stuck HIGH past configured timeout';
+    E_DigitalInput_Fault.StuckLow:
+        ResolveFaultString := 'Debounced signal stuck LOW past configured timeout';
+ELSE
+    ResolveFaultString := CONCAT('DigitalInput fault ', DINT_TO_STRING(code));
+END_CASE;]]></ST>
+      </Implementation>
+    </Method>
+<Method Name="ReassignInput" Id="{12ac6b6a-0413-42ab-9c83-4f96d95c119c}" FolderPath="Configuration\"><Declaration><![CDATA[// Owning-task application API: invalidate history before binding a different source.
+METHOD PUBLIC ReassignInput]]></Declaration><Implementation><ST><![CDATA[_tonOn(IN := FALSE); _tofOff(IN := FALSE); _tonBadQuality(IN := FALSE);
+_debouncedBool := FALSE; _prevDebounced := FALSE; _rawBool := FALSE;
+sts.value := FALSE; sts.rawValue := FALSE;
+sts.risingEdge := FALSE; sts.fallingEdge := FALSE;
+sts.quality := E_IO_Quality.UNKNOWN;
+_conditioningKnown := FALSE;]]></ST></Implementation></Method>
+    <LineIds Name="FB_DigitalInput">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DigitalInput.ResolveFaultString">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

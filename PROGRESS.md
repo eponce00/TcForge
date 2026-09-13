@@ -1,6 +1,6 @@
 # TcForge progress
 
-Last updated: 2026-09-12
+Last updated: 2026-09-13
 
 ## Goal and current status
 
@@ -104,6 +104,22 @@ Engineering references:
 - [x] Connect the Python simulator to the complete assembly station. The model
   covers three cylinders, two discrete sensors and two analog channels; all 22
   offline tests and 11 real-PLC functional scenarios pass.
+
+### Library source and method navigation (2026-09-13)
+
+- [x] **O1 — Organize reusable source.** The library uses `POUs/Base`, `IO`,
+  `Devices`, `Logic`, `Alarms`, and `Utilities`, with each FB and its local types
+  together. `I_Alarm` lives with the alarm blocks. Project folders mirror disk.
+- [x] Separate `Operator RPC` methods from program commands, configuration,
+  diagnostics, and internal methods in the TwinCAT FB tree. The static checker
+  verifies method folder targets, folder ordering, RPC placement, and project
+  source membership. All 27 moved FBs retain identical declarations and ST
+  bodies; the combined development solution builds with zero warnings.
+- [x] **O2 — Re-run current-source bench regression.** After an orderly reboot
+  restored ADS responsiveness, the 10 ms bench run verified all 385 individual
+  TcUnit results in 32 suites. ADS operator RPC tests also passed, including
+  owning-task dispatch and bounded concurrent clients. The first attempt had
+  timed out while the runtime was unresponsive; it was not counted as a pass.
 
 ### Latest verification batch
 

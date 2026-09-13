@@ -23,259 +23,260 @@
     <VirtualLibrary>true</VirtualLibrary>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Modules\Common\Utilities\FB_ExecutionContinuity.TcPOU">
+    <Compile Include="POUs\Utilities\FB_ExecutionContinuity.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Utilities\F_IsFiniteReal.TcPOU">
+    <Compile Include="POUs\Utilities\F_IsFiniteReal.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Utilities\F_IsFiniteLReal.TcPOU">
+    <Compile Include="POUs\Utilities\F_IsFiniteLReal.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\IO\E_IOHealthReason.TcDUT">
+    <Compile Include="POUs\IO\Common\E_IOHealthReason.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\IO\FB_IOQualityMonitor.TcPOU">
+    <Compile Include="POUs\IO\Common\FB_IOQualityMonitor.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\IO\F_EtherCATSlaveDataValid.TcPOU">
+    <Compile Include="POUs\IO\Common\F_EtherCATSlaveDataValid.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\FB_OperatorMailbox.TcPOU">
+    <Compile Include="POUs\Base\FB_OperatorMailbox.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\ST_OperatorCommandRecord.TcDUT">
+    <Compile Include="POUs\Base\ST_OperatorCommandRecord.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\E_OperatorCommand.TcDUT">
+    <Compile Include="POUs\Base\E_OperatorCommand.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\E_Requester.TcDUT">
+    <Compile Include="POUs\Base\E_Requester.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\E_RpcMethodResponse.TcDUT">
+    <Compile Include="POUs\Base\E_RpcMethodResponse.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\F_ValidateRequester.TcPOU">
+    <Compile Include="POUs\Base\F_ValidateRequester.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\E_TwoPosActuator_Fault.TcDUT">
+    <Compile Include="POUs\Devices\Pneumatics\TwoPosActuator\E_TwoPosActuator_Fault.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\E_TwoPosActuator_State.TcDUT">
+    <Compile Include="POUs\Devices\Pneumatics\TwoPosActuator\E_TwoPosActuator_State.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\FB_TwoPosActuator.TcPOU">
+    <Compile Include="POUs\Devices\Pneumatics\TwoPosActuator\FB_TwoPosActuator.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Cfg.TcDUT">
+    <Compile Include="POUs\Devices\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Sts.TcDUT">
+    <Compile Include="POUs\Devices\Pneumatics\TwoPosActuator\ST_TwoPosActuator_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Interlocks\FB_Interlock.TcPOU">
+    <Compile Include="POUs\Logic\Interlocks\FB_Interlock.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Interlocks\ST_Interlock_Config.TcDUT">
+    <Compile Include="POUs\Logic\Interlocks\ST_Interlock_Config.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Interlocks\ST_Interlock_Status.TcDUT">
+    <Compile Include="POUs\Logic\Interlocks\ST_Interlock_Status.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Interlocks\ST_Interlock_Faceplate.TcDUT">
+    <Compile Include="POUs\Logic\Interlocks\ST_Interlock_Faceplate.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\FB_Permissives.TcPOU">
+    <Compile Include="POUs\Logic\Sequencing\Permissives\FB_Permissives.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Config.TcDUT">
+    <Compile Include="POUs\Logic\Sequencing\Permissives\ST_Permissive_Config.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Status.TcDUT">
+    <Compile Include="POUs\Logic\Sequencing\Permissives\ST_Permissive_Status.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\Permissives\ST_Permissive_Faceplate.TcDUT">
+    <Compile Include="POUs\Logic\Sequencing\Permissives\ST_Permissive_Faceplate.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\E_SM_Fault.TcDUT">
+    <Compile Include="POUs\Logic\Sequencing\StateMachine\E_SM_Fault.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\E_SM_State.TcDUT">
+    <Compile Include="POUs\Logic\Sequencing\StateMachine\E_SM_State.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\FB_StateMachine.TcPOU">
+    <Compile Include="POUs\Logic\Sequencing\StateMachine\FB_StateMachine.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\FB_Step.TcPOU">
+    <Compile Include="POUs\Logic\Sequencing\StateMachine\FB_Step.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Status.TcDUT">
+    <Compile Include="POUs\Logic\Sequencing\StateMachine\ST_SM_Status.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Sequencing\StateMachine\ST_SM_Step.TcDUT">
+    <Compile Include="POUs\Logic\Sequencing\StateMachine\ST_SM_Step.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\DigitalInput\FB_DigitalInput.TcPOU">
+    <Compile Include="POUs\IO\DigitalInput\FB_DigitalInput.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\DigitalInput\ST_DigitalInput_Cfg.TcDUT">
+    <Compile Include="POUs\IO\DigitalInput\ST_DigitalInput_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\DigitalInput\ST_DigitalInput_Sts.TcDUT">
+    <Compile Include="POUs\IO\DigitalInput\ST_DigitalInput_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\DigitalOutput\FB_DigitalOutput.TcPOU">
+    <Compile Include="POUs\IO\DigitalOutput\FB_DigitalOutput.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\DigitalOutput\ST_DigitalOutput_Cfg.TcDUT">
+    <Compile Include="POUs\IO\DigitalOutput\ST_DigitalOutput_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\DigitalOutput\ST_DigitalOutput_Sts.TcDUT">
+    <Compile Include="POUs\IO\DigitalOutput\ST_DigitalOutput_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\AnalogInput\FB_AnalogInput.TcPOU">
+    <Compile Include="POUs\IO\AnalogInput\FB_AnalogInput.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\AnalogInput\ST_AnalogInput_Cfg.TcDUT">
+    <Compile Include="POUs\IO\AnalogInput\ST_AnalogInput_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\AnalogInput\ST_AnalogInput_Sts.TcDUT">
+    <Compile Include="POUs\IO\AnalogInput\ST_AnalogInput_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\AnalogOutput\FB_AnalogOutput.TcPOU">
+    <Compile Include="POUs\IO\AnalogOutput\FB_AnalogOutput.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\AnalogOutput\ST_AnalogOutput_Cfg.TcDUT">
+    <Compile Include="POUs\IO\AnalogOutput\ST_AnalogOutput_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\AnalogOutput\ST_AnalogOutput_Sts.TcDUT">
+    <Compile Include="POUs\IO\AnalogOutput\ST_AnalogOutput_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\DigitalInput\E_DigitalInput_Fault.TcDUT">
+    <Compile Include="POUs\IO\DigitalInput\E_DigitalInput_Fault.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\DigitalOutput\E_DigitalOutput_Fault.TcDUT">
+    <Compile Include="POUs\IO\DigitalOutput\E_DigitalOutput_Fault.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\DigitalOutput\E_DigitalOutput_Mode.TcDUT">
+    <Compile Include="POUs\IO\DigitalOutput\E_DigitalOutput_Mode.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\AnalogInput\E_AnalogInput_Fault.TcDUT">
+    <Compile Include="POUs\IO\AnalogInput\E_AnalogInput_Fault.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\IO\AnalogOutput\E_AnalogOutput_Fault.TcDUT">
+    <Compile Include="POUs\IO\AnalogOutput\E_AnalogOutput_Fault.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\IO\E_IO_Quality.TcDUT">
+    <Compile Include="POUs\IO\Common\E_IO_Quality.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\IO\E_Unit.TcDUT">
+    <Compile Include="POUs\IO\Common\E_Unit.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\IO\U_IoRaw_In.TcDUT">
+    <Compile Include="POUs\IO\Common\U_IoRaw_In.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\IO\U_IoRaw_Out.TcDUT">
+    <Compile Include="POUs\IO\Common\U_IoRaw_Out.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Utilities\F_GetTaskCycleTime.TcPOU">
+    <Compile Include="POUs\Utilities\F_GetTaskCycleTime.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Utilities\F_Now.TcPOU">
+    <Compile Include="POUs\Utilities\F_Now.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Utilities\FB_BitMatrix64.TcPOU">
+    <Compile Include="POUs\Utilities\FB_BitMatrix64.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Utilities\FB_LPF_FirstOrder_IIR.TcPOU">
+    <Compile Include="POUs\Utilities\FB_LPF_FirstOrder_IIR.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\FB_DeviceBase.TcPOU">
+    <Compile Include="POUs\Base\FB_DeviceBase.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\ST_DeviceHeader_Sts.TcDUT">
+    <Compile Include="POUs\Base\ST_DeviceHeader_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\ST_FaultEntry.TcDUT">
+    <Compile Include="POUs\Base\ST_FaultEntry.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Common\Interfaces\I_Alarm.TcIO">
+    <Compile Include="POUs\Alarms\Common\I_Alarm.TcIO">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Common\E_AlarmEvaluation.TcDUT">
+    <Compile Include="POUs\Alarms\Common\E_AlarmEvaluation.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Common\E_AlarmSeverity.TcDUT">
+    <Compile Include="POUs\Alarms\Common\E_AlarmSeverity.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Common\ST_Alarm_Cfg.TcDUT">
+    <Compile Include="POUs\Alarms\Common\ST_Alarm_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Common\ST_Alarm_Sts.TcDUT">
+    <Compile Include="POUs\Alarms\Common\ST_Alarm_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Common\FB_AlarmBase.TcPOU">
+    <Compile Include="POUs\Alarms\Common\FB_AlarmBase.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Simple\ST_AlarmSimple_Cfg.TcDUT">
+    <Compile Include="POUs\Alarms\Simple\ST_AlarmSimple_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Simple\FB_AlarmSimple.TcPOU">
+    <Compile Include="POUs\Alarms\Simple\FB_AlarmSimple.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Threshold\ST_AlarmThreshold_Cfg.TcDUT">
+    <Compile Include="POUs\Alarms\Threshold\ST_AlarmThreshold_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Threshold\FB_AlarmThreshold.TcPOU">
+    <Compile Include="POUs\Alarms\Threshold\FB_AlarmThreshold.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Limit\ST_AlarmLimit_Cfg.TcDUT">
+    <Compile Include="POUs\Alarms\Limit\ST_AlarmLimit_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Limit\ST_AlarmLimit_Sts.TcDUT">
+    <Compile Include="POUs\Alarms\Limit\ST_AlarmLimit_Sts.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Limit\FB_AlarmLimit.TcPOU">
+    <Compile Include="POUs\Alarms\Limit\FB_AlarmLimit.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Deviation\ST_AlarmDeviation_Cfg.TcDUT">
+    <Compile Include="POUs\Alarms\Deviation\ST_AlarmDeviation_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\Deviation\FB_AlarmDeviation.TcPOU">
+    <Compile Include="POUs\Alarms\Deviation\FB_AlarmDeviation.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\RateOfChange\ST_AlarmRateOfChange_Cfg.TcDUT">
+    <Compile Include="POUs\Alarms\RateOfChange\ST_AlarmRateOfChange_Cfg.TcDUT">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Modules\Alarms\RateOfChange\FB_AlarmRateOfChange.TcPOU">
+    <Compile Include="POUs\Alarms\RateOfChange\FB_AlarmRateOfChange.TcPOU">
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="Modules" />
-    <Folder Include="Modules\Common" />
-    <Folder Include="Modules\Common\Interfaces" />
-    <Folder Include="Modules\Common\IO" />
-    <Folder Include="Modules\Common\Utilities" />
-    <Folder Include="Modules\Interlocks" />
-    <Folder Include="Modules\Pneumatics" />
-    <Folder Include="Modules\Pneumatics\TwoPosActuator" />
-    <Folder Include="Modules\Sequencing" />
-    <Folder Include="Modules\Sequencing\Permissives" />
-    <Folder Include="Modules\Sequencing\StateMachine" />
-    <Folder Include="Modules\IO" />
-    <Folder Include="Modules\IO\DigitalInput" />
-    <Folder Include="Modules\IO\DigitalOutput" />
-    <Folder Include="Modules\IO\AnalogInput" />
-    <Folder Include="Modules\IO\AnalogOutput" />
-    <Folder Include="Modules\Alarms" />
-    <Folder Include="Modules\Alarms\Common" />
-    <Folder Include="Modules\Alarms\Simple" />
-    <Folder Include="Modules\Alarms\Threshold" />
-    <Folder Include="Modules\Alarms\Limit" />
-    <Folder Include="Modules\Alarms\Deviation" />
-    <Folder Include="Modules\Alarms\RateOfChange" />
+    <Folder Include="POUs" />
+    <Folder Include="POUs\Alarms" />
+    <Folder Include="POUs\Base" />
+    <Folder Include="POUs\Devices" />
+    <Folder Include="POUs\IO" />
+    <Folder Include="POUs\Logic" />
+    <Folder Include="POUs\Utilities" />
+    <Folder Include="POUs\Alarms\Common" />
+    <Folder Include="POUs\Alarms\Deviation" />
+    <Folder Include="POUs\Alarms\Limit" />
+    <Folder Include="POUs\Alarms\RateOfChange" />
+    <Folder Include="POUs\Alarms\Simple" />
+    <Folder Include="POUs\Alarms\Threshold" />
+    <Folder Include="POUs\Devices\Pneumatics" />
+    <Folder Include="POUs\IO\AnalogInput" />
+    <Folder Include="POUs\IO\AnalogOutput" />
+    <Folder Include="POUs\IO\Common" />
+    <Folder Include="POUs\IO\DigitalInput" />
+    <Folder Include="POUs\IO\DigitalOutput" />
+    <Folder Include="POUs\Logic\Interlocks" />
+    <Folder Include="POUs\Logic\Sequencing" />
+    <Folder Include="POUs\Devices\Pneumatics\TwoPosActuator" />
+    <Folder Include="POUs\Logic\Sequencing\Permissives" />
+    <Folder Include="POUs\Logic\Sequencing\StateMachine" />
     <Folder Include="GVLs" />
     <Folder Include="VISUs" />
   </ItemGroup>

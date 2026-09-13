@@ -59,6 +59,19 @@ The docs below cover these in detail.
 - `python/`: deterministic plant simulation primitives and test infrastructure; see [simulation guide](python/README.md).
 - `docs/`: design docs.
 
+Within `TwinCAT/TcForge/POUs`, source is grouped as `Base` (shared contracts and
+mailbox), `IO` (raw I/O policy and channel blocks), `Devices` (machine actuators),
+`Logic` (interlocks and sequencing), `Alarms`, and `Utilities`. Each feature keeps
+its FB, configuration/status structures, enums, and interfaces together. The
+TwinCAT project folders mirror the files on disk.
+
+Function-block methods use TwinCAT method folders. `Operator RPC` contains only
+the methods marked `TcRpcEnable` for OPC UA calls; these submit to the bounded
+mailbox. `Program Commands` and `Configuration` contain the PLC-facing API, while
+`Protected`, `Private`, and `Internal` contain implementation methods. A method's
+folder changes its location in the XAE tree, not its ST access modifier or RPC
+behavior.
+
 ## Getting started
 
 Clone the repository and open the solution in TwinCAT XAE on Windows:

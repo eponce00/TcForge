@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_Step" Id="{a1b2c3d4-e5f6-7890-abcd-ef1234567890}" SpecialFunc="None">
+    <Declaration><![CDATA[(*
+FB_Step - Lightweight step lifecycle wrapper
+============================================
+Each step in a sequence is one FB_Step instance. The parent FB_StateMachine
+owns the active step number, step timer, fault detection, and command handling.
+This FB only reports "am I active?" and drives the Entry/Execute/Exit/Advance
+lifecycle for the user's code.
+
+Lifecycle (while this step is the SM's active step):
+  Entry   : TRUE one scan on activation         -> one-shot init
+  Execute : TRUE every scan until perms satisfied -> cyclic work + MapPerm
+  Exiting : TRUE one scan after perms satisfied  -> one-shot cleanup
+  Advance : writes nNextStep to the SM, SM increments on next scan
+
+Branching / looping / jumping:
+  nNextStep is a VAR_INPUT re-evaluated every scan. To branch, loop, or jump,
+  just assign nNextStep dynamically in the call. There is no separate override
+  method -- the input IS the dynamic target.
+
+      step(sm := sm, nStep := 3004,
+           nNextStep := SEL(bPass, 3500, 3006),  // branch inline
+           nTimeout := 12, sName := 'Inspect');
+
+  nNextStep := 0   -> completes the sequence (SM transitions to waiting state)
+  nNextStep := N   -> SM advances to step N (any valid step; forward/back)
+
+Note: 'Exiting' is used instead of 'Exit' because EXIT is an IEC reserved word.
+*)
+FUNCTION_BLOCK FB_Step
+VAR_IN_OUT
+sm : FB_StateMachine;
+END_VAR
+
+VAR_INPUT
+    nRequired : ULINT;
+    // Required completion conditions, declared independently of MapPerm calls.
+    nStep : DINT;
+    nNextStep : DINT;
+    nTimeout : DINT;
+    sName : STRING(40);
+END_VAR
+
+VAR_OUTPUT
+    Entry : BOOL;
+    Execute : BOOL;
+    Exiting : BOOL;
+END_VAR
+
+VAR
+    _perms : FB_Permissives;
+    _active : BOOL;
+    _prevActive : BOOL;
+    _permsSatisfied : BOOL;
+    _permsEvalReady : BOOL;
+    _exitDone : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Evaluate independently declared required completion conditions.
+_perms.cfg.nRequired := nRequired;
+_perms();
+_permsSatisfied := _perms.sts.bOK;
+
+// Every called instance contributes to the parent's previous-scan coverage check.
+sm.ObserveStep(nStep := nStep);
+_active := sm.CanExecuteStep(nStep := nStep);
+IF _active THEN
+    _active := sm.ValidateStep(nStep := nStep, nDestination := nNextStep, nTimeout := nTimeout);
+END_IF;
+
+// Reset lifecycle outputs each scan
+Entry := FALSE;
+Execute := FALSE;
+Exiting := FALSE;
+
+// Timeout applies to the entire active lifecycle, including Entry and Exiting.
+IF _active AND nTimeout > 0 AND sm.Status.Step.TimerSeconds >= DINT_TO_REAL(nTimeout) THEN
+    sm._RaiseStepFault(stepNum := nStep, stepName := sName, code := E_SM_Fault.StepTimeout, reason := '');
+    _active := FALSE;
+END_IF;
+
+IF _active THEN
+    // Publish step name to SM for HMI / diagnostics
+    sm.SetStepName(sName);
+    sm.SetStepPermissives(cfg := _perms.cfg, sts := _perms.sts);
+
+    IF NOT _prevActive THEN
+        //---------------------------------------------------------------------
+        // ENTRY: first scan this step is active
+        //---------------------------------------------------------------------
+        Entry := TRUE;
+        _permsEvalReady := FALSE;
+        _exitDone := FALSE;
+
+    ELSIF NOT _permsEvalReady THEN
+        //---------------------------------------------------------------------
+        // First EXECUTE scan: user is mapping perms this scan; evaluate next
+        // scan so the first evaluation sees all MapPerm calls from this cycle.
+        //---------------------------------------------------------------------
+        Execute := TRUE;
+        _permsEvalReady := TRUE;
+
+    ELSIF NOT _permsSatisfied THEN
+        //---------------------------------------------------------------------
+        // EXECUTE: waiting for all mapped permissives to be satisfied
+        //---------------------------------------------------------------------
+        IF NOT sm.IsFaulted() OR sm.Status.State = E_SM_State.ABORTING OR sm.Status.State = E_SM_State.STOPPING THEN
+            Execute := TRUE;
+        END_IF;
+
+    ELSIF NOT _exitDone THEN
+        //---------------------------------------------------------------------
+        // EXIT: all permissives satisfied, one-scan cleanup
+        //---------------------------------------------------------------------
+        Exiting := TRUE;
+        _exitDone := TRUE;
+
+    ELSE
+        //---------------------------------------------------------------------
+        // ADVANCE: post-exit, hand the (current-scan) nNextStep to the SM.
+        // Because nNextStep is re-evaluated every scan, the user's latest
+        // branch decision wins -- no override method needed.
+        //---------------------------------------------------------------------
+        sm.SetNextStep(nStep := nNextStep);
+    END_IF;
+
+ELSE
+    // Reset lifecycle tracking when step is not active
+    _permsEvalReady := FALSE;
+    _exitDone := FALSE;
+END_IF;
+
+_prevActive := _active;
+]]></ST>
+    </Implementation>
+
+    <Folder Name="Program Commands" Id="{f0b10001-0001-0001-0001-000000000001}" />
+    <Folder Name="Configuration" Id="{afb9b1af-4a69-5fa2-87c2-617f99cf697b}" />
+<Method Name="MapPerm" Id="{b2c3d4e5-f6a7-8901-bcde-f12345678901}" FolderPath="Configuration\">
+      <Declaration><![CDATA[METHOD MapPerm
+VAR_INPUT
+    nIndex : UDINT;
+    sDescription : STRING;
+    bValue : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nIndex > 63 THEN
+    RETURN;
+END_IF;
+_perms.MapInput(bitIndex := nIndex, inputValue := bValue);
+_perms.cfg.aNames[nIndex] := sDescription;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RaiseFault" Id="{b2c3d4e5-f6a7-8901-bcde-f12345678902}" FolderPath="Program Commands\">
+      <Declaration><![CDATA[// Record a fault from an active step; nonpositive codes normalize to StepUserFault.
+// Ordinary work lands on its odd recovery step. Failed Stop escalates to Abort;
+// failed Abort latches ShutdownFailed and enters STOPPED on the next SM call.
+// Lifecycle outputs are cleared immediately. Call only after FB_Step(sm := ...).
+// Subsequent calls are ignored until the step is explicitly reactivated.
+//
+// C0371 is the "VAR_IN_OUT accessed from method" warning. Safe here because
+// RaiseFault is only legal inside a step block, after FB_Step() has been
+// called with a valid sm reference.
+METHOD RaiseFault
+VAR_INPUT
+    code   : DINT;
+    reason : STRING(79);
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[{warning disable C0371}
+IF NOT _active THEN
+    RETURN;
+END_IF;
+
+sm._RaiseStepFault(
+stepNum  := nStep,
+stepName := sName,
+code     := code,
+reason   := reason
+);
+Entry := FALSE;
+Execute := FALSE;
+Exiting := FALSE;
+_active := FALSE;
+{warning restore C0371}
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Step">
+      <LineId Id="1" Count="0"/>
+    </LineIds>
+    <LineIds Name="FB_Step.MapPerm">
+      <LineId Id="1" Count="0"/>
+    </LineIds>
+    <LineIds Name="FB_Step.RaiseFault">
+      <LineId Id="1" Count="0"/>
+    </LineIds>
+  </POU>
+</TcPlcObject>
