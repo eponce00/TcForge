@@ -11,6 +11,8 @@ if ($PSVersionTable.PSEdition -ne 'Desktop') {
 }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $bin = (Resolve-Path (Join-Path $McpRoot 'TcAutomation/bin/Release-v2')).Path
+$readinessPython = Join-Path $repo 'artifacts/sim-venv/Scripts/python.exe'
+if (-not (Test-Path -LiteralPath $readinessPython)) { throw 'Install python[ads] in artifacts/sim-venv first.' }
 $artifacts = Join-Path $repo 'artifacts'
 New-Item -ItemType Directory -Force $artifacts | Out-Null
 if (-not $BuildEvidence) { $BuildEvidence = Join-Path $artifacts 'build-evidence.json' }
@@ -131,9 +133,18 @@ try {
     if (-not $activation.Success) { throw $activation.ErrorMessage }
     $restart = [TcAutomation.Commands.RestartCommand]::ExecuteInSession($vs, $solution, $Target)
     if (-not $restart.Success) { throw $restart.ErrorMessage }
+    # Establish system/PLC RUN and an advancing test task before the much larger
+    # result read. A transient ADS timeout during startup is not a reason to
+    # reboot Windows or reactivate the project.
+    $readyConfig = Join-Path $RunDirectory 'readiness-config.json'
+    @{ target=$Target; fixture='Testing'; port=853; ads_dll_directory='C:/Program Files (x86)/Beckhoff/TwinCAT/Common64' } |
+        ConvertTo-Json | Set-Content -LiteralPath $readyConfig -Encoding UTF8
+    & $readinessPython (Join-Path $PSScriptRoot 'wait_runtime_ready.py') --config $readyConfig --output (Join-Path $RunDirectory 'readiness.json') --timeout 300
+    if ($LASTEXITCODE -ne 0) { throw 'Testing activation did not produce an advancing cyclic task; see readiness.json.' }
     # Keep ADS dependencies in the helper executable's configured process.
     # The exporter verifies every source test identity/result, not just totals.
-    $deadline = [DateTime]::UtcNow.AddMinutes(2)
+    # A complete 385-result ADS capture takes several minutes on this bench.
+    $deadline = [DateTime]::UtcNow.AddMinutes(10)
     do {
         $exportArgs = @('--target', $Target, '--helper', (Join-Path $bin 'TcAutomation.exe'), '--output', $runReport, '--expected-cycle-ms', $CycleTimeMs)
         if (-not $Development) { $exportArgs += @('--provenance-token', $runToken) }

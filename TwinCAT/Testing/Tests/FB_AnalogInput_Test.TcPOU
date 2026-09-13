@@ -28,10 +28,14 @@ END_VAR]]></Declaration>
       <Implementation>
         <ST><![CDATA[TEST('InitialStatusPublishesDefaults');
 
-// Default cfg: INT terminal, raw 0..32767 -> EU 0..100 %, no filter,
-// clamp-as-fault disabled. With inRaw zero-initialised the first
-// cycle must report a clean 0 % and no fault.
+// Default cfg: INT terminal, raw 0..32767 -> EU 0..100, no filter,
+// clamp-as-fault disabled. The application must explicitly label the unit.
+// With inRaw zero-initialised the first cycle reports a clean 0 and no fault.
 fb(inpQuality := TcForge.E_IO_Quality.GOOD);
+
+AssertTrue(
+    Condition := fb.sts.unit = TcForge.E_Unit.UNSPECIFIED,
+    Message   := 'An unconfigured channel must not claim a physical unit');
 
 AssertTrue(
     Condition := ABS(fb.sts.value) < TOL,

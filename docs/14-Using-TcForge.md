@@ -58,5 +58,15 @@ lines. Align related declarations where useful. For a long cyclic body, use
 named methods for meaningful phases, preserving a visible call order in the
 body. Inline comments should explain intent, units, required call order and
 non-obvious failure behavior; avoid comments that just repeat the assignment.
-Number recipe steps and give each a physical description. Keep device policy
-out of the recipe so a reader can follow the machine's actual operation.
+ Number recipe steps and give each a physical description. Keep device policy
+ out of the recipe so a reader can follow the machine's actual operation.
+
+## Analog engineering units
+
+The default analog scale is a numeric 0..100 example, not an asserted physical
+unit. Configure `cfg.unit` together with the real sensor or actuator scaling;
+the default is `E_Unit.UNSPECIFIED`. Status echoes this value for the HMI. The
+enum is display metadata only: it does not convert values or verify that the
+scale matches the unit. The application/HMI maps an enum such as `MILLIMETER`
+to its display symbol. Add a new unit to `E_Unit` when a machine device needs it,
+using a new explicit numeric code and leaving published codes unchanged.

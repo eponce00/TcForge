@@ -82,6 +82,7 @@ nav:
       - OPC UA qualification: 17-OPC-UA-Qualification.md
       - Runtime recovery: 18-Runtime-Recovery.md
       - SPT review: 13-SPT-Review.md
+      - rw-core utility review: 19-RW-Core-Utilities.md
       - Maintaining this site: documentation-site.md
 
 copyright: MIT licensed. Independent project; not affiliated with Beckhoff Automation.

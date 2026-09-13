@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <DUT Name="ST_AnalogInput_Cfg" Id="{b0100003-0001-0000-0000-000000000001}">
-    <Declaration><![CDATA[// Configuration for FB_AnalogInput. Defaults are a 0-100 % pass-through of
+    <Declaration><![CDATA[// Configuration for FB_AnalogInput. Defaults provide numeric 0..100 scaling of
 // an INT terminal scaled linearly from raw 0..32767 — adjust for the real
 // hardware.
 //
@@ -38,8 +38,8 @@ STRUCT
     euMin              : REAL := 0.0;
     {attribute 'OPC.UA.DA.Description' := 'Engineering value at fRawMax'}
     euMax              : REAL := 100.0;
-    {attribute 'OPC.UA.DA.Description' := 'Engineering unit for the HMI'}
-    unit               : E_Unit := E_Unit.PERCENT;
+    {attribute 'OPC.UA.DA.Description' := 'Engineering-unit display metadata; configure explicitly'}
+    unit               : E_Unit := E_Unit.UNSPECIFIED;
 
     // Clamp reporting. sts.clamped* always tracks whether the raw input
     // was outside [rawMin, rawMax]; clampAsFault promotes that condition

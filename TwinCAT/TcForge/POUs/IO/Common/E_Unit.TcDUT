@@ -1,80 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
   <DUT Name="E_Unit" Id="{c0000030-0000-0000-0000-000000000002}">
-    <Declaration><![CDATA[// Engineering-unit tag carried by analog IO config structs. Lets the HMI
-// render the unit alongside the value without hard-coding the string at the
-// caller. Extend by appending new enumerators at the end; existing codes
-// are stable so historian / OPC tags do not shift.
+    <Declaration><![CDATA[// Display metadata for analog IO. The value is already scaled by the owning
+// device; this enum does not convert or validate engineering units. An HMI may
+// map the enum to a symbol (for example MILLIMETER -> mm).
 //
-// Last used enumerator: 33
+// Keep explicit numeric values stable after publication because OPC clients may
+// store them. Extend for machine-relevant measurements; never repurpose a code.
 {attribute 'qualified_only'}
 {attribute 'strict'}
 {attribute 'to_string'}
 TYPE E_Unit :
 (
-    // Temperature
-    DEGREE_CELSIUS                := 0,     // C
-    DEGREE_FAHRENHEIT             := 31,    // F
+    // A channel whose display unit has not been configured.
+    UNSPECIFIED                   := 0,
 
-    // Percentage & Level
-    PERCENT                       := 1,
+    // Ratio and discrete quantity.
+    PERCENT                       := 1,     // %
+    COUNT                         := 2,     // pieces / cycles
 
-    // pH & Chemistry
-    PH                            := 2,
-    ORP                           := 3,     // mV - Oxidation Reduction Potential
-    SOLIDS                        := 4,     // wt% - weight percent
-    TURBIDITY                     := 5,     // NTU - Nephelometric Turbidity Units
+    // Position, orientation, velocity and acceleration.
+    MILLIMETER                    := 3,     // mm
+    MICROMETER                    := 4,     // um
+    DEGREE                        := 5,     // angular degrees
+    MILLIMETER_PER_SECOND         := 6,     // mm/s
+    MILLIMETER_PER_SECOND_SQUARED := 7,     // mm/s^2
+    RPM                           := 8,     // revolutions/minute
 
-    // Flow - Liquid (volumetric)
-    CUBIC_METER_PER_HOUR          := 6,     // m3/hr
-    LITER_PER_MINUTE              := 7,     // L/min
-    STANDARD_LITER_PER_MINUTE     := 26,    // sL/min
-    MILLILITER_PER_MINUTE         := 8,     // mL/min
+    // Force, torque, mass and pneumatic pressure.
+    NEWTON                        := 9,     // N
+    NEWTON_METER                  := 10,    // N m
+    GRAM                          := 11,    // g
+    KILOGRAM                      := 12,    // kg
+    BAR                           := 13,    // bar
+    KILOPASCAL                    := 14,    // kPa
 
-    // Flow - Gas (volumetric)
-    NORMAL_CUBIC_METER_PER_HOUR   := 9,     // Nm3/hr
-    ACTUAL_LITERS_PER_MINUTE      := 30,    // ALPM
-
-    // Gas monitoring
-    PERCENT_LOWER_EXPLOSIVE_LIMIT := 27,    // %LEL
-
-    // Mass flow / mass
-    KILOGRAM_PER_HOUR             := 10,    // kg/hr
-    KILOGRAM                      := 11,    // kg
-
-    // Pressure
-    BAR                           := 33,    // bar
-    KILOPASCAL                    := 12,    // kPa
-    INCH_WATER_COLUMN             := 13,    // inWC
-    PSIG                          := 14,    // psig - gauge pressure
-    PSIA                          := 25,    // psia - absolute pressure
-
-    // Density
-    KILOGRAM_PER_CUBIC_METER      := 15,    // kg/m3
-
-    // Electrical
-    AMPS                          := 16,    // A
+    // Temperature and electrical measurements.
+    DEGREE_CELSIUS                := 15,    // deg C
+    DEGREE_FAHRENHEIT             := 16,    // deg F
     VOLTS                         := 17,    // V
-    MILLIVOLTS                    := 18,    // mV
-    MICROVOLTS                    := 28,    // uV
+    AMPS                          := 18,    // A
+    WATT                          := 19,    // W
+    HERTZ                         := 20,    // Hz
 
-    // Conductivity
-    MICROSIEMENS_PER_CENTIMETER   := 19,    // uS/cm
-    MILLISIEMENS_PER_CENTIMETER   := 20,    // mS/cm
-
-    // Frequency & speed
-    HERTZ                         := 21,    // Hz
-    RPM                           := 22,    // RPM
-
-    // Energy & power
-    KILOWATT                      := 23,    // kW
-    WATT                          := 32,    // W
-
-    // Distance
-    MILLIMETER                    := 24,    // mm
-
-    // Quantity
-    PPM                           := 29     // ppm
+    // Cycle measurements and sensor-reported durations.
+    SECOND                        := 21,    // s
+    MILLISECOND                   := 22     // ms
 );
 END_TYPE
 ]]></Declaration>

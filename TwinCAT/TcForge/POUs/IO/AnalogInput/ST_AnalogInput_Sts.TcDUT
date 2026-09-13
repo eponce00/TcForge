@@ -18,7 +18,7 @@ STRUCT
     {attribute 'OPC.UA.DA.Description' := 'Scaled value (EU), before filter'}
     scaled       : REAL;
     {attribute 'OPC.UA.DA.Description' := 'Echo of cfg.unit for HMI consumption'}
-    unit         : E_Unit := E_Unit.PERCENT;
+    unit         : E_Unit := E_Unit.UNSPECIFIED;
     {attribute 'OPC.UA.DA.Description' := 'Signal quality tag (may be promoted to CLAMPED)'}
     quality      : E_IO_Quality := E_IO_Quality.UNKNOWN;
 

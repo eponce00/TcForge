@@ -27,8 +27,12 @@ Create a local JSON config, for example `artifacts/readiness.json`:
 }
 ```
 
-Use `Simulation` and port `854` for the unmapped lifecycle fixture. Optional
-`opcua` configuration requires `endpoint`, `application_uri`, `certificate`,
+Use `Simulation` and port `854` for the unmapped lifecycle fixture. Use
+`Testing` and port `853` to check that the TcUnit task is advancing before
+collecting its ADS results. This readiness check is read-only and never reboots
+or reactivates the target.
+
+Optional `opcua` configuration requires `endpoint`, `application_uri`, `certificate`,
 `key`, `server_certificate`, `user`, `password_env` and `namespace`. Certificates
 must already be trusted. Supply the password through the named process environment
 variable; do not include it in the config or commit it.

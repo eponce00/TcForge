@@ -164,7 +164,9 @@ TEST_FINISHED();]]></ST></Implementation></Method>
 <Method Name="AnalogUnitMetadataPreservesIntent" Id="{4155d405-ea9a-4588-bb89-de9c93eac73f}"><Declaration><![CDATA[METHOD PRIVATE AnalogUnitMetadataPreservesIntent
 VAR rsp : TcForge.E_RpcMethodResponse; END_VAR]]></Declaration><Implementation><ST><![CDATA[TEST('AnalogUnitMetadataPreservesIntent');
 device9.cfg.useRawValue := TRUE; device9.SetValue(rValue := 25.0); device9();
+AssertTrue(device9.sts.unit = TcForge.E_Unit.UNSPECIFIED, 'Default output unit is not guessed');
 device9.cfg.unit := TcForge.E_Unit.DEGREE_CELSIUS; device9();
+AssertTrue(device9.sts.unit = TcForge.E_Unit.DEGREE_CELSIUS, 'Status echoes configured unit');
 AssertEquals_REAL(25.0, device9.sts.rawReal, 0.01, 'Display unit metadata does not alter electrical intent');
 TEST_FINISHED();]]></ST></Implementation></Method>
 <Method Name="AnalogConfigRecoveryKeepsFault" Id="{cd68ff26-6ff3-4597-8510-c63d4f333edb}"><Declaration><![CDATA[METHOD PRIVATE AnalogConfigRecoveryKeepsFault

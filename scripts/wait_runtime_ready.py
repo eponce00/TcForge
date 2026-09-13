@@ -90,6 +90,17 @@ def probe(config):
             if config['fixture'] == 'Example':
                 from verify_cyclic_task import verify
                 report['cyclic'] = verify(plc)
+            elif config['fixture'] == 'Testing':
+                owner = plc.read_by_name('MAIN.rpcContext.ownerTask', pyads.PLCTYPE_DINT)
+                if owner <= 0:
+                    raise RuntimeError('Test task owner is uninitialized')
+                symbol = f'TwinCAT_SystemInfoVarList._TaskInfo[{owner}].CycleCount'
+                before = plc.read_by_name(symbol, pyads.PLCTYPE_UDINT)
+                time.sleep(.15)
+                after = plc.read_by_name(symbol, pyads.PLCTYPE_UDINT)
+                if before == after:
+                    raise RuntimeError('Test task is not advancing')
+                report['cyclic'] = {'owner': owner, 'before': before, 'after': after}
             else:
                 symbol = 'MAIN.lifecycle.cycles'
                 before = plc.read_by_name(symbol, pyads.PLCTYPE_ULINT)
@@ -126,9 +137,9 @@ def main():
     parser.add_argument('--probe', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     config = json.loads(args.config.read_text(encoding='utf-8-sig'))
-    expected = {'Example': 851, 'Simulation': 854}
+    expected = {'Example': 851, 'Testing': 853, 'Simulation': 854}
     if config.get('fixture') not in expected or config.get('port') != expected[config['fixture']]:
-        parser.error('Fixture must match Example/851 or Simulation/854')
+        parser.error('Fixture must match Example/851, Testing/853 or Simulation/854')
     if args.probe:
         result = probe(config)
     else:

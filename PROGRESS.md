@@ -465,6 +465,14 @@ The user's 2026-09-09 ideas are tracked here; completed foundations remain below
   Recorded upstream commit and selective adoption decisions in
   [SPT review](docs/13-SPT-Review.md). No upstream implementation copied or added
   as a mandatory dependency. Candidate code-level audit remains part of A6/A8.
+- [x] **R2 — rw-core utility and engineering-unit review.** Compared the reference
+  Utilities and `E_Unit` against TcForge's cycle, filter, quality and IO contracts.
+  Replaced the process-plant unit list with explicit machine-oriented units and an
+  `UNSPECIFIED` default; analog applications must label their configured scale.
+  Deferred protocol/device-specific helpers and optional signal functions until
+  a machine use case needs them. Source build and 385/385 TcUnit tests passed;
+  report collection needed one orderly bench reboot after transient ADS failures.
+  [Review and decisions](docs/19-RW-Core-Utilities.md).
 - [x] **S1 — Python simulation primitives.** Added `python/` package with pure
   cylinder and first-order analog models, mechanical/sensor fault injection,
   transport protocol, deterministic runner, JSONL trace and read-only ADS probe.
@@ -704,6 +712,12 @@ available locally, and current runtime qualification uses the dedicated RT bench
   `artifacts/q2-build-evidence.json` and the version-bearing consumer reports.
   The earlier `VisualElem` initialization failure remains a reliability observation
   in `artifacts/xae-initialization-failure.log`; full environment qualification is open.
+  A 2026-09-13 development TcUnit activation built cleanly, but immediate report
+  reads timed out over ADS; after an orderly bench reboot a single read-only
+  capture verified 385/385 tests. Automatic Windows reboot is not a test recovery
+  policy. The runner now waits for system/PLC RUN and an advancing test task,
+  then allows a bounded 10-minute ADS report retry window. Verify this revised
+  runner on a future bench run; the initial ADS failure cause remains open.
 - [x] **Q3 — PLC test execution.** All 377 registered tests passed across 31 suites
   on the licensed network bench after fresh activations at 10 ms and 1 ms. Each
   report verifies test identities, completion and actual runtime task period.
