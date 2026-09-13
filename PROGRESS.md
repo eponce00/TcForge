@@ -107,6 +107,12 @@ Engineering references:
 
 ### Library source and method navigation (2026-09-13)
 
+- [x] **R2 — Adapt regulatory control from rw-core patterns.** Implement
+  hysteresis, numeric bang-bang, full PID, PWM temperature control and
+  switching-PV PID as TcForge calculation blocks, with quality-gated safe
+  outputs, unit tests, source build and bench TcUnit verification. See
+  [regulatory control](docs/20-Regulatory-Control.md).
+
 - [x] **O1 — Organize reusable source.** The library uses `POUs/Base`, `IO`,
   `Devices`, `Logic`, `Alarms`, and `Utilities`, with each FB and its local types
   together. `I_Alarm` lives with the alarm blocks. Project folders mirror disk.
@@ -122,6 +128,21 @@ Engineering references:
   timed out while the runtime was unresponsive; it was not counted as a pass.
 
 ### Latest verification batch
+
+2026-09-13 regulatory control:
+
+- [x] Added `FB_HysteresisControl`, `FB_BangBang`, `FB_PID_Full`,
+  `FB_TempController`, and `FB_SwitchingPvPid` under `POUs/Control`. Their
+  calculation interfaces use conditioned PV quality and safe outputs, while
+  application blocks retain command ownership, interlocks, and I/O mapping.
+- [x] Corrected PID anti-windup at the CV boundary after the first bench run
+  exposed a floating-point rounding edge case. The corrected development
+  activation build had zero errors/warnings; all 402 individual TcUnit results
+  passed in 34 suites at 10 ms on the dedicated bench PLC. Evidence:
+  `artifacts/tcunit-10ms-ffb306bbc38744b6bb2d92373998904f/`.
+- [x] Repository source checks, 93 tooling tests, and strict documentation
+  build passed. Physical output and machine process qualification remain
+  deferred.
 
 2026-09-12 complete assembly example and simulator:
 

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_TempController_Sts" Id="{4a68c329-d99c-45c6-a61b-97168fd6f709}">
+    <Declaration><![CDATA[TYPE ST_TempController_Sts :
+STRUCT
+    ready          : BOOL;
+    standbyActive  : BOOL;
+    dutyPercent    : REAL;
+    pwmOn          : BOOL;
+    pid            : ST_PID_Full_Sts;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

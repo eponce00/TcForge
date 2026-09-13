@@ -77,6 +77,7 @@ nav:
       - Sequencing: 7-Sequencing.md
       - Alarms: 8-Alarms.md
       - HMI integration: 9-HMI-Integration.md
+      - Regulatory control: 20-Regulatory-Control.md
   - Development:
       - Simulation: 12-Simulation.md
       - OPC UA qualification: 17-OPC-UA-Qualification.md

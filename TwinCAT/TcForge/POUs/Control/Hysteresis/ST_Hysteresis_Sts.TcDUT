@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_Hysteresis_Sts" Id="{7018e773-20f9-441a-9d4f-27addf383881}">
+    <Declaration><![CDATA[// Diagnostic status only. The application connects outDemand to an owned
+// output device and remains responsible for its interlocks and safe level.
+TYPE ST_Hysteresis_Sts :
+STRUCT
+    ready      : BOOL;
+    demand     : BOOL;
+    inDeadband : BOOL;
+    reason     : E_HysteresisReason := E_HysteresisReason.Disabled;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_BangBang" Id="{77bef9ac-7d89-4342-8617-85b35a5615eb}" SpecialFunc="None">
+    <Declaration><![CDATA[// Numeric bang-bang control composed from the quality-gated hysteresis core.
+// The application/output device owns manual commands, hold and safe terminal
+// level; no retained request, source handler or RPC can bypass the cyclic owner.
+FUNCTION_BLOCK FB_BangBang
+VAR_INPUT
+    enable      : BOOL;
+    pv          : REAL;
+    pvQuality   : E_IO_Quality := E_IO_Quality.UNKNOWN;
+    cfg         : ST_BangBang_Cfg;
+END_VAR
+VAR_OUTPUT
+    outCv       : REAL;
+    outDemand   : BOOL;
+    sts         : ST_Hysteresis_Sts;
+END_VAR
+VAR
+    _hysteresis : FB_HysteresisControl;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// A bad numeric mapping must clear the internal hysteresis state too.
+IF NOT F_IsFiniteReal(value := cfg.lowValue)
+    OR NOT F_IsFiniteReal(value := cfg.highValue) THEN
+    _hysteresis(enable := FALSE);
+    outCv := 0.0;
+    outDemand := FALSE;
+    sts := _hysteresis.sts;
+    sts.reason := E_HysteresisReason.InvalidConfig;
+    RETURN;
+END_IF;
+
+_hysteresis(
+    enable := enable,
+    pv := pv,
+    pvQuality := pvQuality,
+    cfg := cfg.hysteresis
+);
+sts := _hysteresis.sts;
+outDemand := _hysteresis.outDemand;
+
+IF NOT sts.ready THEN
+    outCv := 0.0;
+ELSIF outDemand THEN
+    outCv := cfg.highValue;
+ELSE
+    outCv := cfg.lowValue;
+END_IF;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

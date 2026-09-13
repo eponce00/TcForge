@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_SwitchingPvPid_Sts" Id="{16b66eca-2114-45d5-9f6b-d9ae5f63088f}">
+    <Declaration><![CDATA[TYPE ST_SwitchingPvPid_Sts :
+STRUCT
+    ready             : BOOL;
+    activeSource      : E_PvSource := E_PvSource.PV1;
+    sourceChanged     : BOOL;
+    activePv          : REAL;
+    cv                : REAL;
+    pid               : ST_PID_Full_Sts;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

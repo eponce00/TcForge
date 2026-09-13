@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_TempController_Cfg" Id="{5fe81dfe-ded0-47d6-93a7-f44cb3ff3afe}">
+    <Declaration><![CDATA[// Time-proportioning output for a heater, fan or SSR. Configure pid CV as
+// 0..100 percent with safeCv=0; the wrapper rejects other CV ranges.
+TYPE ST_TempController_Cfg :
+STRUCT
+    pid                 : ST_PID_Full_Cfg;
+    pwmPeriod           : TIME := T#2S;
+    standbyEnabled      : BOOL := FALSE;
+    standbySetpoint     : REAL := 25.0;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

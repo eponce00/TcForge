@@ -23,6 +23,57 @@
     <VirtualLibrary>true</VirtualLibrary>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="POUs\Control\BangBang\ST_BangBang_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\BangBang\FB_BangBang.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\PID\E_ControlReason.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\PID\ST_PID_Full_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\PID\ST_PID_Full_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\PID\FB_PID_Full.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\Temperature\ST_TempController_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\Temperature\ST_TempController_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\Temperature\FB_TempController.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\SwitchingPV\E_PvSource.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\SwitchingPV\ST_SwitchingPvPid_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\SwitchingPV\ST_SwitchingPvPid_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\SwitchingPV\FB_SwitchingPvPid.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\Hysteresis\E_HysteresisReason.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\Hysteresis\ST_Hysteresis_Cfg.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\Hysteresis\ST_Hysteresis_Sts.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\Control\Hysteresis\FB_HysteresisControl.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="POUs\Utilities\FB_ExecutionContinuity.TcPOU">
       <SubType>Code</SubType>
     </Compile>
@@ -256,6 +307,12 @@
     <Folder Include="POUs" />
     <Folder Include="POUs\Alarms" />
     <Folder Include="POUs\Base" />
+    <Folder Include="POUs\Control" />
+    <Folder Include="POUs\Control\BangBang" />
+    <Folder Include="POUs\Control\Hysteresis" />
+    <Folder Include="POUs\Control\PID" />
+    <Folder Include="POUs\Control\SwitchingPV" />
+    <Folder Include="POUs\Control\Temperature" />
     <Folder Include="POUs\Devices" />
     <Folder Include="POUs\IO" />
     <Folder Include="POUs\Logic" />

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_PID_Full_Sts" Id="{6511fa27-f96c-4bcf-a36e-f0a7abd2d090}">
+    <Declaration><![CDATA[// Calculation diagnostics. ready is FALSE when outCv carries safeCv.
+TYPE ST_PID_Full_Sts :
+STRUCT
+    ready        : BOOL;
+    reason       : E_ControlReason := E_ControlReason.Disabled;
+    saturated    : BOOL;
+    spRamping    : BOOL;
+    cvRamping    : BOOL;
+    spRequested  : REAL;
+    spApplied    : REAL;
+    pv           : REAL;
+    cv           : REAL;
+    error        : LREAL;
+    pTerm        : LREAL;
+    iTerm        : LREAL;
+    dTerm        : LREAL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

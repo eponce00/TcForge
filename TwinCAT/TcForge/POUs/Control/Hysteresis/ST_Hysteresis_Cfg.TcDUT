@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_Hysteresis_Cfg" Id="{c7452881-2445-4dc0-9d0a-bb32c542802d}">
+    <Declaration><![CDATA[// Both thresholds use the same engineering unit as the conditioned PV.
+// The default equal thresholds are deliberately invalid until configured.
+TYPE ST_Hysteresis_Cfg :
+STRUCT
+    low        : REAL := 0.0;
+    high       : REAL := 0.0;
+    onBelowLow : BOOL := TRUE; // TRUE for heating/fill, FALSE for cooling/vent.
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

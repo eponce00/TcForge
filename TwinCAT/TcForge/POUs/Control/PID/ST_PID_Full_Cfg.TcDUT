@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_PID_Full_Cfg" Id="{9dcfb630-2e3e-456e-b2a8-1ba0444c3357}">
+    <Declaration><![CDATA[// All rates are engineering units per second. CV and integral limits are
+// output units. A zero rate disables that directional ramp.
+TYPE ST_PID_Full_Cfg :
+STRUCT
+    kp              : REAL := 1.0;
+    ki              : REAL := 0.0; // Ideal form, 1/s.
+    kd              : REAL := 0.0; // Ideal form, s.
+    standardForm    : BOOL := FALSE;
+    integralTime    : TIME := T#0MS; // Standard form; zero disables I.
+    derivativeTime  : TIME := T#0MS; // Standard form; zero disables D.
+    derivativeTau   : TIME := T#0MS; // Zero disables derivative filtering.
+    reverseActing   : BOOL := FALSE;
+
+    spMin           : REAL := -1E30;
+    spMax           : REAL := 1E30;
+    spRateUp        : REAL := 0.0;
+    spRateDown      : REAL := 0.0;
+
+    cvMin           : REAL := 0.0;
+    cvMax           : REAL := 100.0;
+    cvRateUp        : REAL := 0.0;
+    cvRateDown      : REAL := 0.0;
+    integralMin     : REAL := -100.0;
+    integralMax     : REAL := 100.0;
+    safeCv          : REAL := 0.0;
+
+    cycleTime       : TIME := T#0MS; // Zero reads the owning task period.
+    maxDt           : TIME := T#1S;  // Maximum declared task interval; not a missed-cycle detector.
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

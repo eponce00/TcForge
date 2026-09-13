@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_HysteresisControl" Id="{9af4b4bf-116d-43c6-bd50-cbcf1789ac5c}" SpecialFunc="None">
+    <Declaration><![CDATA[// Quality-gated two-threshold demand for an owned discrete output.
+// Call once from the same cyclic task as the PV conditioner and output device.
+// Loss of enable, usable PV, or configuration de-energizes demand; recovery
+// never inherits the previous ON state while the PV is inside the deadband.
+// This block does not switch physical IO or implement operator RPCs.
+FUNCTION_BLOCK FB_HysteresisControl
+VAR_INPUT
+    enable    : BOOL;
+    pv        : REAL;
+    pvQuality : E_IO_Quality := E_IO_Quality.UNKNOWN;
+    cfg       : ST_Hysteresis_Cfg;
+END_VAR
+VAR_OUTPUT
+    outDemand : BOOL;
+    sts       : ST_Hysteresis_Sts;
+END_VAR
+VAR
+    _haveConfig : BOOL;
+    _lastCfg    : ST_Hysteresis_Cfg;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Any unusable input takes the same OFF path. Validate floating-point bits
+// before comparisons: a signaling NaN can fault a TwinCAT task when compared.
+sts.ready := FALSE;
+sts.inDeadband := FALSE;
+
+IF NOT enable THEN
+    outDemand := FALSE;
+    _haveConfig := FALSE;
+    sts.reason := E_HysteresisReason.Disabled;
+ELSIF NOT F_IsFiniteReal(value := cfg.low)
+    OR NOT F_IsFiniteReal(value := cfg.high) THEN
+    outDemand := FALSE;
+    _haveConfig := FALSE;
+    sts.reason := E_HysteresisReason.InvalidConfig;
+ELSIF cfg.low >= cfg.high THEN
+    outDemand := FALSE;
+    _haveConfig := FALSE;
+    sts.reason := E_HysteresisReason.InvalidConfig;
+ELSIF pvQuality <> E_IO_Quality.GOOD THEN
+    outDemand := FALSE;
+    _haveConfig := FALSE;
+    sts.reason := E_HysteresisReason.BadQuality;
+ELSIF NOT F_IsFiniteReal(value := pv) THEN
+    outDemand := FALSE;
+    _haveConfig := FALSE;
+    sts.reason := E_HysteresisReason.InvalidValue;
+ELSE
+    // A changed threshold or direction starts from OFF. At either boundary
+    // the fresh PV then determines the new demand; within the band it stays OFF.
+    IF NOT _haveConfig
+        OR cfg.low <> _lastCfg.low
+        OR cfg.high <> _lastCfg.high
+        OR cfg.onBelowLow <> _lastCfg.onBelowLow THEN
+        outDemand := FALSE;
+        _lastCfg := cfg;
+        _haveConfig := TRUE;
+    END_IF;
+
+    IF cfg.onBelowLow THEN
+        IF pv <= cfg.low THEN
+            outDemand := TRUE;
+        ELSIF pv >= cfg.high THEN
+            outDemand := FALSE;
+        END_IF;
+    ELSE
+        IF pv >= cfg.high THEN
+            outDemand := TRUE;
+        ELSIF pv <= cfg.low THEN
+            outDemand := FALSE;
+        END_IF;
+    END_IF;
+
+    sts.ready := TRUE;
+    sts.inDeadband := pv > cfg.low AND pv < cfg.high;
+    sts.reason := E_HysteresisReason.Ready;
+END_IF;
+
+sts.demand := outDemand;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

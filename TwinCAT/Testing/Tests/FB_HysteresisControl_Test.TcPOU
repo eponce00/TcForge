@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_HysteresisControl_Test" Id="{cf346edf-03b7-48b2-913a-f2447ff78e16}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HysteresisControl_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    _done : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF _done THEN
+    RETURN;
+END_IF;
+
+DefaultRequiresConfiguration();
+LowActingDeadband();
+HighActingDeadband();
+QualityLossClearsDemand();
+ConfigChangeClearsDemand();
+ExceptionalValuesFailOff();
+DisableClearsDemand();
+
+_done := TRUE;
+]]></ST>
+    </Implementation>
+
+    <Method Name="DefaultRequiresConfiguration" Id="{36af182d-13b6-47e9-b88f-140ebb6c568d}">
+      <Declaration><![CDATA[METHOD PRIVATE DefaultRequiresConfiguration
+VAR
+    fb : TcForge.FB_HysteresisControl;
+END_VAR
+]]></Declaration>
+      <Implementation><ST><![CDATA[TEST('DefaultRequiresConfiguration');
+
+fb(enable := TRUE, pv := 15.0, pvQuality := TcForge.E_IO_Quality.GOOD);
+AssertFalse(fb.outDemand, 'Equal default thresholds cannot energize');
+AssertTrue(fb.sts.reason = TcForge.E_HysteresisReason.InvalidConfig, 'Invalid defaults are visible');
+
+fb.cfg.low := 10.0;
+fb.cfg.high := 20.0;
+fb();
+AssertTrue(fb.sts.ready, 'Configured finite PV is ready');
+AssertFalse(fb.outDemand, 'Startup inside the deadband starts OFF');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="LowActingDeadband" Id="{fff43146-d492-4446-83a3-f0c16934efcb}">
+      <Declaration><![CDATA[METHOD PRIVATE LowActingDeadband
+VAR
+    fb : TcForge.FB_HysteresisControl;
+END_VAR
+]]></Declaration>
+      <Implementation><ST><![CDATA[TEST('LowActingDeadband');
+
+fb.cfg.low := 10.0;
+fb.cfg.high := 20.0;
+fb(enable := TRUE, pv := 5.0, pvQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(fb.outDemand, 'Heating demand turns ON below low threshold');
+
+fb(pv := 15.0);
+AssertTrue(fb.outDemand AND fb.sts.inDeadband, 'Demand holds ON inside deadband');
+
+fb(pv := 20.0);
+AssertFalse(fb.outDemand, 'Demand turns OFF at high threshold');
+
+fb(pv := 15.0);
+AssertFalse(fb.outDemand, 'Deadband also retains OFF state');
+
+fb(pv := 10.0);
+AssertTrue(fb.outDemand, 'Demand turns ON at low threshold');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="HighActingDeadband" Id="{5b7988a8-0d55-4eac-9778-98f14c1916d5}">
+      <Declaration><![CDATA[METHOD PRIVATE HighActingDeadband
+VAR
+    fb : TcForge.FB_HysteresisControl;
+END_VAR
+]]></Declaration>
+      <Implementation><ST><![CDATA[TEST('HighActingDeadband');
+
+fb.cfg.low := 10.0;
+fb.cfg.high := 20.0;
+fb.cfg.onBelowLow := FALSE;
+fb(enable := TRUE, pv := 25.0, pvQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(fb.outDemand, 'Cooling demand turns ON above high threshold');
+
+fb(pv := 15.0);
+AssertTrue(fb.outDemand, 'Cooling demand holds ON inside deadband');
+
+fb(pv := 10.0);
+AssertFalse(fb.outDemand, 'Cooling demand turns OFF at low threshold');
+
+fb(pv := 15.0);
+AssertFalse(fb.outDemand, 'Cooling deadband retains OFF state');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="QualityLossClearsDemand" Id="{dcc20287-9862-4ed1-8899-0d569a120aa4}">
+      <Declaration><![CDATA[METHOD PRIVATE QualityLossClearsDemand
+VAR
+    fb : TcForge.FB_HysteresisControl;
+END_VAR
+]]></Declaration>
+      <Implementation><ST><![CDATA[TEST('QualityLossClearsDemand');
+
+fb.cfg.low := 10.0;
+fb.cfg.high := 20.0;
+fb(enable := TRUE, pv := 5.0, pvQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(fb.outDemand, 'Precondition: demand ON');
+
+fb(pvQuality := TcForge.E_IO_Quality.BAD);
+AssertFalse(fb.outDemand, 'Quality loss removes demand in the same scan');
+AssertTrue(fb.sts.reason = TcForge.E_HysteresisReason.BadQuality, 'Quality loss is diagnosed');
+
+fb(pv := 15.0, pvQuality := TcForge.E_IO_Quality.GOOD);
+AssertFalse(fb.outDemand, 'Recovery inside deadband cannot restore stale ON intent');
+
+fb(pv := 10.0);
+AssertTrue(fb.outDemand, 'Fresh threshold crossing may demand ON');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="ConfigChangeClearsDemand" Id="{6d65cd2d-dbf5-4359-b3a0-abf9c9cd5ad4}">
+      <Declaration><![CDATA[METHOD PRIVATE ConfigChangeClearsDemand
+VAR
+    fb : TcForge.FB_HysteresisControl;
+END_VAR
+]]></Declaration>
+      <Implementation><ST><![CDATA[TEST('ConfigChangeClearsDemand');
+
+fb.cfg.low := 10.0;
+fb.cfg.high := 20.0;
+fb(enable := TRUE, pv := 5.0, pvQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(fb.outDemand, 'Precondition: old recipe demands ON');
+
+fb.cfg.low := 0.0;
+fb(pv := 5.0);
+AssertFalse(fb.outDemand, 'Changed threshold cannot inherit old ON state in deadband');
+
+fb.cfg.onBelowLow := FALSE;
+fb();
+AssertFalse(fb.outDemand, 'Changed direction also starts from OFF');
+
+fb(pv := 20.0);
+AssertTrue(fb.outDemand, 'New direction can turn ON at its threshold');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="ExceptionalValuesFailOff" Id="{3579176d-59ac-49a0-968d-6d5654703e2e}">
+      <Declaration><![CDATA[METHOD PRIVATE ExceptionalValuesFailOff
+VAR
+    fb : TcForge.FB_HysteresisControl;
+    invalid : REAL;
+    bits : DWORD := DWORD#16#7F800001; // Signaling NaN; never compare as REAL.
+END_VAR
+]]></Declaration>
+      <Implementation><ST><![CDATA[TEST('ExceptionalValuesFailOff');
+
+fb.cfg.low := 10.0;
+fb.cfg.high := 20.0;
+fb(enable := TRUE, pv := 5.0, pvQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(fb.outDemand, 'Precondition: demand ON');
+
+Tc2_System.MEMCPY(destAddr := ADR(invalid), srcAddr := ADR(bits), n := SIZEOF(invalid));
+fb(pv := invalid);
+AssertFalse(fb.outDemand, 'Nonfinite PV fails OFF without a floating-point comparison');
+AssertTrue(fb.sts.reason = TcForge.E_HysteresisReason.InvalidValue, 'Nonfinite PV is diagnosed');
+
+fb(pv := 5.0);
+AssertTrue(fb.outDemand, 'Fresh valid PV at threshold may restore demand');
+
+fb.cfg.low := invalid;
+fb();
+AssertFalse(fb.outDemand, 'Nonfinite threshold fails OFF');
+AssertTrue(fb.sts.reason = TcForge.E_HysteresisReason.InvalidConfig, 'Bad threshold is diagnosed');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="DisableClearsDemand" Id="{9df7da49-af89-4886-afed-387de623bdde}">
+      <Declaration><![CDATA[METHOD PRIVATE DisableClearsDemand
+VAR
+    fb : TcForge.FB_HysteresisControl;
+END_VAR
+]]></Declaration>
+      <Implementation><ST><![CDATA[TEST('DisableClearsDemand');
+
+fb.cfg.low := 10.0;
+fb.cfg.high := 20.0;
+fb(enable := TRUE, pv := 5.0, pvQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(fb.outDemand, 'Precondition: demand ON');
+
+fb(enable := FALSE);
+AssertFalse(fb.outDemand, 'Disable removes demand');
+AssertTrue(fb.sts.reason = TcForge.E_HysteresisReason.Disabled, 'Disabled status is explicit');
+
+fb(enable := TRUE, pv := 15.0);
+AssertFalse(fb.outDemand, 'Re-enable inside deadband remains OFF');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

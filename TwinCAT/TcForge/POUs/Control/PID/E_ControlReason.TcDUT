@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_ControlReason" Id="{ba5392b4-99db-47e9-868f-7b5d22873781}">
+    <Declaration><![CDATA[// Controller state; an output device applies the physical safe level.
+{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_ControlReason :
+(
+    Disabled      := 0,
+    Automatic     := 1,
+    Manual        := 2,
+    Held          := 3,
+    Tracking      := 4,
+    BadQuality    := 5,
+    InvalidValue  := 6,
+    InvalidConfig := 7,
+    InvalidTiming := 8,
+    ConfigChanged := 9
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

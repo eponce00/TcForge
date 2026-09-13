@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_HysteresisReason" Id="{dadcf797-a161-4907-954b-591f8a088f58}">
+    <Declaration><![CDATA[// Why a hysteresis controller is or is not evaluating a live measurement.
+{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_HysteresisReason :
+(
+    Disabled      := 0,
+    Ready         := 1,
+    BadQuality    := 2,
+    InvalidValue  := 3,
+    InvalidConfig := 4
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

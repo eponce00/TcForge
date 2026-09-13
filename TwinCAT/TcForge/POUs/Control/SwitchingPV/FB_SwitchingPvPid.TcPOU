@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_SwitchingPvPid" Id="{107131a9-55be-43e8-8735-5577f7d928a6}" SpecialFunc="None">
+    <Declaration><![CDATA[// Selects one of two independently tuned PID channels for one owned CV.
+// Inactive history is cleared every scan. A source change tracks the last
+// valid CV for one scan, then the selected controller resumes regulation.
+// Source authority belongs to the application, not this calculation block.
+FUNCTION_BLOCK FB_SwitchingPvPid
+VAR_INPUT
+    enable      : BOOL;
+    source      : E_PvSource := E_PvSource.PV1;
+    pv1         : REAL;
+    quality1    : E_IO_Quality := E_IO_Quality.UNKNOWN;
+    setpoint1   : REAL;
+    pv2         : REAL;
+    quality2    : E_IO_Quality := E_IO_Quality.UNKNOWN;
+    setpoint2   : REAL;
+    manual      : BOOL;
+    manualCv    : REAL;
+    hold        : BOOL;
+    cfg         : ST_SwitchingPvPid_Cfg;
+END_VAR
+VAR_OUTPUT
+    outCv       : REAL;
+    sts         : ST_SwitchingPvPid_Sts;
+END_VAR
+VAR
+    _pid1          : FB_PID_Full;
+    _pid2          : FB_PID_Full;
+    _haveSelection : BOOL;
+    _lastSource    : E_PvSource := E_PvSource.PV1;
+    _lastCv        : REAL;
+    changed        : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[sts.ready := FALSE;
+sts.sourceChanged := FALSE;
+sts.activeSource := source;
+sts.activePv := 0.0;
+sts.cv := 0.0;
+outCv := 0.0;
+
+// A single output device cannot reinterpret its safe value or CV range when
+// the selected measurement changes. Reject mismatched output contracts.
+IF NOT F_IsFiniteReal(value := cfg.pv1.cvMin)
+    OR NOT F_IsFiniteReal(value := cfg.pv1.cvMax)
+    OR NOT F_IsFiniteReal(value := cfg.pv1.safeCv)
+    OR NOT F_IsFiniteReal(value := cfg.pv2.cvMin)
+    OR NOT F_IsFiniteReal(value := cfg.pv2.cvMax)
+    OR NOT F_IsFiniteReal(value := cfg.pv2.safeCv) THEN
+    _pid1(enable := FALSE);
+    _pid2(enable := FALSE);
+    _haveSelection := FALSE;
+    RETURN;
+END_IF;
+
+IF cfg.pv1.cvMin <> cfg.pv2.cvMin
+    OR cfg.pv1.cvMax <> cfg.pv2.cvMax
+    OR cfg.pv1.safeCv <> cfg.pv2.safeCv THEN
+    _pid1(enable := FALSE);
+    _pid2(enable := FALSE);
+    _haveSelection := FALSE;
+    RETURN;
+END_IF;
+
+IF NOT enable THEN
+    _pid1(enable := FALSE);
+    _pid2(enable := FALSE);
+    _haveSelection := FALSE;
+    _lastCv := cfg.pv1.safeCv;
+    outCv := _lastCv;
+    sts.cv := outCv;
+    RETURN;
+END_IF;
+
+changed := _haveSelection AND source <> _lastSource;
+sts.sourceChanged := changed;
+
+IF source = E_PvSource.PV1 THEN
+    _pid2(enable := FALSE);
+    _pid1(
+        enable := TRUE,
+        pv := pv1,
+        pvQuality := quality1,
+        setpoint := setpoint1,
+        manual := manual,
+        manualCv := manualCv,
+        hold := hold,
+        track := changed,
+        trackCv := _lastCv,
+        cfg := cfg.pv1
+    );
+    outCv := _pid1.outCv;
+    sts.pid := _pid1.sts;
+    sts.activePv := pv1;
+ELSIF source = E_PvSource.PV2 THEN
+    _pid1(enable := FALSE);
+    _pid2(
+        enable := TRUE,
+        pv := pv2,
+        pvQuality := quality2,
+        setpoint := setpoint2,
+        manual := manual,
+        manualCv := manualCv,
+        hold := hold,
+        track := changed,
+        trackCv := _lastCv,
+        cfg := cfg.pv2
+    );
+    outCv := _pid2.outCv;
+    sts.pid := _pid2.sts;
+    sts.activePv := pv2;
+ELSE
+    _pid1(enable := FALSE);
+    _pid2(enable := FALSE);
+    _haveSelection := FALSE;
+    RETURN;
+END_IF;
+
+sts.ready := sts.pid.ready;
+sts.cv := outCv;
+_lastCv := outCv;
+_lastSource := source;
+_haveSelection := sts.ready;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

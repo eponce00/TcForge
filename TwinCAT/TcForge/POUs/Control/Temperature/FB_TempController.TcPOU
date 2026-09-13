@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_TempController" Id="{b8cb675c-b39b-4ea3-93e2-08e6a9efe936}" SpecialFunc="None">
+    <Declaration><![CDATA[// Composes full PID with a bounded time-proportioning output. No physical
+// terminal is written here. The application must route outOn through a safe
+// owned output device and qualify its independent overtemperature protection.
+FUNCTION_BLOCK FB_TempController
+VAR_INPUT
+    enable       : BOOL;
+    pv           : REAL;
+    pvQuality    : E_IO_Quality := E_IO_Quality.UNKNOWN;
+    setpoint     : REAL;
+    standby      : BOOL;
+    manual       : BOOL;
+    manualDuty   : REAL;
+    hold         : BOOL;
+    cfg          : ST_TempController_Cfg;
+END_VAR
+VAR_OUTPUT
+    outDuty      : REAL;
+    outOn        : BOOL;
+    sts          : ST_TempController_Sts;
+END_VAR
+VAR
+    _pid         : FB_PID_Full;
+    _phaseMs     : LREAL;
+    _lastPeriod  : TIME;
+    _periodKnown : BOOL;
+    selectedSp   : REAL;
+    cycleDuration : TIME;
+    periodMs     : LREAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[sts.ready := FALSE;
+sts.standbyActive := cfg.standbyEnabled AND standby;
+sts.dutyPercent := 0.0;
+sts.pwmOn := FALSE;
+outDuty := 0.0;
+outOn := FALSE;
+
+// Validate the output interpretation before passing any command to PID.
+IF NOT F_IsFiniteReal(value := cfg.standbySetpoint)
+    OR NOT F_IsFiniteReal(value := cfg.pid.cvMin)
+    OR NOT F_IsFiniteReal(value := cfg.pid.cvMax)
+    OR NOT F_IsFiniteReal(value := cfg.pid.safeCv) THEN
+    _pid(enable := FALSE);
+    _phaseMs := 0.0;
+    sts.pid := _pid.sts;
+    RETURN;
+END_IF;
+
+IF cfg.pid.cvMin <> 0.0 OR cfg.pid.cvMax <> 100.0
+    OR cfg.pid.safeCv <> 0.0
+    OR cfg.pwmPeriod < T#100MS OR cfg.pwmPeriod > T#1H THEN
+    _pid(enable := FALSE);
+    _phaseMs := 0.0;
+    sts.pid := _pid.sts;
+    RETURN;
+END_IF;
+
+selectedSp := setpoint;
+IF sts.standbyActive THEN selectedSp := cfg.standbySetpoint; END_IF;
+
+_pid(
+    enable := enable,
+    pv := pv,
+    pvQuality := pvQuality,
+    setpoint := selectedSp,
+    manual := manual,
+    manualCv := manualDuty,
+    hold := hold,
+    track := FALSE,
+    cfg := cfg.pid
+);
+sts.pid := _pid.sts;
+
+IF NOT _pid.sts.ready THEN
+    _phaseMs := 0.0;
+    _periodKnown := FALSE;
+    RETURN;
+END_IF;
+
+cycleDuration := cfg.pid.cycleTime;
+IF cycleDuration = T#0MS THEN cycleDuration := F_GetTaskCycleTime(); END_IF;
+IF cycleDuration = T#0MS OR cycleDuration > cfg.pid.maxDt THEN
+    _phaseMs := 0.0;
+    RETURN;
+END_IF;
+
+IF NOT _periodKnown OR cfg.pwmPeriod <> _lastPeriod THEN
+    _phaseMs := 0.0;
+    _lastPeriod := cfg.pwmPeriod;
+    _periodKnown := TRUE;
+ELSE
+    _phaseMs := _phaseMs + TIME_TO_REAL(cycleDuration);
+END_IF;
+
+periodMs := TIME_TO_REAL(cfg.pwmPeriod);
+WHILE _phaseMs >= periodMs DO
+    _phaseMs := _phaseMs - periodMs;
+END_WHILE;
+
+outDuty := _pid.outCv;
+outOn := outDuty > 0.0 AND _phaseMs < (outDuty / 100.0) * periodMs;
+sts.ready := TRUE;
+sts.dutyPercent := outDuty;
+sts.pwmOn := outOn;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

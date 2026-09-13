@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_PID_Full" Id="{5931169a-4969-4c36-bd09-8402f2f73475}" SpecialFunc="None">
+    <Declaration><![CDATA[// Cyclic PID calculation; the application owns setpoint/mode requests, source
+// arbitration, IO mapping and interlocks. No RPC or persistent output intent.
+// Invalid quality/configuration/timing returns the configured safe CV and
+// discards integral/derivative history. Call once per owning task cycle.
+FUNCTION_BLOCK FB_PID_Full
+VAR_INPUT
+    enable      : BOOL;
+    pv          : REAL;
+    pvQuality   : E_IO_Quality := E_IO_Quality.UNKNOWN;
+    setpoint    : REAL;
+    manual      : BOOL;
+    manualCv    : REAL;
+    hold        : BOOL;
+    track       : BOOL; // One-scan transfer from another controller.
+    trackCv     : REAL;
+    cfg         : ST_PID_Full_Cfg;
+END_VAR
+VAR_OUTPUT
+    outCv       : REAL;
+    sts         : ST_PID_Full_Sts;
+END_VAR
+VAR
+    _initialized : BOOL;
+    _lastCfg     : ST_PID_Full_Cfg;
+    _sp          : LREAL;
+    _cv          : LREAL;
+    _integral    : LREAL;
+    _derivative  : LREAL;
+    _prevPv      : LREAL;
+
+    cycleDuration : TIME;
+    dtSec        : LREAL;
+    spTarget     : LREAL;
+    delta        : LREAL;
+    gainI        : LREAL;
+    gainD        : LREAL;
+    direction    : LREAL;
+    error        : LREAL;
+    pTerm        : LREAL;
+    dRaw         : LREAL;
+    candidateI   : LREAL;
+    unsaturated  : LREAL;
+    targetCv     : LREAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Initialize the published status before each possible early return.
+sts.ready := FALSE;
+sts.reason := E_ControlReason.Disabled;
+sts.saturated := FALSE;
+sts.spRamping := FALSE;
+sts.cvRamping := FALSE;
+sts.spRequested := 0.0;
+sts.spApplied := 0.0;
+sts.pv := 0.0;
+sts.error := 0.0;
+sts.pTerm := 0.0;
+sts.iTerm := 0.0;
+sts.dTerm := 0.0;
+outCv := 0.0;
+
+// Bit-classify every REAL before any numeric comparison or arithmetic.
+IF NOT ValidConfig() THEN
+    ResetState();
+    sts.reason := E_ControlReason.InvalidConfig;
+    sts.cv := outCv;
+    RETURN;
+END_IF;
+
+outCv := cfg.safeCv;
+IF NOT enable THEN
+    ResetState();
+    sts.cv := outCv;
+    RETURN;
+END_IF;
+
+IF pvQuality <> E_IO_Quality.GOOD THEN
+    ResetState();
+    sts.reason := E_ControlReason.BadQuality;
+    sts.cv := outCv;
+    RETURN;
+END_IF;
+
+IF NOT F_IsFiniteReal(value := pv)
+    OR NOT F_IsFiniteReal(value := setpoint)
+    OR (manual AND NOT F_IsFiniteReal(value := manualCv))
+    OR (track AND NOT F_IsFiniteReal(value := trackCv)) THEN
+    ResetState();
+    sts.reason := E_ControlReason.InvalidValue;
+    sts.cv := outCv;
+    RETURN;
+END_IF;
+
+cycleDuration := cfg.cycleTime;
+IF cycleDuration = T#0MS THEN
+    cycleDuration := F_GetTaskCycleTime();
+END_IF;
+IF cycleDuration = T#0MS OR cycleDuration > cfg.maxDt THEN
+    ResetState();
+    sts.reason := E_ControlReason.InvalidTiming;
+    sts.cv := outCv;
+    RETURN;
+END_IF;
+dtSec := TIME_TO_REAL(cycleDuration) / 1000.0;
+
+// Tuning or limit edits remove the old controller history for one scan.
+IF _initialized AND ChangedConfig() THEN
+    ResetState();
+    sts.reason := E_ControlReason.ConfigChanged;
+    sts.cv := outCv;
+    RETURN;
+END_IF;
+
+spTarget := setpoint;
+IF spTarget < cfg.spMin THEN spTarget := cfg.spMin; END_IF;
+IF spTarget > cfg.spMax THEN spTarget := cfg.spMax; END_IF;
+
+IF NOT _initialized THEN
+    _sp := spTarget;
+    _cv := cfg.safeCv;
+    _integral := 0.0;
+    _derivative := 0.0;
+    _prevPv := pv;
+    _lastCfg := cfg;
+    _initialized := TRUE;
+END_IF;
+
+// Limit setpoint motion in physical engineering units per second.
+delta := spTarget - _sp;
+IF delta > 0.0 AND cfg.spRateUp > 0.0 THEN
+    IF delta > cfg.spRateUp * dtSec THEN delta := cfg.spRateUp * dtSec; END_IF;
+ELSIF delta < 0.0 AND cfg.spRateDown > 0.0 THEN
+    IF -delta > cfg.spRateDown * dtSec THEN delta := -cfg.spRateDown * dtSec; END_IF;
+END_IF;
+_sp := _sp + delta;
+
+direction := 1.0;
+IF cfg.reverseActing THEN direction := -1.0; END_IF;
+error := direction * (_sp - pv);
+pTerm := cfg.kp * error;
+
+gainI := cfg.ki;
+gainD := cfg.kd;
+IF cfg.standardForm THEN
+    gainI := 0.0;
+    IF cfg.integralTime > T#0MS THEN
+        gainI := cfg.kp / (TIME_TO_REAL(cfg.integralTime) / 1000.0);
+    END_IF;
+    gainD := cfg.kp * (TIME_TO_REAL(cfg.derivativeTime) / 1000.0);
+END_IF;
+
+// Derivative on measurement prevents a setpoint step from kicking the CV.
+dRaw := -direction * gainD * ((pv - _prevPv) / dtSec);
+_prevPv := pv;
+IF cfg.derivativeTau > T#0MS THEN
+    delta := dtSec / ((TIME_TO_REAL(cfg.derivativeTau) / 1000.0) + dtSec);
+    _derivative := (1.0 - delta) * _derivative + delta * dRaw;
+ELSE
+    _derivative := dRaw;
+END_IF;
+
+// Tracking is a one-cycle bumpless handoff. Manual mode updates the integral
+// bias so a later return to automatic begins at the manual CV.
+IF track OR manual THEN
+    IF track THEN targetCv := trackCv; ELSE targetCv := manualCv; END_IF;
+    IF targetCv < cfg.cvMin THEN targetCv := cfg.cvMin; END_IF;
+    IF targetCv > cfg.cvMax THEN targetCv := cfg.cvMax; END_IF;
+    _cv := targetCv;
+    _integral := targetCv - pTerm - _derivative;
+    IF _integral < cfg.integralMin THEN _integral := cfg.integralMin; END_IF;
+    IF _integral > cfg.integralMax THEN _integral := cfg.integralMax; END_IF;
+    IF track THEN sts.reason := E_ControlReason.Tracking;
+    ELSE sts.reason := E_ControlReason.Manual; END_IF;
+ELSIF hold THEN
+    sts.reason := E_ControlReason.Held;
+ELSE
+    // Integrate only as far as the CV boundary. Rejecting the whole step can
+    // strand the CV just below its limit due to floating-point rounding.
+    candidateI := _integral + gainI * error * dtSec;
+    IF candidateI < cfg.integralMin THEN candidateI := cfg.integralMin; END_IF;
+    IF candidateI > cfg.integralMax THEN candidateI := cfg.integralMax; END_IF;
+    unsaturated := pTerm + candidateI + _derivative;
+    sts.saturated := unsaturated > cfg.cvMax OR unsaturated < cfg.cvMin;
+    IF unsaturated > cfg.cvMax AND candidateI > _integral THEN
+        candidateI := cfg.cvMax - pTerm - _derivative;
+        IF candidateI < _integral THEN candidateI := _integral; END_IF;
+    ELSIF unsaturated < cfg.cvMin AND candidateI < _integral THEN
+        candidateI := cfg.cvMin - pTerm - _derivative;
+        IF candidateI > _integral THEN candidateI := _integral; END_IF;
+    END_IF;
+    _integral := candidateI;
+
+    unsaturated := pTerm + _integral + _derivative;
+    targetCv := unsaturated;
+    IF targetCv < cfg.cvMin THEN targetCv := cfg.cvMin; END_IF;
+    IF targetCv > cfg.cvMax THEN targetCv := cfg.cvMax; END_IF;
+    sts.saturated := sts.saturated OR targetCv <> unsaturated;
+
+    delta := targetCv - _cv;
+    IF delta > 0.0 AND cfg.cvRateUp > 0.0 THEN
+        IF delta > cfg.cvRateUp * dtSec THEN delta := cfg.cvRateUp * dtSec; END_IF;
+    ELSIF delta < 0.0 AND cfg.cvRateDown > 0.0 THEN
+        IF -delta > cfg.cvRateDown * dtSec THEN delta := -cfg.cvRateDown * dtSec; END_IF;
+    END_IF;
+    _cv := _cv + delta;
+    sts.cvRamping := _cv <> targetCv;
+    sts.reason := E_ControlReason.Automatic;
+END_IF;
+
+// All published REAL values are inside validated REAL limits.
+outCv := LREAL_TO_REAL(_cv);
+sts.ready := TRUE;
+sts.spRamping := _sp <> spTarget;
+sts.spRequested := setpoint;
+sts.spApplied := LREAL_TO_REAL(_sp);
+sts.pv := pv;
+sts.cv := outCv;
+sts.error := error;
+sts.pTerm := pTerm;
+sts.iTerm := _integral;
+sts.dTerm := _derivative;
+]]></ST>
+    </Implementation>
+
+    <Folder Name="Internal" Id="{69965d31-8457-4453-9050-3239a80c725c}" />
+    <Method Name="ResetState" Id="{3aa63cc9-d60a-4ef1-9a7e-2f72885049c6}" FolderPath="Internal\">
+      <Declaration><![CDATA[METHOD PRIVATE ResetState
+]]></Declaration>
+      <Implementation><ST><![CDATA[_initialized := FALSE;
+_sp := 0.0;
+_cv := outCv;
+_integral := 0.0;
+_derivative := 0.0;
+_prevPv := 0.0;
+]]></ST></Implementation>
+    </Method>
+
+    <Method Name="ValidConfig" Id="{af9291b7-54ed-4ce2-9a9c-ef87316ae593}" FolderPath="Internal\">
+      <Declaration><![CDATA[METHOD PRIVATE ValidConfig : BOOL
+]]></Declaration>
+      <Implementation><ST><![CDATA[ValidConfig := F_IsFiniteReal(value := cfg.kp)
+    AND F_IsFiniteReal(value := cfg.ki)
+    AND F_IsFiniteReal(value := cfg.kd)
+    AND F_IsFiniteReal(value := cfg.spMin)
+    AND F_IsFiniteReal(value := cfg.spMax)
+    AND F_IsFiniteReal(value := cfg.spRateUp)
+    AND F_IsFiniteReal(value := cfg.spRateDown)
+    AND F_IsFiniteReal(value := cfg.cvMin)
+    AND F_IsFiniteReal(value := cfg.cvMax)
+    AND F_IsFiniteReal(value := cfg.cvRateUp)
+    AND F_IsFiniteReal(value := cfg.cvRateDown)
+    AND F_IsFiniteReal(value := cfg.integralMin)
+    AND F_IsFiniteReal(value := cfg.integralMax)
+    AND F_IsFiniteReal(value := cfg.safeCv);
+IF NOT ValidConfig THEN RETURN; END_IF;
+
+ValidConfig := cfg.kp >= 0.0 AND cfg.ki >= 0.0 AND cfg.kd >= 0.0
+    AND cfg.spMin < cfg.spMax
+    AND cfg.cvMin < cfg.cvMax
+    AND cfg.integralMin < cfg.integralMax
+    AND cfg.spRateUp >= 0.0 AND cfg.spRateDown >= 0.0
+    AND cfg.cvRateUp >= 0.0 AND cfg.cvRateDown >= 0.0
+    AND cfg.safeCv >= cfg.cvMin AND cfg.safeCv <= cfg.cvMax
+    AND cfg.maxDt > T#0MS;
+]]></ST></Implementation>
+    </Method>
+
+    <Method Name="ChangedConfig" Id="{db82cdbc-edc2-4ab0-85e8-7ad84b1d357f}" FolderPath="Internal\">
+      <Declaration><![CDATA[METHOD PRIVATE ChangedConfig : BOOL
+]]></Declaration>
+      <Implementation><ST><![CDATA[ChangedConfig := cfg.kp <> _lastCfg.kp
+    OR cfg.ki <> _lastCfg.ki OR cfg.kd <> _lastCfg.kd
+    OR cfg.standardForm <> _lastCfg.standardForm
+    OR cfg.integralTime <> _lastCfg.integralTime
+    OR cfg.derivativeTime <> _lastCfg.derivativeTime
+    OR cfg.derivativeTau <> _lastCfg.derivativeTau
+    OR cfg.reverseActing <> _lastCfg.reverseActing
+    OR cfg.spMin <> _lastCfg.spMin OR cfg.spMax <> _lastCfg.spMax
+    OR cfg.spRateUp <> _lastCfg.spRateUp OR cfg.spRateDown <> _lastCfg.spRateDown
+    OR cfg.cvMin <> _lastCfg.cvMin OR cfg.cvMax <> _lastCfg.cvMax
+    OR cfg.cvRateUp <> _lastCfg.cvRateUp OR cfg.cvRateDown <> _lastCfg.cvRateDown
+    OR cfg.integralMin <> _lastCfg.integralMin
+    OR cfg.integralMax <> _lastCfg.integralMax
+    OR cfg.safeCv <> _lastCfg.safeCv
+    OR cfg.cycleTime <> _lastCfg.cycleTime
+    OR cfg.maxDt <> _lastCfg.maxDt;
+]]></ST></Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

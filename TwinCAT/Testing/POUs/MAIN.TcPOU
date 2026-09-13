@@ -3,6 +3,8 @@
   <POU Name="MAIN" Id="{f2ebe72b-7c64-48f6-9124-533eb91ffd46}">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
+    regulatoryControl : FB_RegulatoryControl_Test;
+    hysteresisControl : FB_HysteresisControl_Test;
     executionContinuity : FB_ExecutionContinuity_Test;
     digitalInputLifecycle : FB_DigitalInputLifecycle_Test;
     alarmValidity : FB_AlarmValidity_Test;

@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_RegulatoryControl_Test" Id="{6c434a89-71a9-489e-92ef-d564156409f9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_RegulatoryControl_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    _done : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation><ST><![CDATA[IF _done THEN RETURN; END_IF;
+
+BangBangMapsDemand();
+PidProportionalAndReverse();
+PidIntegralAndAntiWindup();
+PidQualityAndManual();
+PidSetpointAndCvRamps();
+PidExceptionalInputFailsSafe();
+TemperaturePwmAndStandby();
+TemperatureQualityFailsOff();
+SwitchingTracksCv();
+SwitchingRejectsIncompatibleOutput();
+
+_done := TRUE;
+]]></ST></Implementation>
+
+    <Folder Name="Scenarios" Id="{500e9fb3-83e7-4954-94c8-3e865a5d9835}" />
+
+    <Method Name="BangBangMapsDemand" Id="{44b6466e-c359-403a-a16d-15c6dc20ece4}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE BangBangMapsDemand
+VAR fb : TcForge.FB_BangBang; END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('BangBangMapsDemand');
+fb.cfg.hysteresis.low := 10.0;
+fb.cfg.hysteresis.high := 20.0;
+fb.cfg.lowValue := 5.0;
+fb.cfg.highValue := 75.0;
+
+fb(enable := TRUE, pv := 5.0, pvQuality := TcForge.E_IO_Quality.GOOD);
+AssertTrue(fb.outDemand, 'Low PV requests the high mapped value');
+AssertEquals_REAL(75.0, fb.outCv, 0.001, 'High value maps demand ON');
+
+fb(pv := 20.0);
+AssertFalse(fb.outDemand, 'High threshold clears demand');
+AssertEquals_REAL(5.0, fb.outCv, 0.001, 'Low value maps demand OFF');
+
+fb(pvQuality := TcForge.E_IO_Quality.BAD);
+AssertFalse(fb.sts.ready, 'Bad quality invalidates mapped CV');
+AssertEquals_REAL(0.0, fb.outCv, 0.001, 'Unusable mapping fails to zero');
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="PidProportionalAndReverse" Id="{e7974364-845a-4a52-b3a7-7ae2e6864336}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE PidProportionalAndReverse
+VAR fb : TcForge.FB_PID_Full; END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('PidProportionalAndReverse');
+fb.cfg.kp := 2.0;
+fb.cfg.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 20.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 30.0);
+AssertTrue(fb.sts.ready, 'Finite configured PID is ready');
+AssertEquals_REAL(20.0, fb.outCv, 0.001, 'Direct P term drives CV');
+
+fb.cfg.reverseActing := TRUE;
+fb(pv := 30.0, setpoint := 20.0);
+AssertFalse(fb.sts.ready, 'Tuning direction edit gets a safe scan');
+fb();
+AssertEquals_REAL(20.0, fb.outCv, 0.001, 'Reverse action changes error sign');
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="PidIntegralAndAntiWindup" Id="{80d71341-b7c7-4e18-b93f-aa5d5dc6f75a}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE PidIntegralAndAntiWindup
+VAR fb : TcForge.FB_PID_Full; END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('PidIntegralAndAntiWindup');
+fb.cfg.kp := 0.0;
+fb.cfg.ki := 1.0;
+fb.cfg.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 10.0);
+AssertEquals_REAL(1.0, fb.outCv, 0.001, 'Integral accumulates error times seconds');
+
+fb();
+AssertEquals_REAL(2.0, fb.outCv, 0.001, 'Integral advances by one output unit per scan');
+
+fb.cfg.cvMax := 2.0;
+fb();
+AssertFalse(fb.sts.ready, 'CV limit edit invalidates old integral history');
+fb();
+AssertEquals_REAL(1.0, fb.outCv, 0.001, 'Reset history resumes from a fresh integral');
+fb();
+fb();
+AssertTrue(fb.sts.saturated, 'Further integration is blocked at the CV limit');
+AssertEquals_REAL(2.0, fb.outCv, 0.001, 'CV stays within the edited limit');
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="PidQualityAndManual" Id="{102a58c4-86cd-4d67-a20a-bad05df0f233}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE PidQualityAndManual
+VAR fb : TcForge.FB_PID_Full; END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('PidQualityAndManual');
+fb.cfg.kp := 1.0;
+fb.cfg.ki := 1.0;
+fb.cfg.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 10.0);
+AssertTrue(fb.outCv > 0.0, 'Precondition: automatic CV is positive');
+
+fb(manual := TRUE, manualCv := 40.0);
+AssertEquals_REAL(40.0, fb.outCv, 0.001, 'Manual request is limited and published');
+AssertTrue(fb.sts.reason = TcForge.E_ControlReason.Manual, 'Manual mode is visible');
+
+fb(manual := FALSE);
+AssertTrue(fb.outCv >= 40.0 AND fb.outCv < 42.0, 'Automatic resumes near tracked manual CV');
+
+fb(pvQuality := TcForge.E_IO_Quality.BAD);
+AssertEquals_REAL(0.0, fb.outCv, 0.001, 'Bad measurement immediately returns safe CV');
+AssertFalse(fb.sts.ready, 'Bad quality cannot report ready');
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="PidSetpointAndCvRamps" Id="{726c63a7-b9ad-47db-a28b-4bcbc6813274}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE PidSetpointAndCvRamps
+VAR fb : TcForge.FB_PID_Full; END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('PidSetpointAndCvRamps');
+fb.cfg.kp := 1.0;
+fb.cfg.spRateUp := 10.0;
+fb.cfg.cvRateUp := 5.0;
+fb.cfg.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 0.0);
+
+fb(setpoint := 10.0);
+AssertEquals_REAL(1.0, fb.sts.spApplied, 0.001, 'SP ramp uses engineering units per second');
+AssertEquals_REAL(0.5, fb.outCv, 0.001, 'CV ramp uses output units per second');
+AssertTrue(fb.sts.spRamping AND fb.sts.cvRamping, 'Both active ramps are reported');
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="PidExceptionalInputFailsSafe" Id="{5d35029c-d36e-4fe2-83ff-85066675a256}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE PidExceptionalInputFailsSafe
+VAR
+    fb : TcForge.FB_PID_Full;
+    invalid : REAL;
+    bits : DWORD := DWORD#16#7F800001; // Signaling NaN.
+END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('PidExceptionalInputFailsSafe');
+fb.cfg.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 20.0);
+AssertTrue(fb.sts.ready, 'Precondition: valid PID');
+
+Tc2_System.MEMCPY(destAddr := ADR(invalid), srcAddr := ADR(bits), n := SIZEOF(invalid));
+fb(pv := invalid);
+AssertFalse(fb.sts.ready, 'Signaling NaN is rejected before arithmetic');
+AssertEquals_REAL(0.0, fb.outCv, 0.001, 'Rejected PV fails to safe CV');
+
+fb(pv := 0.0);
+AssertTrue(fb.sts.ready, 'Fresh finite PV can recover');
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="TemperaturePwmAndStandby" Id="{289f5457-5aae-4355-9220-7a985d3579ba}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE TemperaturePwmAndStandby
+VAR fb : TcForge.FB_TempController; i : INT; END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('TemperaturePwmAndStandby');
+fb.cfg.pid.kp := 1.0;
+fb.cfg.pid.cycleTime := T#100MS;
+fb.cfg.pwmPeriod := T#1S;
+fb.cfg.standbyEnabled := TRUE;
+fb.cfg.standbySetpoint := 0.0;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 50.0);
+AssertEquals_REAL(50.0, fb.outDuty, 0.001, 'PID CV maps to 50 percent duty');
+AssertTrue(fb.outOn, 'First half of PWM window is ON');
+
+FOR i := 1 TO 5 DO fb(); END_FOR;
+AssertFalse(fb.outOn, 'Second half of PWM window is OFF');
+
+fb(standby := TRUE);
+AssertTrue(fb.sts.standbyActive, 'Standby selects its own setpoint');
+AssertEquals_REAL(0.0, fb.outDuty, 0.001, 'Standby zero setpoint removes heating demand');
+AssertFalse(fb.outOn, 'Zero duty is OFF');
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="TemperatureQualityFailsOff" Id="{636ff94f-63fe-497b-b1d4-00efe385f904}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE TemperatureQualityFailsOff
+VAR fb : TcForge.FB_TempController; END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('TemperatureQualityFailsOff');
+fb.cfg.pid.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 100.0);
+AssertTrue(fb.outOn, 'Precondition: full-duty output ON');
+
+fb(pvQuality := TcForge.E_IO_Quality.BAD);
+AssertFalse(fb.outOn, 'Sensor loss removes PWM in the same scan');
+AssertEquals_REAL(0.0, fb.outDuty, 0.001, 'Sensor loss returns zero duty');
+AssertFalse(fb.sts.ready, 'Sensor loss cannot report ready');
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="SwitchingTracksCv" Id="{840a00e3-a2dc-48f3-808d-9a66c50a815c}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE SwitchingTracksCv
+VAR fb : TcForge.FB_SwitchingPvPid; END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('SwitchingTracksCv');
+fb.cfg.pv1.cycleTime := T#100MS;
+fb.cfg.pv2.cycleTime := T#100MS;
+fb.cfg.pv2.ki := 1.0;
+fb(enable := TRUE,
+   source := TcForge.E_PvSource.PV1,
+   pv1 := 0.0, quality1 := TcForge.E_IO_Quality.GOOD, setpoint1 := 20.0,
+   pv2 := 0.0, quality2 := TcForge.E_IO_Quality.GOOD, setpoint2 := 40.0);
+AssertEquals_REAL(20.0, fb.outCv, 0.001, 'PV1 regulates the shared output');
+
+fb(source := TcForge.E_PvSource.PV2);
+AssertTrue(fb.sts.sourceChanged, 'Selection change is published');
+AssertEquals_REAL(20.0, fb.outCv, 0.001, 'PV2 tracks the previous CV for one scan');
+
+fb();
+AssertTrue(fb.outCv > 20.0 AND fb.outCv < 25.0, 'Selected PID resumes regulation');
+
+fb(quality2 := TcForge.E_IO_Quality.BAD);
+AssertFalse(fb.sts.ready, 'Selected bad PV invalidates the output');
+AssertEquals_REAL(0.0, fb.outCv, 0.001, 'Selected bad PV uses the common safe CV');
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="SwitchingRejectsIncompatibleOutput" Id="{47d7aa45-4697-43e1-a4c0-2631d2e266b0}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE SwitchingRejectsIncompatibleOutput
+VAR fb : TcForge.FB_SwitchingPvPid; END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('SwitchingRejectsIncompatibleOutput');
+fb.cfg.pv1.cycleTime := T#100MS;
+fb.cfg.pv2.cycleTime := T#100MS;
+fb.cfg.pv2.cvMax := 80.0;
+fb(enable := TRUE, pv1 := 0.0,
+   quality1 := TcForge.E_IO_Quality.GOOD, setpoint1 := 50.0);
+AssertFalse(fb.sts.ready, 'Different CV ranges cannot drive the same output');
+AssertEquals_REAL(0.0, fb.outCv, 0.001, 'Mismatched output contract fails OFF');
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

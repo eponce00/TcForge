@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="E_PvSource" Id="{028cb00b-ab69-4a3f-bb06-6a0e8fd8d4f0}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_PvSource :
+(
+    PV1 := 0,
+    PV2 := 1
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

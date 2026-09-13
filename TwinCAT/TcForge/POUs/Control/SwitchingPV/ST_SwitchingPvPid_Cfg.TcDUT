@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <DUT Name="ST_SwitchingPvPid_Cfg" Id="{eaed48c2-e308-4bb3-9f6a-c8ca42fe4ae9}">
+    <Declaration><![CDATA[// Each sensor can have separate tuning and SP limits. Both configurations
+// must have identical CV limits and safe CV because they drive one device.
+TYPE ST_SwitchingPvPid_Cfg :
+STRUCT
+    pv1 : ST_PID_Full_Cfg;
+    pv2 : ST_PID_Full_Cfg;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
