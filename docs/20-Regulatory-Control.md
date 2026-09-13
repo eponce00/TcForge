@@ -25,7 +25,7 @@ Hysteresis uses `low < high`. With `onBelowLow := TRUE`, demand turns ON at or b
 - Ideal form (`standardForm := FALSE`): `kp` is CV/PV, `ki` is CV/(PV·s), and `kd` is CV·s/PV. The calculated terms are `kp·error`, integrated `ki·error·dt`, and derivative on PV.
 - Standard form (`standardForm := TRUE`): proportional gain `kp`, integral time `integralTime`, and derivative time `derivativeTime`; the effective integral gain is `kp/Ti` and derivative gain is `kp·Td`. Zero times disable their respective terms.
 
-Setpoint and CV ramp rates are engineering units per second; zero disables a ramp. `reverseActing` changes the error sign. `derivativeTau` enables a first-order derivative filter. CV and integral limits are independent. Conditional integration stops adding integral in the direction of CV saturation, and `sts.saturated` reports a requested CV beyond the limit even when that addition is rejected. A configuration edit clears prior controller history for one safe scan.
+Setpoint and CV ramp rates are engineering units per second; zero disables a ramp. `reverseActing` changes the error sign. `derivativeTau` enables a first-order derivative filter. CV and integral limits are independent. Integration is limited to the reachable CV boundary rather than accumulating beyond it, and `sts.saturated` reports a requested CV beyond that limit. A configuration edit clears prior controller history for one safe scan.
 
 `manual` requests a bounded `manualCv` and tracks the integral bias so automatic control can resume near that value. `hold` freezes the CV while retaining current history. `track` is a one-scan bounded CV handoff for a different controller. These are calculation modes, not authorization or source-priority mechanisms. Resolve competing requests before calling the block.
 
@@ -37,4 +37,16 @@ Setpoint and CV ramp rates are engineering units per second; zero disables a ram
 
 `FB_SwitchingPvPid` has one PID configuration per PV and demands identical CV limits and safe CV for both. The inactive PID is reset each scan. On source change, the newly selected PID tracks the previous valid CV for one scan; subsequent scans regulate using its own tuning. A bad selected PV fails to the shared safe CV and invalidates the prior selection, so recovery cannot reuse a stale handoff. The application decides which source is authoritative.
 
-The TcUnit suites `FB_HysteresisControl_Test` and `FB_RegulatoryControl_Test` cover thresholds, quality loss and recovery, proportional/integral action, saturation, ramps, nonfinite input rejection, PWM/standby, and PV switching. The source build and bench test evidence are tracked in [PROGRESS.md](https://github.com/eponce00/TcForge/blob/main/PROGRESS.md).
+## Generic closed-loop bench test
+
+The Testing PLC contains `FB_ControlLoopFixture`, a bench-only PID composition with no `%I` or `%Q` mapping. The Python runner uses the existing `FirstOrderAnalog` plant and writes PV, quality, enable, and setpoint as a payload, then writes `requestFrame` last. The PLC's cyclic task copies the frame, computes CV, publishes status, and acknowledges `appliedFrame`. A 500 ms feed watchdog disables the PID and returns CV to zero when Python stops. Its `watchdogTrips` counter lets the runner distinguish an actual lost feed from slow ADS communication. A timed-out or uncertain ADS frame is never replayed by the Python transport.
+
+After activating the Testing application on a dedicated runtime, run:
+
+```powershell
+artifacts/sim-venv/Scripts/python.exe -m tcforge_sim.control_loop --target <AMS-Net-ID> --port 853 --output artifacts/control-loop-bench
+```
+
+The runner checks convergence, same-frame response to bad quality, recovery, feed loss, and explicit disable. It writes JSONL and JUnit evidence. This fixture tests the PLC calculation and ADS exchange against a generic physical response; it does not qualify a real sensor, fieldbus, actuator, or machine safety function.
+
+The TcUnit suites `FB_HysteresisControl_Test`, `FB_RegulatoryControl_Test`, and `FB_RegulatoryControl_Edge_Test` cover thresholds, gain forms, derivative filtering, output limits, mode changes, quality loss and recovery, PWM/standby, and PV switching. The source build and bench evidence are tracked in [PROGRESS.md](https://github.com/eponce00/TcForge/blob/main/PROGRESS.md).

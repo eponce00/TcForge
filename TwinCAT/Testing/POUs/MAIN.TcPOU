@@ -3,6 +3,8 @@
   <POU Name="MAIN" Id="{f2ebe72b-7c64-48f6-9124-533eb91ffd46}">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
+    controlLoopFixture : FB_ControlLoopFixture;
+    regulatoryControlEdge : FB_RegulatoryControl_Edge_Test;
     regulatoryControl : FB_RegulatoryControl_Test;
     hysteresisControl : FB_HysteresisControl_Test;
     executionContinuity : FB_ExecutionContinuity_Test;
@@ -46,7 +48,8 @@ END_VAR
 ]]>
     </Declaration>
     <Implementation>
-      <ST><![CDATA[simulation();
+      <ST><![CDATA[controlLoopFixture();
+simulation();
 rpcContext();
 IF enableRpcPump THEN rpcOutput(); END_IF;
 TcUnit.RUN();

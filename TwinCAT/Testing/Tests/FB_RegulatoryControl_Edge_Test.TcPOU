@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_RegulatoryControl_Edge_Test" Id="{ee4f95e7-2aef-44e6-97c0-ef2b79c7a634}" SpecialFunc="None">
+    <Declaration><![CDATA[// Exercises mode transitions and boundary cases beyond the basic control suite.
+FUNCTION_BLOCK FB_RegulatoryControl_Edge_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+    _done : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation><ST><![CDATA[IF _done THEN
+    RETURN;
+END_IF;
+
+StandardFormUsesIntegralTime();
+DerivativeFiltersPvWithoutSetpointKick();
+LowerLimitUnwindsOnReversal();
+HoldAndTrackReleaseWithoutStep();
+InvalidConfigurationAndTimingFailSafe();
+TemperatureManualDutyAndPeriodEdit();
+TemperatureRejectsInvalidConfiguration();
+SwitchingPvRecoversAfterQualityLoss();
+SwitchingContractClearsOldStatus();
+
+_done := TRUE;
+]]></ST></Implementation>
+
+    <Folder Name="Scenarios" Id="{eb41b6d3-663d-4400-9607-cb0b9afb2c35}" />
+
+    <Method Name="StandardFormUsesIntegralTime" Id="{84f6b900-7fd3-48c5-905e-61b6a1c473f8}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE StandardFormUsesIntegralTime
+VAR
+    fb : TcForge.FB_PID_Full;
+END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('StandardFormUsesIntegralTime');
+
+fb.cfg.standardForm := TRUE;
+fb.cfg.kp := 2.0;
+fb.cfg.integralTime := T#1S;
+fb.cfg.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 10.0);
+
+AssertEquals_REAL(22.0, fb.outCv, 0.02, 'Standard form uses Kp/Ti for integral gain');
+fb();
+AssertEquals_REAL(24.0, fb.outCv, 0.02, 'Integral time advances the CV each cycle');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="DerivativeFiltersPvWithoutSetpointKick" Id="{3f97ee52-c3e8-417e-8822-800337daedaa}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE DerivativeFiltersPvWithoutSetpointKick
+VAR
+    fb : TcForge.FB_PID_Full;
+END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('DerivativeFiltersPvWithoutSetpointKick');
+
+fb.cfg.kp := 0.0;
+fb.cfg.kd := 1.0;
+fb.cfg.derivativeTau := T#100MS;
+fb.cfg.cvMin := -100.0;
+fb.cfg.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 0.0);
+
+fb(pv := 1.0);
+AssertEquals_REAL(-5.0, fb.outCv, 0.1, 'First-order filter halves the PV derivative');
+
+fb(setpoint := 50.0);
+AssertEquals_REAL(-2.5, fb.outCv, 0.1, 'Setpoint step does not enter PV derivative');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="LowerLimitUnwindsOnReversal" Id="{6223bb3e-dd6d-4dbc-bc3b-3cb22e285fc1}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE LowerLimitUnwindsOnReversal
+VAR
+    fb : TcForge.FB_PID_Full;
+END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('LowerLimitUnwindsOnReversal');
+
+fb.cfg.kp := 0.0;
+fb.cfg.ki := 1.0;
+fb.cfg.cvMin := -2.0;
+fb.cfg.cvMax := 2.0;
+fb.cfg.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := -10.0);
+
+fb();
+fb();
+AssertTrue(fb.sts.saturated, 'Further negative integration reports saturation');
+AssertEquals_REAL(-2.0, fb.outCv, 0.02, 'Lower CV boundary is reached without windup');
+
+fb(setpoint := 10.0);
+AssertEquals_REAL(-1.0, fb.outCv, 0.02, 'Error reversal immediately unwinds integral');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="HoldAndTrackReleaseWithoutStep" Id="{aedb1fa5-877d-420d-be73-b572b3c63282}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE HoldAndTrackReleaseWithoutStep
+VAR
+    fb : TcForge.FB_PID_Full;
+END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('HoldAndTrackReleaseWithoutStep');
+
+fb.cfg.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 20.0);
+AssertEquals_REAL(20.0, fb.outCv, 0.01, 'Precondition: automatic CV');
+
+fb(hold := TRUE, setpoint := 40.0);
+AssertEquals_REAL(20.0, fb.outCv, 0.01, 'Hold keeps the last CV');
+AssertTrue(fb.sts.reason = TcForge.E_ControlReason.Held, 'Hold mode is visible');
+
+fb(track := TRUE, trackCv := 35.0);
+AssertEquals_REAL(35.0, fb.outCv, 0.01, 'One-scan tracking takes the requested CV');
+
+fb(track := FALSE, hold := FALSE);
+AssertEquals_REAL(35.0, fb.outCv, 0.01, 'Automatic release uses tracked integral bias');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="InvalidConfigurationAndTimingFailSafe" Id="{071cfb9c-2267-4210-bc86-d382dae06116}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE InvalidConfigurationAndTimingFailSafe
+VAR
+    fb : TcForge.FB_PID_Full;
+END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('InvalidConfigurationAndTimingFailSafe');
+
+fb.cfg.cvMin := 100.0;
+fb.cfg.cvMax := 0.0;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 20.0);
+AssertFalse(fb.sts.ready, 'Reversed CV limits cannot run');
+AssertTrue(fb.sts.reason = TcForge.E_ControlReason.InvalidConfig, 'Invalid limits are diagnosed');
+AssertEquals_REAL(0.0, fb.outCv, 0.001, 'Invalid configuration returns zero');
+
+fb.cfg.cvMin := 0.0;
+fb.cfg.cvMax := 100.0;
+fb.cfg.cycleTime := T#2S;
+fb();
+AssertTrue(fb.sts.reason = TcForge.E_ControlReason.InvalidTiming, 'Oversize declared task interval is rejected');
+
+fb.cfg.cycleTime := T#100MS;
+fb();
+AssertTrue(fb.sts.ready, 'Corrected timing starts a fresh controller');
+
+fb(pvQuality := TcForge.E_IO_Quality.BAD);
+AssertEquals_REAL(0.0, fb.outCv, 0.001, 'Bad quality immediately returns safe CV');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="TemperatureManualDutyAndPeriodEdit" Id="{e9b1f269-b230-4c0c-b2d7-234c547483e2}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE TemperatureManualDutyAndPeriodEdit
+VAR
+    fb : TcForge.FB_TempController;
+    index : INT;
+END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('TemperatureManualDutyAndPeriodEdit');
+
+fb.cfg.pid.cycleTime := T#100MS;
+fb.cfg.pwmPeriod := T#1S;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD,
+    setpoint := 25.0, manual := TRUE, manualDuty := 60.0);
+AssertEquals_REAL(60.0, fb.outDuty, 0.01, 'Manual duty is applied as percent');
+
+FOR index := 1 TO 7 DO
+    fb();
+END_FOR;
+AssertFalse(fb.outOn, 'PWM reaches its OFF interval');
+
+fb.cfg.pwmPeriod := T#2S;
+fb();
+AssertTrue(fb.outOn, 'Period edit restarts a bounded PWM window');
+
+fb.cfg.pwmPeriod := T#50MS;
+fb();
+AssertFalse(fb.sts.ready, 'Too-short period is rejected');
+AssertFalse(fb.outOn, 'Invalid period de-energizes PWM');
+
+fb.cfg.pwmPeriod := T#1S;
+fb();
+AssertTrue(fb.sts.ready AND fb.outOn, 'Recovery starts a fresh ON window');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="TemperatureRejectsInvalidConfiguration" Id="{ad3842c7-68db-4584-b51a-4e0d81e91abd}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE TemperatureRejectsInvalidConfiguration
+VAR
+    fb : TcForge.FB_TempController;
+    invalid : REAL;
+    bits : DWORD := DWORD#16#7F800001; // Signaling NaN; classify bits before comparison.
+END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('TemperatureRejectsInvalidConfiguration');
+
+fb.cfg.pid.cvMin := -1.0;
+fb.cfg.pid.cycleTime := T#100MS;
+fb(enable := TRUE, pv := 0.0, pvQuality := TcForge.E_IO_Quality.GOOD, setpoint := 80.0);
+AssertFalse(fb.sts.ready OR fb.outOn, 'Non-percent CV contract fails OFF');
+
+fb.cfg.pid.cvMin := 0.0;
+fb();
+AssertTrue(fb.sts.ready AND fb.outOn, 'Valid percent contract can recover');
+
+Tc2_System.MEMCPY(destAddr := ADR(invalid), srcAddr := ADR(bits), n := SIZEOF(invalid));
+fb.cfg.standbySetpoint := invalid;
+fb();
+AssertFalse(fb.sts.ready OR fb.outOn, 'Nonfinite standby SP fails OFF even before use');
+
+fb.cfg.standbySetpoint := 25.0;
+fb();
+AssertTrue(fb.sts.ready, 'Finite standby SP can recover');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="SwitchingPvRecoversAfterQualityLoss" Id="{8fbb16e8-624a-472f-a214-d4d4d40e2d5f}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE SwitchingPvRecoversAfterQualityLoss
+VAR
+    fb : TcForge.FB_SwitchingPvPid;
+END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('SwitchingPvRecoversAfterQualityLoss');
+
+fb.cfg.pv1.cycleTime := T#100MS;
+fb.cfg.pv2.cycleTime := T#100MS;
+fb(enable := TRUE, source := TcForge.E_PvSource.PV1,
+    pv1 := 0.0, quality1 := TcForge.E_IO_Quality.GOOD, setpoint1 := 30.0,
+    pv2 := 0.0, quality2 := TcForge.E_IO_Quality.BAD, setpoint2 := 40.0);
+AssertEquals_REAL(30.0, fb.outCv, 0.01, 'PV1 is initially authoritative');
+
+fb(source := TcForge.E_PvSource.PV2);
+AssertFalse(fb.sts.ready, 'Selected bad PV cannot retain previous output');
+AssertEquals_REAL(0.0, fb.outCv, 0.01, 'Bad selected PV returns common safe CV');
+
+fb(quality2 := TcForge.E_IO_Quality.GOOD);
+AssertEquals_REAL(40.0, fb.outCv, 0.01, 'Recovery uses fresh PV2 tuning, not stale CV');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+
+    <Method Name="SwitchingContractClearsOldStatus" Id="{599f86b2-6a62-4dde-a91f-4a15cf40ee2c}" FolderPath="Scenarios\">
+      <Declaration><![CDATA[METHOD PRIVATE SwitchingContractClearsOldStatus
+VAR
+    fb : TcForge.FB_SwitchingPvPid;
+END_VAR
+]]></Declaration><Implementation><ST><![CDATA[TEST('SwitchingContractClearsOldStatus');
+
+fb.cfg.pv1.cycleTime := T#100MS;
+fb.cfg.pv2.cycleTime := T#100MS;
+fb(enable := TRUE, pv1 := 0.0, quality1 := TcForge.E_IO_Quality.GOOD, setpoint1 := 20.0);
+AssertTrue(fb.sts.pid.ready, 'Precondition: PID status ready');
+
+fb.cfg.pv2.cvMax := 80.0;
+fb();
+AssertFalse(fb.sts.ready OR fb.sts.pid.ready, 'Invalid shared contract clears old ready status');
+AssertEquals_REAL(0.0, fb.outCv, 0.01, 'Invalid contract fails OFF');
+
+fb.cfg.pv2.cvMax := 100.0;
+fb();
+AssertTrue(fb.sts.ready, 'Restored output contract can recover');
+
+TEST_FINISHED();]]></ST></Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

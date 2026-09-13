@@ -46,6 +46,7 @@ IF NOT F_IsFiniteReal(value := cfg.standbySetpoint)
     OR NOT F_IsFiniteReal(value := cfg.pid.safeCv) THEN
     _pid(enable := FALSE);
     _phaseMs := 0.0;
+    _periodKnown := FALSE;
     sts.pid := _pid.sts;
     RETURN;
 END_IF;
@@ -55,6 +56,7 @@ IF cfg.pid.cvMin <> 0.0 OR cfg.pid.cvMax <> 100.0
     OR cfg.pwmPeriod < T#100MS OR cfg.pwmPeriod > T#1H THEN
     _pid(enable := FALSE);
     _phaseMs := 0.0;
+    _periodKnown := FALSE;
     sts.pid := _pid.sts;
     RETURN;
 END_IF;
@@ -85,6 +87,7 @@ cycleDuration := cfg.pid.cycleTime;
 IF cycleDuration = T#0MS THEN cycleDuration := F_GetTaskCycleTime(); END_IF;
 IF cycleDuration = T#0MS OR cycleDuration > cfg.pid.maxDt THEN
     _phaseMs := 0.0;
+    _periodKnown := FALSE;
     RETURN;
 END_IF;
 

@@ -64,3 +64,20 @@ confirmation, watchdog and reconnect recovery scenarios. It writes
 `assembly-trace.jsonl` and `assembly-junit.xml` and exits nonzero when a scenario
 fails. PLC restart and physical IO acceptance remain tracked in
 [PROGRESS.md](../PROGRESS.md).
+
+## Generic closed-loop control test
+
+The Testing PLC on port 853 also contains a bench-only PID fixture. Its framed
+ADS surface has no physical IO binding. The Python runner uses the existing
+first-order analog model as a generic process, feeds its PV and quality to the
+PLC, and advances the model from the PLC's CV. It checks convergence, loss and
+recovery of sensor quality, feed-watchdog shutdown and explicit disable.
+
+```powershell
+artifacts/sim-venv/Scripts/python.exe -m tcforge_sim.control_loop --target <AMS-Net-ID> --port 853 --output artifacts/control-loop-bench
+```
+
+The payload is written before its frame number; a lost acknowledgement ends
+that transport session without replay. Results are written to
+`control-loop.jsonl` and `control-loop-junit.xml`. This test exercises PLC
+control against simulated physics, not real fieldbus or actuator behavior.

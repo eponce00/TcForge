@@ -52,6 +52,8 @@ IF NOT F_IsFiniteReal(value := cfg.pv1.cvMin)
     _pid1(enable := FALSE);
     _pid2(enable := FALSE);
     _haveSelection := FALSE;
+    _lastCv := 0.0;
+    sts.pid := _pid1.sts;
     RETURN;
 END_IF;
 
@@ -61,6 +63,8 @@ IF cfg.pv1.cvMin <> cfg.pv2.cvMin
     _pid1(enable := FALSE);
     _pid2(enable := FALSE);
     _haveSelection := FALSE;
+    _lastCv := 0.0;
+    sts.pid := _pid1.sts;
     RETURN;
 END_IF;
 
@@ -71,6 +75,7 @@ IF NOT enable THEN
     _lastCv := cfg.pv1.safeCv;
     outCv := _lastCv;
     sts.cv := outCv;
+    sts.pid := _pid1.sts;
     RETURN;
 END_IF;
 
@@ -115,6 +120,8 @@ ELSE
     _pid1(enable := FALSE);
     _pid2(enable := FALSE);
     _haveSelection := FALSE;
+    _lastCv := 0.0;
+    sts.pid := _pid1.sts;
     RETURN;
 END_IF;
 

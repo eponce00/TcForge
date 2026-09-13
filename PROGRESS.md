@@ -113,6 +113,15 @@ Engineering references:
   outputs, unit tests, source build and bench TcUnit verification. See
   [regulatory control](docs/20-Regulatory-Control.md).
 
+- [x] **R3 — Harden regulatory transitions and verify a live closed loop.**
+  Clear stale switching-PV status and temperature timing on invalid input;
+  cover gain forms, derivative filtering, limits, modes, quality, and recovery
+  with nine new PLC cases. Drive a generic first-order Python plant over ADS
+  through a framed, bench-only PID fixture with an observed feed-watchdog
+  counter. The current source build has zero warnings; all 411 PLC results
+  pass in 35 suites; all five live loop scenarios pass. See
+  [regulatory control](docs/20-Regulatory-Control.md).
+
 - [x] **O1 — Organize reusable source.** The library uses `POUs/Base`, `IO`,
   `Devices`, `Logic`, `Alarms`, and `Utilities`, with each FB and its local types
   together. `I_Alarm` lives with the alarm blocks. Project folders mirror disk.
@@ -128,6 +137,21 @@ Engineering references:
   timed out while the runtime was unresponsive; it was not counted as a pass.
 
 ### Latest verification batch
+
+2026-09-13 regulatory-control hardening and closed-loop bench:
+
+- [x] Combined source build: `artifacts/development-build-a0f5e1d7a6ad42af836b628b6abe3a3b/`;
+  zero errors or warnings. Bench activation and 411/411 TcUnit results in
+  35 suites: `artifacts/tcunit-10ms-4d51756df4e140518a1a815bf1ef8091/`.
+- [x] Generic first-order plant over ADS: convergence, bad-quality OFF,
+  recovery, actual 500 ms PLC feed-watchdog trip and recovery, and explicit
+  disable all pass. JSONL/JUnit evidence:
+  `artifacts/control-loop-bench-20260913-v3/`. The runner checks the PLC's
+  `watchdogTrips` counter during ordinary exchanges instead of assuming a
+  wall-clock ADS round-trip bound.
+- [x] All 27 Python simulation tests, 93 tooling tests, repository source
+  checks, and strict documentation build pass. Physical IO and production
+  process qualification remain deferred.
 
 2026-09-13 regulatory control:
 

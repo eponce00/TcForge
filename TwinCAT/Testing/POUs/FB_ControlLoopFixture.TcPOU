@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.12">
+  <POU Name="FB_ControlLoopFixture" Id="{1102f76f-6d41-4d44-b689-f659bfe3a30f}" SpecialFunc="None">
+    <Declaration><![CDATA[// Bench-only ADS surface for a generic first-order analog plant. There is no
+// physical IO binding or operator command path. The Python runner writes the
+// payload first and requestFrame last; the cyclic owner copies one complete
+// frame, computes PID, publishes the result, then acknowledges appliedFrame.
+FUNCTION_BLOCK FB_ControlLoopFixture
+VAR
+    // Test-writer fields. One monotonically increasing frame is accepted at a time.
+    requestFrame    : UDINT;
+    requestEnable   : BOOL;
+    requestPv       : REAL;
+    requestQuality  : USINT;
+    requestSetpoint : REAL;
+
+    // Stable until the next accepted frame or the 500 ms feed watchdog expires.
+    appliedFrame    : UDINT;
+    rejectedFrame   : UDINT;
+    outputCv        : REAL;
+    ready           : BOOL;
+    reason          : TcForge.E_ControlReason;
+    watchdogExpired : BOOL;
+    watchdogTrips   : UDINT;
+    ownerTask       : DINT;
+    cycleCounter    : UDINT;
+
+    _pid            : TcForge.FB_PID_Full;
+    _cfg            : TcForge.ST_PID_Full_Cfg;
+    _watchdog       : TON;
+    _wasExpired     : BOOL;
+    _activeEnable   : BOOL;
+    _activePv       : REAL;
+    _activeQuality  : TcForge.E_IO_Quality := TcForge.E_IO_Quality.UNKNOWN;
+    _activeSp       : REAL;
+    _frameFault     : BOOL;
+    accepted        : BOOL;
+    expectedFrame   : UDINT;
+    pendingFrame    : UDINT;
+END_VAR
+]]></Declaration>
+    <Implementation><ST><![CDATA[ownerTask := Tc2_System.GETCURTASKINDEXEX();
+cycleCounter := cycleCounter + 1;
+accepted := FALSE;
+
+// The final frame write is the commit marker. Old or skipped frame numbers
+// invalidate the feed instead of leaving the previous regulator demand live.
+IF appliedFrame = UDINT#16#FFFFFFFF THEN
+    expectedFrame := 0;
+ELSE
+    expectedFrame := appliedFrame + 1;
+END_IF;
+
+IF requestFrame <> appliedFrame THEN
+    IF requestFrame = expectedFrame THEN
+        _activeEnable := requestEnable;
+        _activePv := requestPv;
+        _activeSp := requestSetpoint;
+        _activeQuality := TcForge.E_IO_Quality.BAD;
+        IF requestQuality = 2 THEN
+            _activeQuality := TcForge.E_IO_Quality.GOOD;
+        END_IF;
+
+        pendingFrame := requestFrame;
+        _frameFault := FALSE;
+        accepted := TRUE;
+    ELSE
+        rejectedFrame := requestFrame;
+        _frameFault := TRUE;
+    END_IF;
+END_IF;
+
+_watchdog(IN := NOT accepted, PT := T#500MS);
+watchdogExpired := _watchdog.Q;
+IF watchdogExpired AND NOT _wasExpired THEN
+    watchdogTrips := watchdogTrips + 1;
+END_IF;
+_wasExpired := watchdogExpired;
+
+// Fixed, bounded tuning makes the test process generic and reproducible.
+// The task period is read from the owning PLC task, not from ADS pacing.
+_cfg.kp := 2.0;
+_cfg.ki := 1.0;
+_cfg.kd := 0.0;
+_cfg.cvMin := 0.0;
+_cfg.cvMax := 100.0;
+_cfg.safeCv := 0.0;
+_cfg.cycleTime := T#0MS;
+_cfg.maxDt := T#100MS;
+
+_pid(
+    enable := _activeEnable AND NOT watchdogExpired AND NOT _frameFault,
+    pv := _activePv,
+    pvQuality := _activeQuality,
+    setpoint := _activeSp,
+    cfg := _cfg
+);
+outputCv := _pid.outCv;
+ready := _pid.sts.ready;
+reason := _pid.sts.reason;
+
+// Publish acknowledgement after the CV and status for this frame.
+IF accepted THEN
+    appliedFrame := pendingFrame;
+END_IF;
+]]></ST></Implementation>
+  </POU>
+</TcPlcObject>

@@ -18,6 +18,12 @@
     <LibraryReferences>{5a50abef-9dcc-4283-91b1-6ea1a6fecc9a}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Testing\POUs\FB_ControlLoopFixture.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Testing\Tests\FB_RegulatoryControl_Edge_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Testing\Tests\FB_RegulatoryControl_Test.TcPOU">
       <SubType>Code</SubType>
     </Compile>
